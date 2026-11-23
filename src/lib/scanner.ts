@@ -55,45 +55,100 @@ function order(pts: Pt[]): Quad {
 }
 const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y)
 
-/** Tìm tứ giác lớn nhất giống tờ giấy trên ảnh (toạ độ theo ảnh nguồn) */
-export function detectQuad(cv: CV, src: HTMLCanvasElement | HTMLImageElement | HTMLVideoElement, sw: number, sh: number): Quad | null {
-  const W = 400, s = W / sw, H = Math.round(sh * s)
-  const ctx = workCanvas(W, H)
-  ctx.drawImage(src as CanvasImageSource, 0, 0, W, H)
-  const img = cv.imread(ctx.canvas)
-  const gray = new cv.Mat(), edges = new cv.Mat(), contours = new cv.MatVector(), hier = new cv.Mat()
-  let best: Quad | null = null
+function quadFromEdges(cv: CV, edges: CV, W: number, H: number): Pt[] | null {
+  const contours = new cv.MatVector(), hier = new cv.Mat()
+  let best: Pt[] | null = null
   try {
-    cv.cvtColor(img, gray, cv.COLOR_RGBA2GRAY)
-    cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0)
-    cv.Canny(gray, edges, 40, 120)
-    const k = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5))
-    cv.dilate(edges, edges, k); k.delete()
     cv.findContours(edges, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     let bestArea = W * H * 0.12
     for (let i = 0; i < contours.size(); i++) {
       const cnt = contours.get(i)
       const area = cv.contourArea(cnt)
-      if (area > bestArea) {
+      if (area > bestArea && area < W * H * 0.97) {
         const approx = new cv.Mat()
-        const peri = cv.arcLength(cnt, true)
-        cv.approxPolyDP(cnt, approx, 0.02 * peri, true)
+        cv.approxPolyDP(cnt, approx, 0.02 * cv.arcLength(cnt, true), true)
         let pts: Pt[] | null = null
         if (approx.rows === 4 && cv.isContourConvex(approx)) {
           pts = []; for (let j = 0; j < 4; j++) pts.push({ x: approx.data32S[j * 2], y: approx.data32S[j * 2 + 1] })
         } else if (area > W * H * 0.2) {
           // bon dài, mép không thẳng: dùng hình chữ nhật xoay nhỏ nhất
           const r = cv.minAreaRect(cnt)
-          const p = cv.RotatedRect.points(r) as Pt[]
-          if (cv.contourArea(cnt) / (r.size.width * r.size.height) > 0.8) pts = p.map((q) => ({ x: q.x, y: q.y }))
+          if (area / (r.size.width * r.size.height) > 0.8) pts = (cv.RotatedRect.points(r) as Pt[]).map((q) => ({ x: q.x, y: q.y }))
         }
-        if (pts) { best = order(pts.map((p) => ({ x: p.x / s, y: p.y / s }))); bestArea = area }
+        if (pts) { best = pts; bestArea = area }
         approx.delete()
       }
       cnt.delete()
     }
-  } finally { img.delete(); gray.delete(); edges.delete(); contours.delete(); hier.delete() }
+  } finally { contours.delete(); hier.delete() }
   return best
+}
+
+/** Giấy trắng trên nền trắng: không thấy mép, lấy vùng có chữ rồi nới ra một chút */
+function quadFromText(cv: CV, gray: CV, W: number, H: number): Pt[] | null {
+  const grad = new cv.Mat(), bw = new cv.Mat(), contours = new cv.MatVector(), hier = new cv.Mat()
+  try {
+    const k3 = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3))
+    cv.morphologyEx(gray, grad, cv.MORPH_GRADIENT, k3); k3.delete()
+    cv.threshold(grad, bw, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)
+    // nối các chữ thành một khối
+    const k = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(Math.round(W / 25), Math.round(W / 40)))
+    cv.morphologyEx(bw, bw, cv.MORPH_CLOSE, k); k.delete()
+    const k2 = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3))
+    cv.morphologyEx(bw, bw, cv.MORPH_OPEN, k2); k2.delete()
+    cv.findContours(bw, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    // gộp các khối lớn nằm gần khối lớn nhất (dòng chữ cách nhau)
+    const boxes: { r: CV; area: number; cnt: CV }[] = []
+    for (let i = 0; i < contours.size(); i++) {
+      const cnt = contours.get(i), area = cv.contourArea(cnt)
+      if (area > W * H * 0.002) boxes.push({ r: cv.boundingRect(cnt), area, cnt }); else cnt.delete()
+    }
+    if (!boxes.length) return null
+    boxes.sort((a, b) => b.area - a.area)
+    const main = boxes[0].r
+    let x0 = main.x, y0 = main.y, x1 = main.x + main.width, y1 = main.y + main.height
+    const pts: number[] = []
+    for (const b of boxes) {
+      const r = b.r
+      const near = r.x < x1 + W * 0.05 && r.x + r.width > x0 - W * 0.05 && r.y < y1 + H * 0.06 && r.y + r.height > y0 - H * 0.06
+      if (near) {
+        x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.width); y1 = Math.max(y1, r.y + r.height)
+        for (let j = 0; j < b.cnt.rows; j++) pts.push(b.cnt.data32S[j * 2], b.cnt.data32S[j * 2 + 1])
+      }
+      b.cnt.delete()
+    }
+    if ((x1 - x0) * (y1 - y0) < W * H * 0.08 || (x1 - x0) * (y1 - y0) > W * H * 0.9) return null
+    const m = cv.matFromArray(pts.length / 2, 1, cv.CV_32SC2, pts)
+    const r = cv.minAreaRect(m); m.delete()
+    // nới lề 5%
+    r.size = { width: r.size.width * 1.08 + W * 0.02, height: r.size.height * 1.06 + W * 0.02 }
+    return (cv.RotatedRect.points(r) as Pt[]).map((q) => ({ x: Math.max(0, Math.min(W, q.x)), y: Math.max(0, Math.min(H, q.y)) }))
+  } finally { grad.delete(); bw.delete(); contours.delete(); hier.delete() }
+}
+
+/** Tìm tứ giác lớn nhất giống tờ giấy trên ảnh (toạ độ theo ảnh nguồn) */
+export function detectQuad(cv: CV, src: HTMLCanvasElement | HTMLImageElement | HTMLVideoElement, sw: number, sh: number): Quad | null {
+  const W = 400, s = W / sw, H = Math.round(sh * s)
+  const ctx = workCanvas(W, H)
+  ctx.drawImage(src as CanvasImageSource, 0, 0, W, H)
+  const img = cv.imread(ctx.canvas)
+  const gray = new cv.Mat(), blur = new cv.Mat(), edges = new cv.Mat()
+  let pts: Pt[] | null = null
+  try {
+    cv.cvtColor(img, gray, cv.COLOR_RGBA2GRAY)
+    cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0)
+    const k = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5))
+    // mép rõ trước, rồi mép mờ (giấy sáng trên nền sáng)
+    for (const [lo, hi] of [[40, 120], [12, 36]]) {
+      cv.Canny(blur, edges, lo, hi)
+      cv.dilate(edges, edges, k)
+      pts = quadFromEdges(cv, edges, W, H)
+      if (pts) break
+    }
+    k.delete()
+    if (!pts) pts = quadFromText(cv, gray, W, H)
+  } finally { img.delete(); gray.delete(); blur.delete(); edges.delete() }
+  return pts ? order(pts.map((p) => ({ x: p.x / s, y: p.y / s }))) : null
 }
 
 /** Cắt theo tứ giác, làm thẳng, tăng chất lượng. Trả về canvas. */
