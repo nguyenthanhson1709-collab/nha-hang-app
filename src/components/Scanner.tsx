@@ -143,7 +143,7 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
   const pill = (on: boolean): React.CSSProperties => ({ minHeight: 36, padding: '4px 12px', borderRadius: 999, background: on ? '#fff' : 'rgba(255,255,255,.15)', color: on ? '#000' : '#fff', border: 0 })
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#000', color: '#fff' }}>
+    <div className="scanner" style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#000', color: '#fff' }}>
       <video ref={video} autoPlay playsInline muted style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
       <canvas ref={overlay} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
       {flash && <div style={{ position: 'absolute', inset: 0, background: '#fff', opacity: 0.7 }} />}
