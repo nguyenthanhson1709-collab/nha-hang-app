@@ -12,7 +12,13 @@ async function adminCall(body: Record<string, unknown>) {
   if (error) {
     let msg = error.message
     try { msg = (await (error as { context?: Response }).context?.json())?.error || msg } catch { /* */ }
-    throw new Error(msg)
+    const vi: Record<string, string> = {
+      invalid_input: 'Thiếu thông tin hoặc mật khẩu dưới 8 ký tự / Angaben fehlen oder Passwort unter 8 Zeichen',
+      forbidden: 'Không có quyền / Keine Berechtigung',
+      email_exists: 'Email này đã có tài khoản khác / E-Mail bereits vergeben',
+      invalid_role: 'Vai trò không hợp lệ / Ungültige Rolle',
+    }
+    throw new Error(vi[msg] || msg)
   }
   return data
 }
@@ -43,6 +49,8 @@ export default function RestaurantSettings() {
   }
   async function createUser() {
     if (!add) return
+    if (add.password.length < 8) { toast(t('password') + ': ≥ 8'); return }
+    if (!/^\S+@\S+\.\S+$/.test(add.email.trim())) { toast(t('email') + '?'); return }
     try { await adminCall({ action: 'create_user', restaurant_id: rid, ...add, lang }); setAdd(null); loadMembers(); toast(t('added')) }
     catch (e) { toast(errMsg(e)) }
   }
