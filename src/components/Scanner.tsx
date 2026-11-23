@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLang } from '../lib/i18n'
-import { canvasToBlob, detectQuad, frameSharpness, loadCv, quadMoved, warpAndEnhance, type Mode, type Quad } from '../lib/scanner'
+import { canvasToBlob, detectQuad, frameSharpness, freeCanvas, loadCv, quadMoved, warpAndEnhance, type Mode, type Quad } from '../lib/scanner'
 
-export interface ScannedPage { blob: Blob; preview: string }
+export interface ScannedPage { blob: Blob; preview: string; raw?: boolean }
 
 const TXT = {
   vi: { loading: 'Đang mở máy scan…', hold: 'Đưa cả tờ giấy vào khung', steady: 'Giữ yên…', manual: 'Bấm nút tròn để chụp', shot: 'Đã chụp', next: 'Đã chụp. Đổi sang trang tiếp hoặc bấm Xong', done: 'Xong', auto: 'Tự chụp', noCam: 'Không mở được camera. Hãy cho phép dùng camera, hoặc dùng nút chụp ảnh thường.', pages: 'trang', modes: { scan: 'Scan', gray: 'Xám', color: 'Màu' } },
@@ -22,7 +22,9 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
   const [flash, setFlash] = useState(false)
   const [torch, setTorch] = useState<boolean | null>(null)
   const [err, setErr] = useState('')
-  const st = useRef({ quad: null as Quad | null, shotQuad: null as Quad | null, stable: 0, busy: false, lastShot: 0, auto: true, mode: 'scan' as Mode, stream: null as MediaStream | null })
+  const [shooting, setShooting] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const st = useRef({ quad: null as Quad | null, shotQuad: null as Quad | null, stable: 0, busy: false, lastShot: 0, auto: true, mode: 'scan' as Mode, stream: null as MediaStream | null, cv: null as any })
 
   useEffect(() => { st.current.auto = auto }, [auto])
   useEffect(() => { st.current.mode = mode }, [mode])
@@ -32,8 +34,6 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
     ;(async () => {
       try {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error('no getUserMedia')
-        // Camera và bộ nhận mép giấy chạy độc lập: nếu bộ nhận mép lỗi vẫn chụp tay được
-        const cvLoad = loadCv().catch((e) => { setErr(String(e?.message || e)); return null })
         let stream: MediaStream
         try {
           stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } })
@@ -48,9 +48,14 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
         const track = stream.getVideoTracks()[0]
         const caps = (track.getCapabilities?.() || {}) as { torch?: boolean }
         if (caps.torch) setTorch(false)
-        setStatus('ready'); setHint(T.hold)
-        const cv = await cvLoad
-        if (!cv) { setHint(T.manual); return }
+        setStatus('ready'); setHint(T.manual)
+        // Bộ nhận mép giấy (OpenCV, ~10 MB) chỉ tải sau khi camera đã chạy; lỗi vẫn chụp tay được
+        await new Promise((r) => setTimeout(r, 600))
+        if (stop) return
+        const cv = await loadCv().catch((e) => { setErr(String(e?.message || e)); return null })
+        if (!cv || stop) return
+        st.current.cv = cv
+        setHint(T.hold)
         const loop = () => {
           if (stop) return
           if (!st.current.busy && v.videoWidth) try {
@@ -64,7 +69,7 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
             if (q && st.current.stable >= 2) {
               setHint(T.steady)
               if (st.current.shotQuad) setHint(T.next)
-              else if (st.current.auto && st.current.stable >= 4 && Date.now() - st.current.lastShot > 1500 && frameSharpness(cv, v, q) > 60) capture(cv)
+              else if (st.current.auto && st.current.stable >= 4 && Date.now() - st.current.lastShot > 1500 && frameSharpness(cv, v, q) > 60) capture()
             } else setHint(st.current.shotQuad ? T.next : q ? T.steady : T.hold)
           } catch (e) { setErr(String((e as Error)?.message || e)) }
           timer = window.setTimeout(loop, 220)
@@ -94,25 +99,37 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
     ctx.lineWidth = 3; ctx.strokeStyle = st.current.stable >= 2 ? '#4fb393' : '#f0a640'; ctx.stroke()
   }
 
-  async function capture(cvIn?: unknown) {
+  async function capture() {
     const v = video.current; if (!v || st.current.busy) return
-    st.current.busy = true
+    if (!v.videoWidth) { setErr('camera: video chưa sẵn sàng'); return }
+    st.current.busy = true; setShooting(true)
+    const c = document.createElement('canvas')
+    let out: HTMLCanvasElement | null = null
     try {
-      const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight
-      c.getContext('2d')!.drawImage(v, 0, 0)
-      let out = c
-      let q: Quad | null = st.current.quad
-      try {
-        const cv = cvIn || (await Promise.race([loadCv(), new Promise<null>((r) => setTimeout(() => r(null), 3000))]))
-        if (cv) { q = q || detectQuad(cv, c, c.width, c.height); out = warpAndEnhance(cv, c, q, st.current.mode) }
-      } catch (e) { setErr(String((e as Error)?.message || e)) }
+      // Giới hạn cỡ ảnh để iPhone không hết bộ nhớ canvas
+      const sc = Math.min(1, 2400 / Math.max(v.videoWidth, v.videoHeight))
+      c.width = Math.round(v.videoWidth * sc); c.height = Math.round(v.videoHeight * sc)
+      const ctx = c.getContext('2d')
+      if (!ctx) throw new Error('canvas')
+      ctx.drawImage(v, 0, 0, c.width, c.height)
+      out = c
+      let q: Quad | null = st.current.quad ? (st.current.quad.map((p) => ({ x: p.x * sc, y: p.y * sc })) as Quad) : null
+      const cv = st.current.cv
+      // Chỉ làm thẳng khi bộ nhận mép đã sẵn; nếu chưa thì giữ ảnh gốc, app sẽ tự cắt mép khi xử lý
+      if (cv) try { q = q || detectQuad(cv, c, c.width, c.height); out = warpAndEnhance(cv, c, q, st.current.mode) } catch (e) { out = c; setErr(String((e as Error)?.message || e)) }
       const blob = await canvasToBlob(out)
-      setPages((p) => [...p, { blob, preview: URL.createObjectURL(blob) }])
+      setPages((p) => [...p, { blob, preview: URL.createObjectURL(blob), raw: !cv } as ScannedPage])
       setFlash(true); setTimeout(() => setFlash(false), 180)
       setHint(T.shot)
-      st.current.lastShot = Date.now(); st.current.stable = 0; st.current.shotQuad = q
-      navigator.vibrate?.(40)
-    } finally { st.current.busy = false }
+      st.current.lastShot = Date.now(); st.current.stable = 0; st.current.shotQuad = st.current.quad
+      try { navigator.vibrate?.(40) } catch { /* */ }
+    } catch (e) {
+      setErr('Chụp lỗi: ' + String((e as Error)?.message || e))
+    } finally {
+      if (out && out !== c) freeCanvas(out)
+      freeCanvas(c)
+      st.current.busy = false; setShooting(false)
+    }
   }
 
   async function toggleTorch() {
@@ -127,7 +144,7 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#000', color: '#fff' }}>
-      <video ref={video} playsInline muted style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+      <video ref={video} autoPlay playsInline muted style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
       <canvas ref={overlay} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
       {flash && <div style={{ position: 'absolute', inset: 0, background: '#fff', opacity: 0.7 }} />}
 
@@ -153,8 +170,8 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
                 style={{ height: 56, width: 42, objectFit: 'cover', borderRadius: 6, border: '2px solid #fff' }} />
             ))}
           </div>
-          <button aria-label="shutter" disabled={status !== 'ready'} onClick={() => capture()}
-            style={{ width: 72, height: 72, borderRadius: '50%', border: '4px solid #fff', background: 'rgba(255,255,255,.25)', minHeight: 0, padding: 0 }} />
+          <button aria-label="shutter" disabled={status !== 'ready' || shooting} onClick={() => capture()}
+            style={{ width: 72, height: 72, borderRadius: '50%', border: '4px solid #fff', background: shooting ? '#fff' : 'rgba(255,255,255,.25)', minHeight: 0, padding: 0, opacity: status === 'ready' ? 1 : 0.4 }} />
           <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
             <button disabled={!pages.length} onClick={() => onDone(pages)} style={{ ...pill(true), minHeight: 44, fontWeight: 700 }}>
               {T.done}{pages.length ? ` (${pages.length})` : ''}

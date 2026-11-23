@@ -34,6 +34,19 @@ export function loadCv(): Promise<CV> {
   return cvP
 }
 
+// iPhone (Safari) giới hạn tổng bộ nhớ canvas: dùng lại một canvas thay vì tạo mới mỗi khung hình
+let work: HTMLCanvasElement | null = null
+function workCanvas(w: number, h: number): CanvasRenderingContext2D {
+  if (!work) work = document.createElement('canvas')
+  if (work.width !== w) work.width = w
+  if (work.height !== h) work.height = h
+  const ctx = work.getContext('2d', { willReadFrequently: true })
+  if (!ctx) throw new Error('canvas')
+  return ctx
+}
+/** Giải phóng bộ nhớ canvas ngay (Safari không tự dọn kịp) */
+export function freeCanvas(c: HTMLCanvasElement) { c.width = 0; c.height = 0 }
+
 function order(pts: Pt[]): Quad {
   const s = [...pts].sort((a, b) => a.x + a.y - (b.x + b.y))
   const tl = s[0], br = s[3]
@@ -45,9 +58,9 @@ const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y)
 /** Tìm tứ giác lớn nhất giống tờ giấy trên ảnh (toạ độ theo ảnh nguồn) */
 export function detectQuad(cv: CV, src: HTMLCanvasElement | HTMLImageElement | HTMLVideoElement, sw: number, sh: number): Quad | null {
   const W = 400, s = W / sw, H = Math.round(sh * s)
-  const c = document.createElement('canvas'); c.width = W; c.height = H
-  c.getContext('2d', { willReadFrequently: true })!.drawImage(src as CanvasImageSource, 0, 0, W, H)
-  const img = cv.imread(c)
+  const ctx = workCanvas(W, H)
+  ctx.drawImage(src as CanvasImageSource, 0, 0, W, H)
+  const img = cv.imread(ctx.canvas)
   const gray = new cv.Mat(), edges = new cv.Mat(), contours = new cv.MatVector(), hier = new cv.Mat()
   let best: Quad | null = null
   try {
@@ -132,9 +145,9 @@ export function warpAndEnhance(cv: CV, src: HTMLCanvasElement, quad: Quad | null
 export function frameSharpness(cv: CV, video: HTMLVideoElement, quad: Quad | null): number {
   const vw = video.videoWidth, vh = video.videoHeight
   const W = 480, s = W / vw, H = Math.round(vh * s)
-  const c = document.createElement('canvas'); c.width = W; c.height = H
-  c.getContext('2d', { willReadFrequently: true })!.drawImage(video, 0, 0, W, H)
-  const img = cv.imread(c), g = new cv.Mat(), lap = new cv.Mat(), mean = new cv.Mat(), sd = new cv.Mat()
+  const ctx = workCanvas(W, H)
+  ctx.drawImage(video, 0, 0, W, H)
+  const img = cv.imread(ctx.canvas), g = new cv.Mat(), lap = new cv.Mat(), mean = new cv.Mat(), sd = new cv.Mat()
   try {
     cv.cvtColor(img, g, cv.COLOR_RGBA2GRAY)
     let roi = g
@@ -157,7 +170,7 @@ export function quadMoved(a: Quad | null, b: Quad | null, size: number) {
 }
 
 export function canvasToBlob(c: HTMLCanvasElement, q = 0.85): Promise<Blob> {
-  return new Promise((res) => c.toBlob((b) => res(b!), 'image/jpeg', q))
+  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('toBlob'))), 'image/jpeg', q))
 }
 
 /** Ảnh chụp sẵn (camera hệ thống / thư viện): tự cắt mép và làm thẳng */
@@ -170,6 +183,8 @@ export async function autoScanImage(file: Blob, mode: Mode = 'scan'): Promise<Bl
     const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s)
     c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
     const quad = detectQuad(cv, c, c.width, c.height)
-    return canvasToBlob(warpAndEnhance(cv, c, quad, mode))
+    const out = warpAndEnhance(cv, c, quad, mode)
+    freeCanvas(c)
+    try { return await canvasToBlob(out) } finally { freeCanvas(out) }
   } finally { URL.revokeObjectURL(url) }
 }

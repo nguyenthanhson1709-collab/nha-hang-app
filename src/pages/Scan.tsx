@@ -54,7 +54,12 @@ export default function Scan() {
   async function fromScanner(ps: ScannedPage[]) {
     setScanner(false)
     const add: Page[] = []
-    for (const p of ps) add.push({ blob: p.blob, name: 'scan.jpg', type: 'image/jpeg', preview: p.preview, blurry: (await sharpness(p.blob)) < BLUR_LIMIT })
+    for (const p of ps) {
+      let { blob, preview } = p
+      // Ảnh chụp khi bộ nhận mép chưa sẵn: cắt mép, làm thẳng bây giờ
+      if (p.raw) try { blob = await autoScanImage(p.blob); URL.revokeObjectURL(preview); preview = URL.createObjectURL(blob) } catch { /* giữ ảnh gốc */ }
+      add.push({ blob, name: 'scan.jpg', type: 'image/jpeg', preview, blurry: (await sharpness(blob)) < BLUR_LIMIT })
+    }
     setPages((x) => [...x, ...add])
   }
 
