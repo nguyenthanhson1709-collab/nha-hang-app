@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import JSZip from 'jszip'
-import { supabase, errMsg, type Doc, type ZBon, type CashCount, type CashMove } from '../lib/supabase'
+import { supabase, errMsg, type Doc, type ZBon } from '../lib/supabase'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { addMonths, dmy, eur, monthLabel, monthRange, thisMonth } from '../lib/format'
-import { DOC_SELECT, balanceBefore, docsInRange, folderParts, kassenbuch, lockedPeriods } from '../lib/data'
-import { kbLines, kbPdf, kbXlsx } from '../lib/kassenbuch'
+import { DOC_SELECT, docsInRange, folderParts, lockedPeriods } from '../lib/data'
 import { download, folderFiles, folderPdf, scansPdf, type ExtraBeleg, type Folder } from '../lib/pdf'
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
 
@@ -31,7 +29,7 @@ export default function Archive() {
   const [zbons, setZbons] = useState<ZBon[]>([])
   const [extra, setExtra] = useState<ExtraBeleg[]>([])
   const [locked, setLocked] = useState(false)
-  const [q, setQ] = useState('')
+  const [q] = useState('')
   const [found, setFound] = useState<Doc[] | null>(null)
   const [fPay, setFPay] = useState(''); const [fRate, setFRate] = useState(''); const [fCat, setFCat] = useState(''); const [fSup, setFSup] = useState('')
   const [busy, setBusy] = useState('')
@@ -95,31 +93,6 @@ export default function Archive() {
     try { const b = await scansPdf(f, docs, zbons, setBusy, extra); if (b) download(b, `${safe}_${period}_${f}_Original.pdf`); else toast(t('noData')) } catch (e) { fail(e) }
     setBusy('')
   }
-  async function zipScans() {
-    setBusy('ZIP…')
-    try {
-      const z = new JSZip()
-      for (const f of FOLDERS) { const b = await scansPdf(f, docs, zbons, setBusy, extra); if (b) z.file(`${safe}_${period}_${f}_Original.pdf`, b) }
-      download(await z.generateAsync({ type: 'blob' }), `${safe}_${period}_Original.zip`)
-    } catch (e) { fail(e) }
-    setBusy('')
-  }
-  async function zipPdf() {
-    setBusy('ZIP…')
-    try {
-      const z = new JSZip()
-      for (const f of FOLDERS) z.file(`${safe}_${period}_${f}.pdf`, await folderPdf(f, docs, f === 'Rechnungsausgang' ? zbons : [], r!, period, categories, setBusy, false))
-      const rows = await kassenbuch(rid!, period)
-      const { data: c } = await supabase.from('nh_cash_counts').select('*').eq('restaurant_id', rid!).eq('period', period)
-      const { data: mv } = await supabase.from('nh_cash_moves').select('*').eq('restaurant_id', rid!).eq('period', period)
-      const opening = rows.length ? Number(rows[0].saldo) - Number(rows[0].einnahme) + Number(rows[0].ausgabe) : await balanceBefore(rid!, monthRange(period).from, Number(r!.opening_cash))
-      const kl = kbLines(docs, zbons, (mv || []) as CashMove[], r!, period, opening, categories)
-      z.file(`${safe}_${period}_Kassenbuch.pdf`, kbPdf(kl, (c || []) as CashCount[], r!, period, opening))
-      z.file(`${safe}_${period}_Kassenbuch.xlsx`, kbXlsx(kl, r!, period, opening))
-      download(await z.generateAsync({ type: 'blob' }), `${safe}_${period}.zip`)
-    } catch (e) { fail(e) }
-    setBusy('')
-  }
   async function lock() {
     if (!confirm(t('lockConfirm', { m: monthLabel(period) }))) return
     const pending = docs.filter((d) => d.status === 'uploaded').length
@@ -132,7 +105,6 @@ export default function Archive() {
     <>
       <Top title={folder ? LABEL[folder] : t('archive')} sub={r.name} back={folder ? `/r/${rid}/archive` : undefined} />
       <div className="page">
-        <input placeholder={`🔍 ${t('search')}`} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 10 }} />
         {!found && (
           <>
             <div className="row" style={{ marginBottom: 10 }}>
@@ -189,16 +161,13 @@ export default function Archive() {
 
         {m && !found && (
           <div className="card">
-            <div className="grid2">
+            {folder && <div className="grid2">
               {folder ? <>
                 <button disabled={!!busy} onClick={() => pdfFolder(folder)}>📄 {t('exportPdf')}</button>
                 <button disabled={!!busy} onClick={() => scans(folder)}>🗂 {t('originals')}</button>
-              </> : <>
-                <button disabled={!!busy} onClick={zipPdf}>🗜 {t('exportZip')} (PDF)</button>
-                <button disabled={!!busy} onClick={zipScans}>🗂 {t('exportZip')} ({t('origShort')})</button>
-              </>}
-            </div>
-            {!folder && profile.is_owner && !locked && <button className="danger block" style={{ marginTop: 10 }} onClick={lock}>🔒 {t('lockMonth')} {monthLabel(period)}</button>}
+              </> : null}
+            </div>}
+            {!folder && profile.is_owner && !locked && <button className="danger block" onClick={lock}>🔒 {t('lockMonth')} {monthLabel(period)}</button>}
             {busy && <div className="small muted" style={{ marginTop: 8 }}>{busy}</div>}
           </div>
         )}
