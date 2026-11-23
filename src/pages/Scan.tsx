@@ -11,6 +11,7 @@ import { Top, toast, useRestaurant } from '../components/ui'
 import Scanner, { type ScannedPage } from '../components/Scanner'
 import { autoScanImage } from '../lib/scanner'
 import { aiReadInvoice, aiReadZbon } from '../lib/ai'
+import { autoProblems } from '../lib/autocheck'
 
 type Kind = 'purchase' | 'zbon' | 'sales'
 interface Page { blob: Blob; name: string; type: string; preview: string; blurry: boolean }
@@ -101,8 +102,10 @@ export default function Scan() {
       const files = await uploadFiles(rid!, date, pages.map((p) => p.blob), pages.map((p) => p.name))
       const payment = pay || pi.payment
       const gross = r2(pi.gross || pi.taxes.reduce((s, x) => s + x.gross, 0))
+      // Chủ/quản lý tải lên, AI (hoặc e-Rechnung) đọc đủ và khớp, không trùng -> duyệt luôn
+      const auto = m && kind === 'purchase' && !dup && !!(parsedE || aiInv) && autoProblems({ ...pi, gross }, payment).length === 0
       const { data: doc, error } = await supabase.from('nh_documents').insert({
-        restaurant_id: rid, kind, status: 'uploaded', doc_date: date, period: date.slice(0, 7),
+        restaurant_id: rid, kind, status: auto ? 'reviewed' : 'uploaded', doc_date: date, period: date.slice(0, 7),
         supplier: pi.supplier, invoice_no: pi.invoice_no, seller_tax_id: pi.seller_tax_id, gross, files, ocr_text: text.slice(0, 50000),
       }).select().single()
       if (error) throw error
@@ -118,6 +121,7 @@ export default function Scan() {
         pi.lines.map((l, i) => ({ pos: i, name: l.name, qty: l.qty, unit: null, unit_price: l.unit_price, total: l.total, rate: l.rate, category_id: guessCategory(l.name, categories, mem).id })),
         false)
       if (!m) { setStaffDone(true); setPages([]); setPay(null); setBusy(''); return }
+      if (auto) { toast(`✓ ${t('autoOk')}: ${pi.supplier} · ${gross.toFixed(2).replace('.', ',')} €`); setPages([]); setPay(null); setBusy(''); return }
       nav(`/r/${rid}/doc/${doc.id}`)
     } catch (e) {
       toast(errMsg(e)); setBusy('')

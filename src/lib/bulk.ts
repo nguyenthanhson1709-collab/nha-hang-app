@@ -6,6 +6,7 @@ import { r2 } from './format'
 import { aiReadInvoice, aiSegment, type Segment } from './ai'
 import { findDuplicate, saveChildren, uploadFiles } from './data'
 import { guessCategory, loadMemory } from './categorize'
+import { autoProblems } from './autocheck'
 
 export const MAX_PAGES = 200
 export const MAX_MB = 25
@@ -54,7 +55,7 @@ async function segmentAll(rid: string, src: PDFDocument, n: number, onProgress: 
   return all
 }
 
-export type BulkResult = { added: { supplier: string | null; date: string; gross: number; pages: string }[]; skipped: { supplier: string | null; date: string; gross: number; pages: string; why: string }[] }
+export type BulkResult = { added: { supplier: string | null; date: string; gross: number; pages: string; ok: boolean }[]; skipped: { supplier: string | null; date: string; gross: number; pages: string; why: string }[] }
 
 export async function bulkUpload(opts: {
   rid: string; file: File; folder: 'Bargeld' | 'Rechnungseingang'; period: string; categories: Category[]; onProgress: (s: string) => void
@@ -85,8 +86,9 @@ export async function bulkUpload(opts: {
     // Bargeld = trả tiền mặt; Rechnung = thẻ nếu hoá đơn ghi thẻ, còn lại chuyển khoản
     const payment: PayMethod = folder === 'Bargeld' ? 'cash' : pi.payment === 'card' ? 'card' : 'transfer'
     const files = await uploadFiles(rid, date, [part], ['rechnung.pdf'])
+    const ok = autoProblems(pi, payment).length === 0
     const { data: doc, error } = await supabase.from('nh_documents').insert({
-      restaurant_id: rid, kind: 'purchase', status: 'uploaded', doc_date: date, period: date.slice(0, 7),
+      restaurant_id: rid, kind: 'purchase', status: ok ? 'reviewed' : 'uploaded', doc_date: date, period: date.slice(0, 7),
       supplier: pi.supplier, invoice_no: pi.invoice_no, seller_tax_id: pi.seller_tax_id, gross, files,
       ocr_text: ('AI: ' + JSON.stringify(pi)).slice(0, 50000),
     }).select().single()
@@ -98,7 +100,7 @@ export async function bulkUpload(opts: {
     await saveChildren(doc.id, [{ method: payment, amount: gross }], pi.taxes,
       pi.lines.map((l, i) => ({ pos: i, name: l.name, qty: l.qty, unit: null, unit_price: l.unit_price, total: l.total, rate: l.rate, category_id: guessCategory(l.name, categories, mem).id })),
       false)
-    res.added.push({ supplier: pi.supplier, date, gross, pages })
+    res.added.push({ supplier: pi.supplier, date, gross, pages, ok })
   }
 
   // Đọc tối đa 3 hoá đơn cùng lúc

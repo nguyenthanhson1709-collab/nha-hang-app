@@ -190,12 +190,12 @@ export default function Archive() {
             {folder && folder !== 'Rechnungsausgang' && !locked && !busy && !bulk && <div className="small muted" style={{ marginTop: 6 }}>{t('uploadHint', { p: String(MAX_PAGES), mb: String(MAX_MB) })}</div>}
             {bulk && (
               <div style={{ marginTop: 10 }}>
-                <div className="alert ok">✓ {t('bulkAdded', { n: String(bulk.added.length) })}{bulk.skipped.length > 0 && ` · ${t('bulkSkipped', { n: String(bulk.skipped.length) })}`}</div>
+                <div className="alert ok">✓ {t('bulkAdded', { n: String(bulk.added.length) })} ({t('autoOk')}: {bulk.added.filter((x) => x.ok).length}){bulk.skipped.length > 0 && ` · ${t('bulkSkipped', { n: String(bulk.skipped.length) })}`}</div>
                 <div className="small">
-                  {bulk.added.map((x, i) => <div key={'a' + i}>✓ {x.pages}: {x.supplier || '—'} · {dmy(x.date)} · {eur(x.gross)}</div>)}
+                  {bulk.added.map((x, i) => <div key={'a' + i}>{x.ok ? '✓' : '🔎'} {x.pages}: {x.supplier || '—'} · {dmy(x.date)} · {eur(x.gross)}{!x.ok && <> · <span className="tag warn">{t('toReview')}</span></>}</div>)}
                   {bulk.skipped.map((x, i) => <div key={'s' + i} className="muted">✕ {x.pages}: {x.supplier || '—'}{x.gross ? ` · ${eur(x.gross)}` : ''} ({x.why === 'dup' ? t('dupShort') : x.why === 'AI' ? t('bulkUnread') : x.why})</div>)}
                 </div>
-                {bulk.added.length > 0 && <Link className="btn block" style={{ marginTop: 8, textAlign: 'center' }} to={`/r/${rid}?v=review`}>{t('toReview')} →</Link>}
+                {bulk.added.some((x) => !x.ok) && <Link className="btn block" style={{ marginTop: 8, textAlign: 'center' }} to={`/r/${rid}?v=review`}>{t('toReview')} →</Link>}
               </div>
             )}
             {!folder && profile.is_owner && !locked && <button className="danger block" onClick={lock}>🔒 {t('lockMonth')} {monthLabel(period)}</button>}
