@@ -10,6 +10,8 @@ import { addOriginals, download, folderFiles, kassenbuchPdf, scansPdf, type Fold
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
 
 const FOLDERS: Folder[] = ['Bargeld', 'Rechnungseingang', 'Rechnungsausgang']
+// Tên hiển thị gọn; tên file xuất ra vẫn giữ tên chuyên môn (Rechnungseingang / Rechnungsausgang)
+const LABEL: Record<Folder, string> = { Bargeld: 'Bargeld', Rechnungseingang: 'Rechnung', Rechnungsausgang: 'Z-Bon' }
 
 export default function Archive() {
   const { rid } = useParams()
@@ -113,7 +115,7 @@ export default function Archive() {
 
   return (
     <>
-      <Top title={folder || t('archive')} sub={r.name} back={folder ? `/r/${rid}/archive` : undefined} />
+      <Top title={folder ? LABEL[folder] : t('archive')} sub={r.name} back={folder ? `/r/${rid}/archive` : undefined} />
       <div className="page">
         <input placeholder={`🔍 ${t('search')}`} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 10 }} />
         {!found && (
@@ -129,7 +131,7 @@ export default function Archive() {
                 {FOLDERS.map((f) => (
                   <button key={f} className="tile" onClick={() => setFolder(f)}>
                     <span className="ic">{f === 'Bargeld' ? '💶' : f === 'Rechnungseingang' ? '📥' : '📤'}</span>
-                    <span>{f}</span>
+                    <span>{LABEL[f]}</span>
                     <span className="small muted">{folderFiles(f, docs, f === 'Rechnungsausgang' ? zbons : []).length} Belege</span>
                   </button>
                 ))}
@@ -153,7 +155,7 @@ export default function Archive() {
             <Link className="it" key={d.id + i} to={`/r/${rid}/doc/${d.id}`}>
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="t">{d.supplier || '—'}{folderParts(d).length > 1 && <span className="tag" style={{ marginLeft: 6 }}>⇄</span>}</div>
-                <div className="small muted">{dmy(d.doc_date)}{found && ` · ${fo}`}{d.status === 'uploaded' && <> · <span className="tag warn">{t('uploaded')}</span></>}{d.flags?.length > 0 && <> · <span className="tag err">!</span></>}</div>
+                <div className="small muted">{dmy(d.doc_date)}{found && ` · ${LABEL[fo]}`}{d.status === 'uploaded' && <> · <span className="tag warn">{t('uploaded')}</span></>}{d.flags?.length > 0 && <> · <span className="tag err">!</span></>}</div>
               </div>
               <div className="right"><div className="num">{eur(amount)}</div>{method && <PayTag m={method.split('+')[0]} />}</div>
             </Link>
