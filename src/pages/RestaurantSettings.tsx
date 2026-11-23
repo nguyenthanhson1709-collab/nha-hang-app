@@ -122,8 +122,8 @@ export default function RestaurantSettings() {
             </div>
           </div>
           {owner && <button className="primary block" onClick={save}>{t('save')}</button>}
-          <button className="block" style={{ marginTop: 16 }} onClick={() => supabase.auth.signOut()}>{t('logout')}</button>
         </fieldset>
+        <button className="block" style={{ marginTop: 16 }} onClick={() => supabase.auth.signOut()}>{t('logout')}</button>
       </div>
 
       <Sheet open={!!add} onClose={() => setAdd(null)} title={t('addUser')}>
