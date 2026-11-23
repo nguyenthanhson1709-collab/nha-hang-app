@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import JSZip from 'jszip'
-import { supabase, errMsg, type Doc, type ZBon, type CashMove, type CashCount } from '../lib/supabase'
+import { supabase, errMsg, type Doc, type ZBon, type CashCount } from '../lib/supabase'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { addMonths, dmy, eur, monthLabel, monthRange, thisMonth } from '../lib/format'
 import { DOC_SELECT, docsInRange, folderParts, kassenbuch, lockedPeriods } from '../lib/data'
-import { download, folderPdf, kassenbuchPdf, type Folder } from '../lib/pdf'
-import { buildBookings, datevCsv } from '../lib/datev'
+import { addOriginals, download, folderFiles, kassenbuchPdf, scansPdf, type Folder } from '../lib/pdf'
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
 
 const FOLDERS: Folder[] = ['Bargeld', 'Rechnungseingang', 'Rechnungsausgang']
@@ -21,7 +20,10 @@ export default function Archive() {
   const m = canManage(role)
   const { categories, profile, reload } = useApp()
   const [period, setPeriod] = useState(thisMonth())
-  const [folder, setFolder] = useState<Folder>('Rechnungseingang')
+  const [sp] = useSearchParams()
+  const nav = useNavigate()
+  const folder = sp.get('f') as Folder | null
+  const setFolder = (f: Folder | null) => nav(f ? `/r/${rid}/archive?f=${f}` : `/r/${rid}/archive`)
   const [docs, setDocs] = useState<Doc[]>([])
   const [zbons, setZbons] = useState<ZBon[]>([])
   const [locked, setLocked] = useState(false)
@@ -73,34 +75,33 @@ export default function Archive() {
   const zSum = zbons.reduce((s, z) => s + Number(z.total), 0)
   const safe = r.name.replace(/\W+/g, '_')
 
-  async function pdfFolder() {
+  const fail = (e: unknown) => toast(errMsg(e))
+  async function pdfFolder(f: Folder) {
     setBusy('PDF…')
-    try { download(await folderPdf(folder, docs, folder === 'Rechnungsausgang' ? zbons : [], r!, period, categories, setBusy), `${safe}_${period}_${folder}.pdf`) }
-    catch (e) { toast(errMsg(e)) }
+    try { const b = await scansPdf(f, docs, zbons, setBusy); if (b) download(b, `${safe}_${period}_${f}.pdf`); else toast(t('noData')) } catch (e) { fail(e) }
     setBusy('')
   }
-  async function datevData() {
-    const { data: mv } = await supabase.from('nh_cash_moves').select('*').eq('restaurant_id', rid!).eq('period', period)
-    return buildBookings(docs, zbons, (mv || []) as CashMove[], r!, categories)
-  }
-  async function zip() {
+  async function originals(fs: Folder[], name: string) {
     setBusy('ZIP…')
     try {
       const z = new JSZip()
-      for (const f of FOLDERS) z.file(`${safe}_${period}_${f}.pdf`, await folderPdf(f, docs, f === 'Rechnungsausgang' ? zbons : [], r!, period, categories, setBusy))
+      for (const f of fs) await addOriginals(z, fs.length > 1 ? `${f}/` : '', f, docs, zbons, setBusy)
+      download(await z.generateAsync({ type: 'blob' }), name)
+    } catch (e) { fail(e) }
+    setBusy('')
+  }
+  async function zipPdf() {
+    setBusy('ZIP…')
+    try {
+      const z = new JSZip()
+      for (const f of FOLDERS) { const b = await scansPdf(f, docs, zbons, setBusy); if (b) z.file(`${safe}_${period}_${f}.pdf`, b) }
       const rows = await kassenbuch(rid!, period)
       const { data: c } = await supabase.from('nh_cash_counts').select('*').eq('restaurant_id', rid!).eq('period', period)
       const opening = rows.length ? Number(rows[0].saldo) - Number(rows[0].einnahme) + Number(rows[0].ausgabe) : Number(r!.opening_cash)
       z.file(`${safe}_${period}_Kassenbuch.pdf`, kassenbuchPdf(rows, (c || []) as CashCount[], r!, period, opening))
-      if (profile.is_owner) z.file(`EXTF_Buchungsstapel_${safe}_${period}.csv`, datevCsv(await datevData(), r!, period))
       download(await z.generateAsync({ type: 'blob' }), `${safe}_${period}.zip`)
-    } catch (e) { toast(errMsg(e)) }
+    } catch (e) { fail(e) }
     setBusy('')
-  }
-  async function datev() {
-    const b = await datevData()
-    download(datevCsv(b, r!, period), `EXTF_Buchungsstapel_${safe}_${period}.csv`)
-    toast(t('datevNote'))
   }
   async function lock() {
     if (!confirm(t('lockConfirm', { m: monthLabel(period) }))) return
@@ -112,7 +113,7 @@ export default function Archive() {
 
   return (
     <>
-      <Top title={t('archive')} sub={r.name} />
+      <Top title={folder || t('archive')} sub={r.name} back={folder ? `/r/${rid}/archive` : undefined} />
       <div className="page">
         <input placeholder={`🔍 ${t('search')}`} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 10 }} />
         {!found && (
@@ -123,11 +124,20 @@ export default function Archive() {
               <button onClick={() => setPeriod(addMonths(period, 1))}>›</button>
             </div>
             {locked && <div className="alert warn">🔒 {t('locked')}</div>}
-            <div className="seg" style={{ marginBottom: 10 }}>
-              {FOLDERS.map((f) => <button key={f} className={folder === f ? 'sel' : ''} onClick={() => setFolder(f)} style={{ fontSize: '.85rem' }}>{f}</button>)}
-            </div>
+            {!folder && (
+              <div className="tiles">
+                {FOLDERS.map((f) => (
+                  <button key={f} className="tile" onClick={() => setFolder(f)}>
+                    <span className="ic">{f === 'Bargeld' ? '💶' : f === 'Rechnungseingang' ? '📥' : '📤'}</span>
+                    <span>{f}</span>
+                    <span className="small muted">{folderFiles(f, docs, f === 'Rechnungsausgang' ? zbons : []).length} Belege</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </>
         )}
+        {(folder || found) && <>
         <details style={{ marginBottom: 10 }}>
           <summary className="small muted">Filter</summary>
           <div className="grid2" style={{ marginTop: 8 }}>
@@ -158,14 +168,20 @@ export default function Archive() {
         </div>
         {!found && <div className="row between small muted" style={{ marginBottom: 12 }}><span>{items.length + (folder === 'Rechnungsausgang' ? zbons.length : 0)} Belege</span><b>{eur(sum + (folder === 'Rechnungsausgang' ? zSum : 0))}</b></div>}
 
+        </>}
+
         {m && !found && (
           <div className="card">
-            <div className="row wrap">
-              <button disabled={!!busy} onClick={pdfFolder}>📄 {t('exportPdf')} ({folder})</button>
-              <button disabled={!!busy} onClick={zip}>🗜 {t('exportZip')}</button>
-              {profile.is_owner && <button disabled={!!busy} onClick={datev}>DATEV</button>}
-              {profile.is_owner && !locked && <button className="danger" onClick={lock}>🔒 {t('lockMonth')} {monthLabel(period)}</button>}
+            <div className="grid2">
+              {folder ? <>
+                <button disabled={!!busy} onClick={() => pdfFolder(folder)}>📄 {t('exportPdf')}</button>
+                <button disabled={!!busy} onClick={() => originals([folder], `${safe}_${period}_${folder}_Original.zip`)}>🗂 {t('originals')}</button>
+              </> : <>
+                <button disabled={!!busy} onClick={zipPdf}>🗜 {t('exportZip')} (PDF)</button>
+                <button disabled={!!busy} onClick={() => originals(FOLDERS, `${safe}_${period}_Original.zip`)}>🗂 {t('exportZip')} ({t('originals')})</button>
+              </>}
             </div>
+            {!folder && profile.is_owner && !locked && <button className="danger block" style={{ marginTop: 10 }} onClick={lock}>🔒 {t('lockMonth')} {monthLabel(period)}</button>}
             {busy && <div className="small muted" style={{ marginTop: 8 }}>{busy}</div>}
           </div>
         )}

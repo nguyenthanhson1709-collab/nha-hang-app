@@ -174,6 +174,50 @@ export async function folderPdf(folder: Folder, docs: Doc[], zbons: ZBon[], r: R
   return pdf.output('blob')
 }
 
+/** Chứng từ của một thư mục trong tháng, theo ngày: tên + danh sách file gốc */
+export function folderFiles(folder: Folder, docs: Doc[], zbons: ZBon[]): { date: string; name: string; files: string[] }[] {
+  const out: { date: string; name: string; files: string[] }[] = []
+  for (const d of docs) if (folderParts(d).some((p) => p.folder === folder)) out.push({ date: d.doc_date, name: d.supplier || 'Beleg', files: d.files || [] })
+  if (folder === 'Rechnungsausgang') for (const z of zbons) out.push({ date: z.z_date, name: 'Z-Bon', files: z.files || [] })
+  return out.sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/** PDF chỉ gồm các bản scan (mỗi trang một ảnh), không có trang tổng hợp */
+export async function scansPdf(folder: Folder, docs: Doc[], zbons: ZBon[], onProgress?: (s: string) => void): Promise<Blob | null> {
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
+  const items = folderFiles(folder, docs, zbons)
+  let first = true, n = 0
+  for (const it of items) {
+    n++; onProgress?.(`${folder} ${n}/${items.length}`)
+    for (const f of it.files) for (const img of await fileImages(f)) {
+      if (!first) pdf.addPage()
+      first = false
+      const el = new Image(); el.src = img; await el.decode()
+      const m = 6, s = Math.min((W - 2 * m) / el.naturalWidth, (H - 2 * m) / el.naturalHeight)
+      const w = el.naturalWidth * s, h = el.naturalHeight * s
+      pdf.addImage(img, 'JPEG', (W - w) / 2, (H - h) / 2, w, h)
+    }
+  }
+  return first ? null : pdf.output('blob')
+}
+
+/** Thêm file gốc vào ZIP: thư mục/ngày_tên_số.đuôi */
+export async function addOriginals(zip: { file: (name: string, data: Blob) => unknown }, dir: string, folder: Folder, docs: Doc[], zbons: ZBon[], onProgress?: (s: string) => void) {
+  const items = folderFiles(folder, docs, zbons)
+  let n = 0
+  for (const it of items) {
+    n++; onProgress?.(`${folder} ${n}/${items.length}`)
+    let k = 0
+    for (const f of it.files) {
+      const b = await downloadFile(f); if (!b) continue
+      k++
+      const ext = (f.match(/\.(\w+)$/)?.[1] || 'jpg').toLowerCase()
+      const safe = it.name.replace(/[^\wÄÖÜäöüß-]+/g, '_').slice(0, 40)
+      zip.file(`${dir}${it.date}_${String(n).padStart(3, '0')}_${safe}${it.files.length > 1 ? '_' + k : ''}.${ext}`, b)
+    }
+  }
+}
+
 export function kassenbuchPdf(rows: KbRow[], counts: CashCount[], r: Restaurant, period: string, opening: number): Blob {
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
   const y = header(pdf, `Kassenbuch ${monthLabel(period)}`, r)
