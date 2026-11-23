@@ -8,6 +8,8 @@ import { BLUR_LIMIT, compressImage, parseEInvoice, parseInvoice, parseZbon, pdfE
 import { saveChildren, uploadFiles } from '../lib/data'
 import { guessCategory, loadMemory } from '../lib/categorize'
 import { Top, toast, useRestaurant } from '../components/ui'
+import Scanner, { type ScannedPage } from '../components/Scanner'
+import { autoScanImage } from '../lib/scanner'
 
 type Kind = 'purchase' | 'zbon' | 'sales'
 interface Page { blob: Blob; name: string; type: string; preview: string; blurry: boolean }
@@ -26,6 +28,7 @@ export default function Scan() {
   const [busy, setBusy] = useState('')
   const [pay, setPay] = useState<PayMethod | null>(null)
   const [staffDone, setStaffDone] = useState(false)
+  const [scanner, setScanner] = useState(false)
   const cam = useRef<HTMLInputElement>(null)
   const pick = useRef<HTMLInputElement>(null)
 
@@ -36,7 +39,8 @@ export default function Scan() {
     const add: Page[] = []
     for (const f of Array.from(fl)) {
       if (f.type.startsWith('image/')) {
-        const blob = await compressImage(f)
+        let blob: Blob
+        try { blob = await autoScanImage(f) } catch { blob = await compressImage(f) }
         const sh = await sharpness(blob)
         add.push({ blob, name: f.name.replace(/\.\w+$/, '') + '.jpg', type: 'image/jpeg', preview: URL.createObjectURL(blob), blurry: sh < BLUR_LIMIT })
       } else {
@@ -44,6 +48,13 @@ export default function Scan() {
       }
     }
     setPages((p) => [...p, ...add])
+  }
+
+  async function fromScanner(ps: ScannedPage[]) {
+    setScanner(false)
+    const add: Page[] = []
+    for (const p of ps) add.push({ blob: p.blob, name: 'scan.jpg', type: 'image/jpeg', preview: p.preview, blurry: (await sharpness(p.blob)) < BLUR_LIMIT })
+    setPages((x) => [...x, ...add])
   }
 
   async function process() {
@@ -112,10 +123,12 @@ export default function Scan() {
         <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
         <input ref={pick} type="file" accept="image/*,application/pdf,.xml,text/xml,application/xml" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
 
-        <div className="grid2">
-          <button className="primary huge" onClick={() => { setStaffDone(false); cam.current?.click() }}>📷 {pages.length ? t('addPage') : t('takePhoto')}</button>
-          <button className="huge" onClick={() => { setStaffDone(false); pick.current?.click() }}>📄 {t('chooseFile')}</button>
+        <button className="primary huge" onClick={() => { setStaffDone(false); setScanner(true) }}>📄 {pages.length ? t('addPage') : t('scan')}</button>
+        <div className="grid2" style={{ marginTop: 8 }}>
+          <button onClick={() => { setStaffDone(false); cam.current?.click() }}>📷 {t('takePhoto')}</button>
+          <button onClick={() => { setStaffDone(false); pick.current?.click() }}>📁 {t('chooseFile')}</button>
         </div>
+        {scanner && <Scanner onDone={fromScanner} onCancel={() => setScanner(false)} />}
 
         {pages.length > 0 && (
           <div className="card" style={{ marginTop: 12 }}>

@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "cp node_modules/@techstark/opencv-js/dist/opencv.js public/opencv.js && vite",
+    "build": "cp node_modules/@techstark/opencv-js/dist/opencv.js public/opencv.js && tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.6.0",
+    "@techstark/opencv-js": "^4.10.0-release.1",
     "@tesseract.js-data/deu": "^1.0.0",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
