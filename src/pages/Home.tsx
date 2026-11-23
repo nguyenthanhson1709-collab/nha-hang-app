@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase, type Doc } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
 import { useT } from '../lib/i18n'
@@ -15,6 +15,8 @@ export default function Home() {
   const role = useRole(rid)
   const { profile } = useApp()
   const m = canManage(role)
+  const [sp] = useSearchParams()
+  const view = sp.get('v')
   const [s, setS] = useState<{ spend: number; cash: number; card: number; transfer: number; rev: number; bal: number; missing: string[]; review: Doc[]; mine: Doc[] } | null>(null)
 
   useEffect(() => {
@@ -44,6 +46,18 @@ export default function Home() {
   }, [rid, r, m, profile.id])
 
   if (!r) return null
+  if (m && view === 'review') return (
+    <>
+      <Top title={`${t('toReview')} (${s?.review.length ?? '…'})`} sub={r.name} back={`/r/${rid}`} />
+      <div className="page">{s ? <DocList docs={s.review} rid={rid!} empty={t('noData')} /> : <div className="center"><div className="spinner" /></div>}</div>
+    </>
+  )
+  const tiles = [
+    { icon: '📷', label: t('scanTile'), to: `/r/${rid}/scan` },
+    ...(m ? [{ icon: '🔎', label: t('toReview'), to: `/r/${rid}?v=review`, badge: s?.review.length }] : []),
+    { icon: '📁', label: t('archive'), to: `/r/${rid}/archive` },
+    ...(m ? [{ icon: '📒', label: t('kassenbuch'), to: `/r/${rid}/kb` }] : []),
+  ]
   return (
     <>
       <Top title={r.name} sub={`${t('thisMonth')} · ${thisMonth().slice(5)}/${thisMonth().slice(0, 4)}`} back={profile.is_owner ? '/restaurants' : undefined}
@@ -55,24 +69,20 @@ export default function Home() {
             <div className="big" style={{ color: s && s.bal < 0 ? 'var(--err)' : undefined }}>{s ? eur(s.bal) : '…'}</div>
           </div>
         )}
-        <button className="primary huge" onClick={() => nav(`/r/${rid}/scan`)}>📷 {t('scan')}</button>
-        {m && s && (
-          <>
-            <div className="grid2" style={{ marginTop: 12 }}>
-              <div className="stat"><div className="l">{t('spending')}</div><div className="v">{eur(s.spend)}</div></div>
-              <div className="stat"><div className="l">{t('revenue')} (Z-Bon)</div><div className="v">{eur(s.rev)}</div></div>
-              <div className="stat"><div className="l">{t('spending')} · {t('cash')}</div><div className="v">{eur(s.cash)}</div></div>
-              <div className="stat"><div className="l">{t('spending')} · {t('card')} / {t('transfer')}</div><div className="v">{eur(s.card + s.transfer)}</div></div>
-            </div>
-            {s.missing.length > 0 && (
-              <div className="alert warn">
-                <b>{t('missingZbon')} ({s.missing.length}):</b> {s.missing.slice(-10).map((d) => d.slice(8) + '.').join(' ')}
-                {s.missing.length > 10 && ' …'}
-              </div>
-            )}
-            <h2>{t('toReview')} ({s.review.length})</h2>
-            <DocList docs={s.review} rid={rid!} empty={t('noData')} />
-          </>
+        <div className="tiles">
+          {tiles.map((x) => (
+            <button key={x.to} className="tile" onClick={() => nav(x.to)}>
+              <span className="ic">{x.icon}</span>
+              <span>{x.label}</span>
+              {!!('badge' in x && x.badge) && <span className="badge">{x.badge}</span>}
+            </button>
+          ))}
+        </div>
+        {m && s && s.missing.length > 0 && (
+          <div className="alert warn">
+            <b>{t('missingZbon')} ({s.missing.length}):</b> {s.missing.slice(-10).map((d) => d.slice(8) + '.').join(' ')}
+            {s.missing.length > 10 && ' …'}
+          </div>
         )}
         {!m && s && (
           <>
