@@ -106,6 +106,11 @@ export default function Scan() {
         supplier: pi.supplier, invoice_no: pi.invoice_no, seller_tax_id: pi.seller_tax_id, gross, files, ocr_text: text.slice(0, 50000),
       }).select().single()
       if (error) throw error
+      // Lưu nhà cung cấp mới vào danh sách
+      if (pi.supplier) {
+        const { data: ex } = await supabase.from('nh_suppliers').select('id').ilike('name', pi.supplier.replace(/[%_]/g, '')).limit(1)
+        if (!ex?.length) await supabase.from('nh_suppliers').insert({ name: pi.supplier, tax_id: pi.seller_tax_id })
+      }
       const mem = await loadMemory()
       await saveChildren(doc.id,
         payment ? [{ method: payment, amount: gross }] : [],

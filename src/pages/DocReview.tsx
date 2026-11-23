@@ -7,7 +7,7 @@ import { dmy, eur, monthLabel, normName, r2 } from '../lib/format'
 import { findDuplicate, folderParts, getDoc, lockedPeriods, saveChildren } from '../lib/data'
 import { guessCategory, loadMemory, remember } from '../lib/categorize'
 import { docPdf } from '../lib/pdf'
-import { Money, PayTag, Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
+import { Money, PayTag, Sheet, Spinner, Top, toast, useRestaurant, ComboInput } from '../components/ui'
 
 type PayMode = PayMethod | 'mixed' | null
 
@@ -110,7 +110,7 @@ export default function DocReview() {
       if (error) throw error
       await saveChildren(doc.id, payments, taxes, lines, true)
       for (const l of lines) if (l.category_id && l.name) await remember(l.name, l.category_id)
-      if (f.supplier.trim() && !suppliers.includes(f.supplier.trim())) await supabase.from('nh_suppliers').insert({ name: f.supplier.trim(), tax_id: f.seller_tax_id || null })
+      if (f.supplier.trim() && !suppliers.some((x) => x.toLowerCase() === f.supplier.trim().toLowerCase())) await supabase.from('nh_suppliers').insert({ name: f.supplier.trim(), tax_id: f.seller_tax_id || null })
       toast(t('saved'))
       nav(`/r/${rid}`)
     } catch (e) { toast(errMsg(e)) }
@@ -158,10 +158,9 @@ export default function DocReview() {
                   <button className={f.kind === 'sales' ? 'sel' : ''} onClick={() => setF({ ...f, kind: 'sales' })}>{t('scanSales')}</button>
                 </div>
               )}
-              <label className="f"><span>{t('supplier')}</span>
-                <input list="sup" value={f.supplier} onChange={(e) => setF({ ...f, supplier: e.target.value })} />
-                <datalist id="sup">{suppliers.map((s) => <option key={s} value={s} />)}</datalist>
-              </label>
+              <div className="f"><span>{t('supplier')}</span>
+                <ComboInput value={f.supplier} onChange={(v) => setF({ ...f, supplier: v })} options={suppliers} />
+              </div>
               <div className="grid2">
                 <label className="f"><span>{t('date')}</span><input type="date" value={f.doc_date} onChange={(e) => setF({ ...f, doc_date: e.target.value })} /></label>
                 <label className="f"><span>{t('invoiceNo')}</span><input value={f.invoice_no} onChange={(e) => setF({ ...f, invoice_no: e.target.value })} /></label>

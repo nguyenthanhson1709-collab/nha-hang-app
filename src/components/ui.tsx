@@ -93,3 +93,28 @@ export function useRestaurant(rid: string | undefined) {
   const { restaurants } = useApp()
   return restaurants.find((r) => r.id === rid)
 }
+
+/** Ô chọn có danh sách cuộn + gõ tay giá trị mới (thay datalist, iPhone hiển thị kém) */
+export function ComboInput({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: string[]; placeholder?: string }) {
+  const [open, setOpen] = useState(false)
+  const q = value.trim().toLowerCase()
+  const exact = options.some((o) => o.toLowerCase() === q)
+  const shown = (q && !exact ? options.filter((o) => o.toLowerCase().includes(q)) : options).slice(0, 200)
+  return (
+    <div className="combo">
+      <div className="row" style={{ gap: 6 }}>
+        <input value={value} placeholder={placeholder} onChange={(e) => { onChange(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)} style={{ flex: 1 }} />
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setOpen(!open)} style={{ minWidth: 44 }}>▾</button>
+      </div>
+      {open && (shown.length > 0 || (q && !exact)) && (
+        <div className="combo-list">
+          {q && !exact && <div className="combo-it muted small">+ „{value.trim()}"</div>}
+          {shown.map((o) => (
+            <div key={o} className={`combo-it ${o === value ? 'sel' : ''}`} onMouseDown={(e) => e.preventDefault()} onClick={() => { onChange(o); setOpen(false) }}>{o}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

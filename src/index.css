@@ -50,8 +50,8 @@ button.huge { width: 100%; min-height: 64px; font-size: 1.15rem; }
 input, select, textarea { font: inherit; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); min-height: 44px; }
 input[type=checkbox] { width: 22px; min-height: 22px; height: 22px; }
 textarea { min-height: 70px; }
-label.f { display: block; margin-bottom: 10px; }
-label.f > span { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 4px; }
+label.f, div.f { display: block; margin-bottom: 10px; }
+label.f > span, div.f > span { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 4px; }
 .seg { display: flex; gap: 6px; flex-wrap: wrap; }
 .seg button { flex: 1; min-width: 80px; }
 .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .75rem; background: var(--brand-2); color: var(--brand); white-space: nowrap; }
@@ -112,3 +112,9 @@ tfoot td { font-weight: 700; border-top: 2px solid var(--line); }
 .tile .ic { font-size: 2.4rem; line-height: 1; }
 .tile:active { transform: scale(.97); }
 .tile .badge { position: absolute; top: 10px; right: 10px; min-width: 26px; height: 26px; padding: 0 7px; border-radius: 13px; background: var(--warn); color: #fff; font-size: .85rem; display: flex; align-items: center; justify-content: center; }
+.combo { position: relative; }
+.combo-list { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); max-height: 240px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.combo-it { padding: 12px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.combo-it:last-child { border-bottom: 0; }
+.combo-it.sel { background: var(--brand-2); font-weight: 650; }
