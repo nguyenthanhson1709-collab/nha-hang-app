@@ -144,6 +144,9 @@ export default function Archive() {
                     <span className="small muted">{folderFiles(f, docs, f === 'Rechnungsausgang' ? zbons : [], extra).length} Belege</span>
                   </button>
                 ))}
+                <Link className="tile" to={`/r/${rid}/statements`}>
+                  <span className="ic">🏦</span><span>Kontoauszug</span>
+                </Link>
                 <Link className="tile" to={`/r/${rid}/contracts`}>
                   <span className="ic">📑</span><span>{t('contracts')}</span><span className="small muted">Lastschrift</span>
                 </Link>

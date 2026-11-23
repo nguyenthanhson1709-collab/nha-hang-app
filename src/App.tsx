@@ -14,6 +14,7 @@ import ZbonReview from './pages/ZbonReview'
 import Kassenbuch from './pages/Kassenbuch'
 import Archive from './pages/Archive'
 import Contracts from './pages/Contracts'
+import Statements from './pages/Statements'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import RestaurantSettings from './pages/RestaurantSettings'
@@ -68,6 +69,7 @@ function Shell({ session }: { session: Session }) {
           <Route path="/r/:rid/kb" element={<RestLayout><Kassenbuch /></RestLayout>} />
           <Route path="/r/:rid/archive" element={<RestLayout><Archive /></RestLayout>} />
           <Route path="/r/:rid/contracts" element={<RestLayout><Contracts /></RestLayout>} />
+          <Route path="/r/:rid/statements" element={<RestLayout><Statements /></RestLayout>} />
           <Route path="/r/:rid/reports" element={<RestLayout><Reports /></RestLayout>} />
           <Route path="/r/:rid/settings" element={<RestLayout><RestaurantSettings /></RestLayout>} />
           <Route path="*" element={<Navigate to={start} replace />} />
