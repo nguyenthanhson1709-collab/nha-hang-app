@@ -75,7 +75,7 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
     const txt = m.channel === 'viva' ? 'Kartenzahlung' : txt0
     const a = Number(m.amount)
     out.push({
-      ...base, date: m.move_date, konto, text: m.description ? `${txt}: ${m.description}` : txt, moveId: m.id, prio: isIn ? 1 : 4, ts: m.created_at,
+      ...base, date: m.move_date, konto, text: m.description && m.description.trim() !== txt ? `${txt}: ${m.description}` : txt, moveId: m.id, prio: isIn ? 1 : 4, ts: m.created_at,
       ...(isIn ? { ein: a, einNetto: a } : { aus: a, ausNetto: a }),
     })
   }
