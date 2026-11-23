@@ -41,7 +41,7 @@ const vi = {
   uploadedBy: 'Người tải', status: 'Trạng thái', uploaded: 'Chờ duyệt', reviewed: 'Đã duyệt', open: 'Mở', myUploads: 'Hoá đơn tôi đã tải',
   original: 'Ảnh gốc', linkedPart: 'Phần còn lại ở thư mục', confirmDelete: 'Xoá chứng từ này?', ocrFailed: 'Không đọc được, hãy nhập tay.',
   history: 'Lịch sử sửa', daysOpen: 'Mở cửa', added: 'Đã thêm', mustChoosePayment: 'Hãy chọn hình thức trả', paymentSumMismatch: 'Tổng các hình thức trả phải bằng tổng hoá đơn',
-  journal: 'Sổ nhật ký (Buchungsjournal)', soll: 'Soll', haben: 'Haben', period: 'Kỳ', from: 'Từ', to: 'Đến', week: 'Tuần', quarter: 'Quý', year: 'Năm',
+  journal: 'Sổ nhật ký (Buchungsjournal)', soll: 'Soll', haben: 'Haben', period: 'Kỳ', from: 'Từ', to: 'Đến', week: 'Tuần', quarter: 'Quý', custom: 'Tự chọn', year: 'Năm',
   vatNote: 'Chỉ để xem. Steuerberater nộp tờ khai.', datevNote: 'Lần đầu hãy nhờ Steuerberater thử nhập file và xác nhận số tài khoản.',
   rememberedCategory: 'Nhóm đã nhớ', suggestion: 'Gợi ý', perGuest: 'Doanh thu / khách',
 }
@@ -87,7 +87,7 @@ const de: Dict = {
   uploadedBy: 'Hochgeladen von', status: 'Status', uploaded: 'Ungeprüft', reviewed: 'Geprüft', open: 'Öffnen', myUploads: 'Meine Belege',
   original: 'Original', linkedPart: 'Restbetrag im Ordner', confirmDelete: 'Diesen Beleg löschen?', ocrFailed: 'Nicht lesbar, bitte manuell erfassen.',
   history: 'Änderungsverlauf', daysOpen: 'Geöffnet', added: 'Hinzugefügt', mustChoosePayment: 'Bitte Zahlungsart wählen', paymentSumMismatch: 'Summe der Zahlungsarten muss dem Rechnungsbetrag entsprechen',
-  journal: 'Buchungsjournal', soll: 'Soll', haben: 'Haben', period: 'Zeitraum', from: 'Von', to: 'Bis', week: 'Woche', quarter: 'Quartal', year: 'Jahr',
+  journal: 'Buchungsjournal', soll: 'Soll', haben: 'Haben', period: 'Zeitraum', from: 'Von', to: 'Bis', week: 'Woche', quarter: 'Quartal', custom: 'Zeitraum', year: 'Jahr',
   vatNote: 'Nur zur Ansicht. Die Anmeldung macht der Steuerberater.', datevNote: 'Beim ersten Mal den Import vom Steuerberater testen und Konten bestätigen lassen.',
   rememberedCategory: 'Gemerkte Gruppe', suggestion: 'Vorschlag', perGuest: 'Umsatz / Gast',
 }
