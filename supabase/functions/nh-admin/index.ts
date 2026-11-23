@@ -88,6 +88,17 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    if (action === "set_role") {
+      // Chỉ chủ đổi vai trò người phụ trách <-> nhân viên
+      if (!isOwner) return json({ error: "forbidden" }, 403);
+      if (!["manager", "staff"].includes(role)) return json({ error: "invalid_role" }, 400);
+      // Mỗi quán 1 người phụ trách: người phụ trách cũ thành nhân viên
+      if (role === "manager") await admin.from("nh_members").update({ role: "staff" }).eq("restaurant_id", restaurant_id).eq("role", "manager").neq("user_id", body.user_id);
+      const { error } = await admin.from("nh_members").update({ role }).eq("restaurant_id", restaurant_id).eq("user_id", body.user_id);
+      if (error) return json({ error: error.message }, 400);
+      return json({ ok: true });
+    }
+
     return json({ error: "unknown_action" }, 400);
   } catch (e) {
     return json({ error: String(e) }, 500);

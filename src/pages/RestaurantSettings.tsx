@@ -62,6 +62,9 @@ export default function RestaurantSettings() {
     if (!confirm(t('remove') + '?')) return
     try { await adminCall({ action: 'remove_member', restaurant_id: rid, user_id: uid }); loadMembers() } catch (e) { toast(errMsg(e)) }
   }
+  async function setRole(uid: string, role: string) {
+    try { await adminCall({ action: 'set_role', restaurant_id: rid, user_id: uid, role }); loadMembers(); toast(t('saved')) } catch (e) { toast(errMsg(e)) }
+  }
   const map = f.pos_payment_map || {}
 
   return (
@@ -73,7 +76,11 @@ export default function RestaurantSettings() {
           <div className="list">
             {members.map((m) => (
               <div className="it" key={m.user_id}>
-                <div className="grow" style={{ minWidth: 0 }}><div className="t">{m.nh_profiles?.full_name || m.nh_profiles?.email}</div><div className="small muted">{m.nh_profiles?.email} · {t(m.role)}</div></div>
+                <div className="grow" style={{ minWidth: 0 }}><div className="t">{m.nh_profiles?.full_name || m.nh_profiles?.email}</div><div className="small muted">{m.nh_profiles?.email}{!owner && ` · ${t(m.role)}`}</div>
+                  {owner && <select value={m.role} onChange={(e) => setRole(m.user_id, e.target.value)} style={{ marginTop: 6, maxWidth: 220 }}>
+                    <option value="manager">{t('manager')}</option><option value="staff">{t('staff')}</option>
+                  </select>}
+                </div>
                 {(owner || m.role === 'staff') && <>
                   <button className="ghost small" onClick={() => setPwFor({ user_id: m.user_id, password: '' })}>🔑</button>
                   <button className="ghost small" onClick={() => remove(m.user_id)}>✕</button>
