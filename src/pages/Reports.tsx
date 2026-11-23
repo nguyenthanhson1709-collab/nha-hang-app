@@ -74,7 +74,7 @@ export default function Reports() {
     setDocs(null)
     ;(async () => {
       const [d, z] = await Promise.all([docsInRange(rid || null, range.from, range.to, false), zbonsInRange(rid || null, range.from, range.to)])
-      setDocs(d.filter((x) => x.kind === 'purchase')); setZs(z)
+      setDocs(d.filter((x) => x.kind === 'purchase' && x.status === 'reviewed')); setZs(z)
     })().catch((e) => toast(errMsg(e)))
   }, [rid, range.from, range.to])
 
