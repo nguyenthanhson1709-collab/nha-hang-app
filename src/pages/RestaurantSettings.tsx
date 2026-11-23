@@ -97,12 +97,6 @@ export default function RestaurantSettings() {
             <label className="f"><span>{t('name')}</span><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
             <label className="f"><span>{t('address')}</span><input value={f.address || ''} onChange={(e) => setF({ ...f, address: e.target.value })} /></label>
             <label className="f"><span>{t('taxNumber')}</span><input value={f.tax_number || ''} onChange={(e) => setF({ ...f, tax_number: e.target.value })} /></label>
-            <div className="grid2">
-              <label className="f"><span>{t('openingCash')}</span><Money value={Number(f.opening_cash)} onChange={(v) => setF({ ...f, opening_cash: v })} /></label>
-              <label className="f"><span>{t('openingDate')}</span><input type="date" value={f.opening_date || ''} onChange={(e) => setF({ ...f, opening_date: e.target.value })} /></label>
-            </div>
-            <label className="row" style={{ marginBottom: 10 }}><input type="checkbox" checked={f.tip_paid_cash} onChange={(e) => setF({ ...f, tip_paid_cash: e.target.checked })} /> {t('tipPaidCash')}</label>
-            <label className="row" style={{ marginBottom: 10 }}><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> {t('active')}</label>
           </div>
           <div className="card">
             <label className="f"><span>{t('posType')}</span>
