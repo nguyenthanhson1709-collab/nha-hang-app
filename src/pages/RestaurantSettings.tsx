@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { supabase, errMsg, type PayMethod, type Restaurant } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
-import { Money, Sheet, Top, toast, useRestaurant } from '../components/ui'
+import { Sheet, Top, toast, useRestaurant } from '../components/ui'
 
 interface Member { user_id: string; role: 'manager' | 'staff'; nh_profiles: { email: string; full_name: string } | null }
 
