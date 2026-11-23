@@ -99,12 +99,7 @@ export default function RestaurantSettings() {
             <label className="f"><span>{t('taxNumber')}</span><input value={f.tax_number || ''} onChange={(e) => setF({ ...f, tax_number: e.target.value })} /></label>
           </div>
           <div className="card">
-            <label className="f"><span>{t('posType')}</span>
-              <select value={f.pos_type} onChange={(e) => setF({ ...f, pos_type: e.target.value })}>
-                <option value="thermal_b">Bon in nhiệt / Thermobon (Summen, Zahlungsmethoden)</option>
-                <option value="allo">allO „Umsatzanalyze“ (PDF)</option>
-              </select></label>
-            <h3>{t('posMap')}</h3>
+            <h3 style={{ marginTop: 0 }}>{t('posMap')}</h3>
             {Object.entries(map).map(([k, v]) => (
               <div className="row" key={k} style={{ marginBottom: 6 }}>
                 <code className="grow">{k}</code>
