@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import * as XLSX from 'xlsx'
-import { errMsg, type Category, type Doc, type ZBon } from '../lib/supabase'
+import { supabase, errMsg, type Category, type Doc, type ZBon } from '../lib/supabase'
+import { remember } from '../lib/categorize'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { addMonths, daysOfMonth, dmy, eur, monthLabel, monthRange, r2, thisMonth } from '../lib/format'
@@ -11,7 +12,8 @@ import { Spinner, Top, toast, useRestaurant } from '../components/ui'
 
 type Mode = 'month' | 'quarter' | 'year' | 'custom'
 type Tab = 'umsatz' | 'supplier' | 'food' | 'drink' | 'nonfood'
-type Item = { name: string; qty: number; sum: number; n: number; last: string; suppliers: Set<string> }
+type Item = { name: string; qty: number; sum: number; n: number; last: string; suppliers: Set<string>; ids: string[]; cid: string | null }
+type DL = NonNullable<Doc['nh_document_lines']>[number]
 
 const TABS: { k: Tab; icon: string; vi: string; de: string }[] = [
   { k: 'umsatz', icon: '📊', vi: 'Umsatz', de: 'Umsatz' },
@@ -36,12 +38,13 @@ function Bars({ data }: { data: { label: string; value: number }[] }) {
 }
 
 /** Gộp dòng hàng theo tên */
-function addItem(map: Map<string, Item>, name: string, qty: number | null, sum: number, date: string, supplier: string) {
-  const k = name.trim().toLowerCase().replace(/\s+/g, ' ')
+function addItem(map: Map<string, Item>, l: DL, date: string, supplier: string) {
+  const k = l.name.trim().toLowerCase().replace(/\s+/g, ' ')
   if (!k) return
-  const it = map.get(k) || { name: name.trim(), qty: 0, sum: 0, n: 0, last: '', suppliers: new Set<string>() }
-  it.qty += Number(qty || 1); it.sum += sum; it.n++
-  if (date > it.last) it.last = date
+  const it = map.get(k) || { name: l.name.trim(), qty: 0, sum: 0, n: 0, last: '', suppliers: new Set<string>(), ids: [], cid: null }
+  it.qty += Number(l.qty || 1); it.sum += Number(l.total); it.n++
+  if (l.id) it.ids.push(l.id)
+  if (date >= it.last) { it.last = date; it.cid = l.category_id }
   it.suppliers.add(supplier)
   map.set(k, it)
 }
@@ -114,7 +117,7 @@ export default function Reports() {
       const k = d.supplier || '—'
       const s = m.get(k) || { sum: 0, n: 0, items: new Map() }
       s.sum += Number(d.gross); s.n++
-      for (const l of d.nh_document_lines || []) addItem(s.items, l.name, l.qty, Number(l.total), d.doc_date, k)
+      for (const l of d.nh_document_lines || []) addItem(s.items, l, d.doc_date, k)
       m.set(k, s)
     }
     return [...m.entries()].sort((a, b) => b[1].sum - a[1].sum)
@@ -126,16 +129,32 @@ export default function Reports() {
       food: { sum: 0, subs: new Map(), items: new Map() }, drink: { sum: 0, subs: new Map(), items: new Map() }, nonfood: { sum: 0, subs: new Map(), items: new Map() },
     }
     let none = 0
+    const noneItems = new Map<string, Item>()
     for (const d of docs || []) for (const l of d.nh_document_lines || []) {
       const k = kindOf(l.category_id)
-      if (!k) { none += Number(l.total); continue }
+      if (!k) { none += Number(l.total); addItem(noneItems, l, d.doc_date, d.supplier || '—'); continue }
       const g = res[k]
       g.sum += Number(l.total)
       g.subs.set(l.category_id!, (g.subs.get(l.category_id!) || 0) + Number(l.total))
-      addItem(g.items, l.name, l.qty, Number(l.total), d.doc_date, d.supplier || '—')
+      addItem(g.items, l, d.doc_date, d.supplier || '—')
     }
-    return { ...res, none }
+    return { ...res, none, noneItems }
   }, [docs, kindOf])
+
+  // Đổi nhóm của một mặt hàng: sửa mọi dòng cùng tên trong kỳ đang xem + nhớ cho lần sau
+  async function setCat(it: Item, cid: string | null) {
+    try {
+      for (let i = 0; i < it.ids.length; i += 100) {
+        const { error } = await supabase.from('nh_document_lines').update({ category_id: cid }).in('id', it.ids.slice(i, i + 100))
+        if (error) throw error
+      }
+      if (cid) await remember(it.name, cid)
+      const ids = new Set(it.ids)
+      setDocs((ds) => ds && ds.map((d) => ({ ...d, nh_document_lines: (d.nh_document_lines || []).map((l) => (l.id && ids.has(l.id) ? { ...l, category_id: cid } : l)) })))
+      toast(t('saved'))
+    } catch (e) { toast(errMsg(e)) }
+  }
+  const catSel = { categories, lang, onChange: setCat }
 
   if (rid && !canManage(role)) return null
   if (!rid && !profile.is_owner) return null
@@ -269,7 +288,7 @@ export default function Reports() {
           {tab === 'supplier' && sup && supData && (
             <div className="card">
               <div className="row between" style={{ marginBottom: 8 }}><b>{sup}</b><b>{eur(supData.sum)}</b></div>
-              <ItemTable items={itemRows(supData.items)} t={t} />
+              <ItemTable items={itemRows(supData.items)} t={t} cat={catSel} />
             </div>
           )}
 
@@ -280,7 +299,8 @@ export default function Reports() {
                 <Bars data={[...groupTab.subs.entries()].sort((a, b) => b[1] - a[1]).map(([cid, v]) => ({ label: catName(categories.find((c) => c.id === cid), lang), value: v }))} />
                 {group.none > 0 && <div className="small muted">{t('uncategorized')}: {eur(group.none)}</div>}
               </div>
-              <div className="card"><ItemTable items={itemRows(groupTab.items)} t={t} showSupplier /></div>
+              <div className="card"><ItemTable items={itemRows(groupTab.items)} t={t} showSupplier cat={catSel} /></div>
+              {group.noneItems.size > 0 && <div className="card"><b>{t('uncategorized')}</b><div style={{ marginTop: 8 }}><ItemTable items={itemRows(group.noneItems)} t={t} showSupplier cat={catSel} /></div></div>}
             </>
           )}
         </>}
@@ -289,7 +309,9 @@ export default function Reports() {
   )
 }
 
-function ItemTable({ items, t, showSupplier }: { items: Item[]; t: ReturnType<typeof useT>; showSupplier?: boolean }) {
+type CatSel = { categories: Category[]; lang: string; onChange: (it: Item, cid: string | null) => void }
+function ItemTable({ items, t, showSupplier, cat }: { items: Item[]; t: ReturnType<typeof useT>; showSupplier?: boolean; cat?: CatSel }) {
+  const tops = cat ? cat.categories.filter((c) => !c.parent_id).sort((a, b) => a.sort - b.sort) : []
   if (!items.length) return <div className="muted">{t('noData')}</div>
   return (
     <div className="tbl-wrap">
@@ -298,7 +320,18 @@ function ItemTable({ items, t, showSupplier }: { items: Item[]; t: ReturnType<ty
         <tbody>
           {items.map((i) => (
             <tr key={i.name + i.last}>
-              <td>{i.name}<div className="small muted">{dmy(i.last)}{showSupplier && ` · ${[...i.suppliers].join(', ')}`}</div></td>
+              <td>{i.name}<div className="small muted">{dmy(i.last)}{showSupplier && ` · ${[...i.suppliers].join(', ')}`}</div>
+                {cat && (
+                  <select className="cat-sel" value={i.cid || ''} onChange={(e) => cat.onChange(i, e.target.value || null)}>
+                    <option value="">— {t('category')} —</option>
+                    {tops.map((tp) => (
+                      <optgroup key={tp.id} label={catName(tp, cat.lang as 'vi' | 'de')}>
+                        {cat.categories.filter((c) => c.parent_id === tp.id).sort((a, b) => a.sort - b.sort).map((c) => <option key={c.id} value={c.id}>{catName(c, cat.lang as 'vi' | 'de')}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                )}
+              </td>
               <td className="num">{qtyFmt(i.qty)}</td>
               <td className="num">{eur(i.sum / (i.qty || 1), false)}</td>
               <td className="num"><b>{eur(i.sum, false)}</b></td>

@@ -4,21 +4,21 @@ import { normName } from './format'
 
 // Từ khoá -> nhóm con (theo name_de của danh mục mặc định)
 const RULES: [RegExp, string][] = [
-  [/(bier|pils|weizen|radler|heineken|beck|krombacher|warsteiner|saigon|tiger|333|hanoi)/i, 'Bier'],
-  [/(wein|sekt|prosecco|vodka|whisky|rum|gin|likör|likor|schnaps|sake|soju|spirit)/i, 'Wein und Spirituosen'],
+  [/(bier|pils|weizen|radler|heineken|\bbeck'?s?\b|krombacher|warsteiner|saigon|tiger|333|hanoi)/i, 'Bier'],
+  [/(wein|sekt|prosecco|vodka|whisky|\brum\b|\bgin\b|likör|likor|schnaps|sake|soju|spirit)/i, 'Wein und Spirituosen'],
   [/(wasser|mineral|vittel|gerolsteiner|evian|volvic|selters|sprudel|still)/i, 'Wasser'],
-  [/(cola|fanta|sprite|limo|saft|juice|eistee|ice tea|schorle|red bull|energy|mate|nektar)/i, 'Softdrinks und Säfte'],
+  [/(\bcola\b|coca|fanta|sprite|\blimo|saft|juice|eistee|ice tea|schorle|red bull|energy|\bmate\b|nektar)/i, 'Softdrinks und Säfte'],
   [/(kaffee|coffee|tee\b|tea\b|eis\s?würfel|eiswürfel)/i, 'Sonstige Getränke'],
-  [/(rind|schwein|hähnchen|hahnchen|huhn|geflügel|ente|lamm|hack|steak|filet|brust|keule|wurst|speck|thịt|bò|gà|heo|vịt)/i, 'Fleisch'],
+  [/(rind|schwein|hähnchen|hahnchen|huhn|geflügel|\bente\b|lamm|hack|steak|filet|brust|keule|wurst|speck|thịt|bò|gà|heo|vịt)/i, 'Fleisch'],
   [/(garnele|shrimp|lachs|fisch|tintenfisch|calamar|muschel|thunfisch|pangasius|tôm|cá|mực)/i, 'Fisch und Meeresfrüchte'],
   [/(ei\b|eier|milch|sahne|butter|käse|kase|joghurt|quark|trứng|sữa)/i, 'Eier und Milchprodukte'],
-  [/(salat|zwiebel|knoblauch|tomate|gurke|paprika|kohl|möhre|mohre|karotte|kartoffel|zitrone|limette|ingwer|chili|koriander|minze|basilikum|lauch|pilz|champignon|banane|apfel|mango|ananas|sprossen|rau|hành|tỏi|chanh|ớt)/i, 'Obst und Gemüse'],
-  [/(reis|nudel|mehl|bohne|linse|glasnudel|reisnudel|reispapier|mie|udon|ramen|stärke|starke|gạo|bún|mì|phở)/i, 'Trockenware'],
+  [/(salat|zwiebel|knoblauch|tomate|rucola|rukola|gurke|paprika|kohl|möhre|mohre|karotte|kartoffel|zitrone|limette|ingwer|chili|koriander|minze|basilikum|lauch|pilz|champignon|banane|apfel|mango|ananas|sprossen|rau|hành|tỏi|chanh|ớt)/i, 'Obst und Gemüse'],
+  [/(reis|nudel|mehl|bohne|linse|glasnudel|reisnudel|reispapier|\bmie\b|udon|ramen|stärke|starke|gạo|bún|mì|phở)/i, 'Trockenware'],
   [/(salz|zucker|pfeffer|sojasauce|soja|fischsauce|sauce|soße|essig|öl\b|ol\b|oil|brühe|bruhe|gewürz|gewurz|curry|sesam|mắm|dầu|đường|muối)/i, 'Gewürze und Saucen'],
   [/(tk |tiefkühl|tiefkuhl|frozen|pommes|gefroren)/i, 'Tiefkühlware'],
   [/(box|becher|deckel|tüte|tute|beutel|serviette|stäbchen|stabchen|alufolie|folie|einweg|strohhalm|karton|verpackung|to go)/i, 'Verpackung und Einwegartikel'],
   [/(spül|spul|reiniger|putz|desinfekt|seife|müllbeutel|mullbeutel|handschuh|schwamm|wc|chlor|klarspüler)/i, 'Reinigung'],
-  [/(gas|propan|butan|kohle|brennstoff|benzin|diesel)/i, 'Gas und Brennstoffe'],
+  [/(\bgas\b|propan|butan|kohle|brennstoff|benzin|diesel)/i, 'Gas und Brennstoffe'],
   [/(messer|topf|pfanne|brett|kelle|sieb|wok|schüssel|schussel)/i, 'Werkzeuge und Kleingeräte'],
 ]
 
