@@ -125,7 +125,7 @@ export async function docPdf(d: Doc, r: Restaurant, cats: Category[]): Promise<B
 export type Folder = 'Bargeld' | 'Rechnungseingang' | 'Rechnungsausgang'
 
 /** Cả thư mục theo tháng: danh sách + từng chứng từ */
-export async function folderPdf(folder: Folder, docs: Doc[], zbons: ZBon[], r: Restaurant, period: string, cats: Category[], onProgress?: (s: string) => void): Promise<Blob> {
+export async function folderPdf(folder: Folder, docs: Doc[], zbons: ZBon[], r: Restaurant, period: string, cats: Category[], onProgress?: (s: string) => void, images = true): Promise<Blob> {
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
   const y = header(pdf, `${folder} ${monthLabel(period)}`, r, 'Belegliste')
   type Item = { date: string; who: string; nr: string; net: number; tax: number; gross: number; amount: number; pay: string; doc?: Doc; z?: ZBon }
@@ -149,7 +149,7 @@ export async function folderPdf(folder: Folder, docs: Doc[], zbons: ZBon[], r: R
       pdf.addPage()
       const yy = header(pdf, `Beleg ${n}`, r, `${folder} · ${it.who} · ${dmy(it.date)} · ${eur(it.amount)}`)
       summaryPage(pdf, it.doc, r, cats, yy)
-      for (const f of it.doc.files) for (const img of await fileImages(f)) await addImagePage(pdf, img, `Beleg ${n}: ${it.who} ${dmy(it.date)}`)
+      if (images) for (const f of it.doc.files) for (const img of await fileImages(f)) await addImagePage(pdf, img, `Beleg ${n}: ${it.who} ${dmy(it.date)}`)
     } else if (it.z) {
       pdf.addPage()
       let yy = header(pdf, `Beleg ${n}: Z-Bon ${dmy(it.date)}`, r)
@@ -162,7 +162,7 @@ export async function folderPdf(folder: Folder, docs: Doc[], zbons: ZBon[], r: R
         ['Karte lt. EC-Terminal (inkl. Trinkgeld)', z.card_terminal == null ? '—' : eur(z.card_terminal)], ['davon Trinkgeld Karte', eur(z.tip_card)],
         ['Bareinnahmen (Kassenbuch)', eur(z.cash_revenue)], ['Trinkgeld lt. Kasse', eur(z.tip)], [`Storno (${z.storno_count})`, eur(z.storno)],
       ])
-      for (const f of z.files) for (const img of await fileImages(f)) await addImagePage(pdf, img, `Z-Bon ${dmy(z.z_date)}`)
+      if (images) for (const f of z.files) for (const img of await fileImages(f)) await addImagePage(pdf, img, `Z-Bon ${dmy(z.z_date)}`)
     }
   }
   footerPages(pdf)

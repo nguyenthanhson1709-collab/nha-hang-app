@@ -7,7 +7,7 @@ import { useLang, useT } from '../lib/i18n'
 import { addMonths, dmy, eur, monthLabel, monthRange, thisMonth } from '../lib/format'
 import { DOC_SELECT, balanceBefore, docsInRange, folderParts, kassenbuch, lockedPeriods } from '../lib/data'
 import { kbLines, kbPdf, kbXlsx } from '../lib/kassenbuch'
-import { addOriginals, download, folderFiles, scansPdf, type ExtraBeleg, type Folder } from '../lib/pdf'
+import { download, folderFiles, folderPdf, scansPdf, type ExtraBeleg, type Folder } from '../lib/pdf'
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
 
 const FOLDERS: Folder[] = ['Bargeld', 'Rechnungseingang', 'Rechnungsausgang']
@@ -83,17 +83,24 @@ export default function Archive() {
   const safe = r.name.replace(/\W+/g, '_')
 
   const fail = (e: unknown) => toast(errMsg(e))
+  // Tải PDF: nội dung đã đọc (danh sách + từng chứng từ), không kèm ảnh
   async function pdfFolder(f: Folder) {
     setBusy('PDF…')
-    try { const b = await scansPdf(f, docs, zbons, setBusy, extra); if (b) download(b, `${safe}_${period}_${f}.pdf`); else toast(t('noData')) } catch (e) { fail(e) }
+    try { download(await folderPdf(f, docs, f === 'Rechnungsausgang' ? zbons : [], r!, period, categories, setBusy, false), `${safe}_${period}_${f}.pdf`) } catch (e) { fail(e) }
     setBusy('')
   }
-  async function originals(fs: Folder[], name: string) {
+  // Tải file gốc: PDF gồm các bản scan
+  async function scans(f: Folder) {
+    setBusy('PDF…')
+    try { const b = await scansPdf(f, docs, zbons, setBusy, extra); if (b) download(b, `${safe}_${period}_${f}_Original.pdf`); else toast(t('noData')) } catch (e) { fail(e) }
+    setBusy('')
+  }
+  async function zipScans() {
     setBusy('ZIP…')
     try {
       const z = new JSZip()
-      for (const f of fs) await addOriginals(z, fs.length > 1 ? `${f}/` : '', f, docs, zbons, setBusy, extra)
-      download(await z.generateAsync({ type: 'blob' }), name)
+      for (const f of FOLDERS) { const b = await scansPdf(f, docs, zbons, setBusy, extra); if (b) z.file(`${safe}_${period}_${f}_Original.pdf`, b) }
+      download(await z.generateAsync({ type: 'blob' }), `${safe}_${period}_Original.zip`)
     } catch (e) { fail(e) }
     setBusy('')
   }
@@ -101,7 +108,7 @@ export default function Archive() {
     setBusy('ZIP…')
     try {
       const z = new JSZip()
-      for (const f of FOLDERS) { const b = await scansPdf(f, docs, zbons, setBusy, extra); if (b) z.file(`${safe}_${period}_${f}.pdf`, b) }
+      for (const f of FOLDERS) z.file(`${safe}_${period}_${f}.pdf`, await folderPdf(f, docs, f === 'Rechnungsausgang' ? zbons : [], r!, period, categories, setBusy, false))
       const rows = await kassenbuch(rid!, period)
       const { data: c } = await supabase.from('nh_cash_counts').select('*').eq('restaurant_id', rid!).eq('period', period)
       const { data: mv } = await supabase.from('nh_cash_moves').select('*').eq('restaurant_id', rid!).eq('period', period)
@@ -185,10 +192,10 @@ export default function Archive() {
             <div className="grid2">
               {folder ? <>
                 <button disabled={!!busy} onClick={() => pdfFolder(folder)}>📄 {t('exportPdf')}</button>
-                <button disabled={!!busy} onClick={() => originals([folder], `${safe}_${period}_${folder}_Original.zip`)}>🗂 {t('originals')}</button>
+                <button disabled={!!busy} onClick={() => scans(folder)}>🗂 {t('originals')}</button>
               </> : <>
                 <button disabled={!!busy} onClick={zipPdf}>🗜 {t('exportZip')} (PDF)</button>
-                <button disabled={!!busy} onClick={() => originals(FOLDERS, `${safe}_${period}_Original.zip`)}>🗂 {t('exportZip')} ({t('originals')})</button>
+                <button disabled={!!busy} onClick={zipScans}>🗂 {t('exportZip')} ({t('origShort')})</button>
               </>}
             </div>
             {!folder && profile.is_owner && !locked && <button className="danger block" style={{ marginTop: 10 }} onClick={lock}>🔒 {t('lockMonth')} {monthLabel(period)}</button>}
