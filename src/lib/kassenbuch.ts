@@ -71,7 +71,9 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
     sonstige_ausgabe: ['4900', 'Sonstige Ausgabe', false], einlage: ['1890', 'Einlage', true], privatentnahme: ['1800', 'Privatentnahme', false],
   }
   for (const m of moves) {
-    const [konto, txt0, isIn] = MV[m.type]
+    const [konto0, txt0, isIn] = MV[m.type]
+    // Viva Wallet có tài khoản riêng 1210 trong DATEV của Steuerberater (SKR03)
+    const konto = m.channel === 'viva' ? '1210' : konto0
     const txt = m.channel === 'viva' ? 'Kartenzahlung' : txt0
     const a = Number(m.amount)
     out.push({
