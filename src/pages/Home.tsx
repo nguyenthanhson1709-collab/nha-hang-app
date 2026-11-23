@@ -55,7 +55,7 @@ export default function Home() {
   const tiles = [
     { icon: '📷', label: t('scanTile'), to: `/r/${rid}/scan` },
     ...(m ? [{ icon: '🔎', label: t('toReview'), to: `/r/${rid}?v=review`, badge: s?.review.length }] : []),
-    { icon: '📁', label: t('archive'), to: `/r/${rid}/archive` },
+    ...(m ? [{ icon: '📁', label: t('archive'), to: `/r/${rid}/archive` }] : []),
     ...(m ? [{ icon: '📒', label: t('kassenbuch'), to: `/r/${rid}/kb` }] : []),
   ]
   return (

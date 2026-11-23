@@ -77,7 +77,7 @@ export default function Archive() {
     return out
   }, [docs, found, folder, fPay, fRate, fCat, fSup])
 
-  if (!r) return null
+  if (!r || !m) return null
   const sum = items.reduce((s, i) => s + i.amount, 0)
   const zSum = zbons.reduce((s, z) => s + Number(z.total), 0)
   const safe = r.name.replace(/\W+/g, '_')

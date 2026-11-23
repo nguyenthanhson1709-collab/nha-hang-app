@@ -40,7 +40,7 @@ export function BottomNav({ rid }: { rid: string }) {
       <NavLink to={`/r/${rid}`} end><Icon k="home" />{t('home')}</NavLink>
       <NavLink to={`/r/${rid}/scan`}><Icon k="scan" />{t('scan')}</NavLink>
       {m && <NavLink to={`/r/${rid}/kb`}><Icon k="book" />{t('kassenbuch')}</NavLink>}
-      <NavLink to={`/r/${rid}/archive`}><Icon k="folder" />{t('archive')}</NavLink>
+      {m && <NavLink to={`/r/${rid}/archive`}><Icon k="folder" />{t('archive')}</NavLink>}
       {m && <NavLink to={`/r/${rid}/reports`}><Icon k="chart" />{t('reports')}</NavLink>}
     </div></nav>
   )
