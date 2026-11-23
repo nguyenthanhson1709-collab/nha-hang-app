@@ -6,6 +6,7 @@ import { useLang, useT } from '../lib/i18n'
 import { dmy, eur, monthLabel, normName, r2 } from '../lib/format'
 import { findDuplicate, folderParts, getDoc, lockedPeriods, saveChildren } from '../lib/data'
 import { guessCategory, loadMemory, remember } from '../lib/categorize'
+import { linesToGross } from '../lib/lines'
 import { docPdf } from '../lib/pdf'
 import { Money, PayTag, Sheet, Spinner, Top, toast, useRestaurant, ComboInput } from '../components/ui'
 
@@ -29,6 +30,7 @@ export default function DocReview() {
   const [f, setF] = useState({ supplier: '', doc_date: '', invoice_no: '', seller_tax_id: '', note: '', gross: 0, kind: 'purchase' as 'purchase' | 'sales' })
   const [taxes, setTaxes] = useState<TaxRow[]>([])
   const [lines, setLines] = useState<Line[]>([])
+  const [openLines, setOpenLines] = useState(false)
   const [payMode, setPayMode] = useState<PayMode>(null)
   const [mix, setMix] = useState({ cash: 0, other: 0, otherMethod: 'card' as PayMethod })
   const [suppliers, setSuppliers] = useState<string[]>([])
@@ -45,12 +47,14 @@ export default function DocReview() {
       setTaxes((d.nh_document_taxes || []).map((x) => ({ rate: Number(x.rate), net: Number(x.net), tax: Number(x.tax), gross: Number(x.gross) })))
       const mem = await loadMemory()
       const rem = new Set<number>()
-      setLines((d.nh_document_lines || []).map((l, i) => {
+      const raw = (d.nh_document_lines || []).map((l, i) => {
         let cid = l.category_id
         if (!cid) { const g = guessCategory(l.name, categories, mem); cid = g.id; if (g.remembered) rem.add(i) }
         else if (mem.get(normName(l.name)) === cid) rem.add(i)
         return { ...l, qty: l.qty == null ? null : Number(l.qty), total: Number(l.total), rate: l.rate == null ? null : Number(l.rate), unit_price: l.unit_price == null ? null : Number(l.unit_price), category_id: cid }
-      }))
+      })
+      // Hoá đơn in giá Netto -> đổi sang Brutto (chỉ khi còn chờ duyệt)
+      setLines(d.status === 'uploaded' ? linesToGross(raw, (d.nh_document_taxes || []).map((x) => ({ rate: Number(x.rate), net: Number(x.net) })), Number(d.gross)) : raw)
       setRemembered(rem)
       const pays = d.nh_document_payments || []
       if (pays.length === 1) setPayMode(pays[0].method)
@@ -220,15 +224,23 @@ export default function DocReview() {
             </div>
 
             <div className="card">
-              <div className="row between"><h3 style={{ margin: 0 }}>{t('lines')} ({lines.length})</h3>
-                <span className={`small ${linesBad ? 'kb-out' : 'muted'}`}>Σ {eur(lineSum)}</span></div>
+              <button type="button" className="ghost block" style={{ justifyContent: 'space-between', padding: 0, minHeight: 32 }} onClick={() => setOpenLines(!openLines)}>
+                <h3 style={{ margin: 0 }}>{openLines ? '▾' : '▸'} {t('lines')} ({lines.length})</h3>
+                <span className={`small ${linesBad ? 'kb-out' : 'muted'}`}>Σ {eur(lineSum)}</span></button>
               {linesBad && <div className="alert warn">{t('linesMismatch')}</div>}
-              {lines.map((l, i) => (
+              {openLines && lines.map((l, i) => (
                 <div className="line-item" key={i}>
                   <div className="row"><input value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder={t('item')} />
                     {!readOnly && <button className="ghost" onClick={() => setLines(lines.filter((_, j) => j !== i))}>✕</button>}</div>
                   <div className="row" style={{ marginTop: 6 }}>
                     <input style={{ width: 64 }} inputMode="decimal" placeholder={t('qty')} value={l.qty ?? ''} onChange={(e) => setLine(i, { qty: e.target.value ? Number(e.target.value.replace(',', '.')) : null })} />
+                    <input style={{ width: 72 }} placeholder={t('unit')} value={l.unit ?? ''} onChange={(e) => setLine(i, { unit: e.target.value || null })} />
+                    <span className="small muted">×</span>
+                    <Money value={l.unit_price ?? 0} onChange={(v) => setLine(i, { unit_price: v || null })} />
+                    <span className="small muted" style={{ whiteSpace: 'nowrap' }}>€/{l.unit || t('unitShort')}</span>
+                  </div>
+                  <div className="row" style={{ marginTop: 6 }}>
+                    <span className="small muted">=</span>
                     <Money value={l.total} onChange={(v) => setLine(i, { total: v })} />
                     <select style={{ width: 80 }} value={l.rate ?? ''} onChange={(e) => setLine(i, { rate: e.target.value === '' ? null : Number(e.target.value) })}>
                       <option value="">–</option><option value={7}>7%</option><option value={19}>19%</option><option value={0}>0%</option></select>
@@ -246,7 +258,7 @@ export default function DocReview() {
                   </div>
                 </div>
               ))}
-              {!readOnly && <button onClick={() => setLines([...lines, { pos: lines.length, name: '', qty: null, unit: null, unit_price: null, total: 0, rate: taxes[0]?.rate ?? null, category_id: null }])}>+ {t('addLine')}</button>}
+              {openLines && !readOnly && <button onClick={() => setLines([...lines, { pos: lines.length, name: '', qty: null, unit: null, unit_price: null, total: 0, rate: taxes[0]?.rate ?? null, category_id: null }])}>+ {t('addLine')}</button>}
             </div>
 
             <label className="f"><span>{t('note')}</span><textarea value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>

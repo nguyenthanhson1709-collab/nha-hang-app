@@ -4,8 +4,9 @@ import { supabase, type Doc } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
 import { useT } from '../lib/i18n'
 import { daysOfMonth, dmy, eur, monthRange, thisMonth, todayIso } from '../lib/format'
-import { currentBalance, docsInRange, zbonsInRange } from '../lib/data'
+import { currentBalance, docsInRange, DOC_SELECT, zbonsInRange } from '../lib/data'
 import { PayTag, Top, useRestaurant } from '../components/ui'
+import { QuickReview } from '../components/QuickReview'
 
 export default function Home() {
   const { rid } = useParams()
@@ -17,6 +18,7 @@ export default function Home() {
   const m = canManage(role)
   const [sp] = useSearchParams()
   const view = sp.get('v')
+  const [tick, setTick] = useState(0)
   const [s, setS] = useState<{ spend: number; cash: number; card: number; transfer: number; rev: number; bal: number; missing: string[]; review: Doc[]; mine: Doc[] } | null>(null)
 
   useEffect(() => {
@@ -36,20 +38,20 @@ export default function Home() {
         missing = daysOfMonth(p).filter((d) => d < today && !have.has(d) && (!r.opening_date || d >= r.opening_date))
       }
       const { data: review } = m
-        ? await supabase.from('nh_documents').select('*, nh_document_payments(*)').eq('restaurant_id', rid!).eq('status', 'uploaded').order('created_at').limit(50)
+        ? await supabase.from('nh_documents').select(DOC_SELECT).eq('restaurant_id', rid!).eq('status', 'uploaded').order('doc_date').limit(100)
         : { data: [] }
       const { data: mine } = !m
         ? await supabase.from('nh_documents').select('*, nh_document_payments(*)').eq('restaurant_id', rid!).eq('created_by', profile.id).order('created_at', { ascending: false }).limit(30)
         : { data: [] }
       setS({ spend: purchase.reduce((a, d) => a + Number(d.gross), 0), cash: sum('cash'), card: sum('card'), transfer: sum('transfer'), rev, bal, missing, review: (review || []) as Doc[], mine: (mine || []) as Doc[] })
     })()
-  }, [rid, r, m, profile.id])
+  }, [rid, r, m, profile.id, tick])
 
   if (!r) return null
   if (m && view === 'review') return (
     <>
       <Top title={`${t('toReview')} (${s?.review.length ?? '…'})`} sub={r.name} back={`/r/${rid}`} />
-      <div className="page">{s ? <DocList docs={s.review} rid={rid!} empty={t('noData')} /> : <div className="center"><div className="spinner" /></div>}</div>
+      <div className="page">{s ? <QuickReview docs={s.review} rid={rid!} onDone={() => setTick((x) => x + 1)} /> : <div className="center"><div className="spinner" /></div>}</div>
     </>
   )
   const tiles = [

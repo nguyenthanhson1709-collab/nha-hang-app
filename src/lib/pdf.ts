@@ -105,8 +105,8 @@ function summaryPage(pdf: jsPDF, d: Doc, _r: Restaurant, cats: Category[], y: nu
   }
   const lines = d.nh_document_lines || []
   if (lines.length) {
-    y = table(pdf, y, [{ h: 'Artikel', w: 80 }, { h: 'Menge', w: 18, right: true }, { h: 'USt', w: 16, right: true }, { h: 'Warengruppe', w: 42 }, { h: 'Brutto', w: 26, right: true }],
-      lines.map((l) => [l.name, l.qty == null ? '' : String(l.qty).replace('.', ','), l.rate == null ? '' : `${Number(l.rate)}%`, cats.find((c) => c.id === l.category_id)?.name_de || '', eur(Number(l.total))]))
+    y = table(pdf, y, [{ h: 'Artikel', w: 62 }, { h: 'Menge', w: 36, right: true }, { h: 'USt', w: 16, right: true }, { h: 'Warengruppe', w: 42 }, { h: 'Brutto', w: 26, right: true }],
+      lines.map((l) => [l.name, l.qty == null ? '' : `${String(l.qty).replace('.', ',')}${l.unit ? ' ' + l.unit : ''}${l.unit_price != null ? ` × ${eur(Number(l.unit_price))}` : ''}`, l.rate == null ? '' : `${Number(l.rate)}%`, cats.find((c) => c.id === l.category_id)?.name_de || '', eur(Number(l.total))]))
   }
   if (d.note) { y += 4; pdf.setFontSize(8); pdf.text(pdfText('Notiz: ' + d.note), M, y) }
   return y

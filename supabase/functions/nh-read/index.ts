@@ -24,7 +24,7 @@ const INVOICE = obj({
   gross: { ...num, description: "Endbetrag brutto, den der Kunde zahlen musste (NICHT 'Gegeben'/'Bar' bezahlter Betrag, NICHT Rückgeld)" },
   taxes: { type: "array", items: obj({ rate: { type: "number", enum: [0, 7, 19] }, net: num, tax: num, gross: num }) },
   payment: { anyOf: [{ type: "string", enum: ["cash", "card", "transfer"] }, { type: "null" }] },
-  lines: { type: "array", items: obj({ name: { type: "string" }, qty: nNum, unit_price: nNum, total: num, rate: { anyOf: [{ type: "number", enum: [0, 7, 19] }, { type: "null" }] } }) },
+  lines: { type: "array", items: obj({ name: { type: "string" }, qty: { ...nNum, description: "Menge wie gedruckt (z.B. 2,5 bei 2,5 kg)" }, unit: { ...nStr, description: "Mengeneinheit wie gedruckt, kurz: kg, g, Stk, Kiste, Bund, Karton, Fl, l, Pck, Schale, Sack ..." }, unit_price: { ...nNum, description: "Preis je Einheit wie gedruckt (z.B. €/kg, €/Kiste, €/Bund)" }, total: num, rate: { anyOf: [{ type: "number", enum: [0, 7, 19] }, { type: "null" }] } }) },
 });
 
 const ZBON = obj({
@@ -57,7 +57,7 @@ const PROMPT_INV = `Du liest einen deutschen Kassenbon bzw. eine Eingangsrechnun
 Extrahiere die Daten exakt wie gedruckt. Regeln:
 - gross = zu zahlender Endbetrag (Summe / zu zahlen / Gesamt). "Bar", "Gegeben", "Rückgeld" sind Zahlungsangaben, nicht der Betrag.
 - taxes: aus dem MwSt-Block (z.B. "A 7% Netto Steuer Brutto"). Je Steuersatz eine Zeile. Prüfe: net + tax = gross, Summe aller gross = Endbetrag. Fehlt der Block, berechne aus den Positionen.
-- lines: jede Artikelzeile mit Endpreis; Pfand ist eine eigene Zeile. Rabatte als negative Zeile. rate über den Buchstaben (A/B) und die Legende.
+- lines: jede Artikelzeile mit Zeilenbetrag; qty, unit und unit_price genau wie in der Zeile (z.B. "2,350 kg x 3,99 €/kg" -> qty 2.35, unit kg, unit_price 3.99; "3 Bund à 0,99" -> qty 3, unit Bund; "1 Kiste") ; Pfand ist eine eigene Zeile. Rabatte als negative Zeile. rate über den Buchstaben (A/B) und die Legende.
 - payment: cash bei Bar/Gegeben, card bei EC/Girocard/Kreditkarte/Visa/Mastercard, transfer bei Überweisung/Zahlungsziel/Lastschrift, sonst null.
 - Unleserliches: bestmöglich schätzen; Felder, die nicht vorhanden sind: null.`;
 

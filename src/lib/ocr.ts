@@ -168,7 +168,7 @@ const SUPPLIERS = ['METRO', 'Selgros', 'Transgourmet', 'EDEKA', 'REWE', 'Lidl', 
 export interface ParsedInvoice {
   doc_date: string | null; supplier: string | null; invoice_no: string | null; seller_tax_id: string | null
   gross: number; taxes: TaxRow[]; payment: PayMethod | null
-  lines: { name: string; qty: number | null; unit_price: number | null; total: number; rate: number | null }[]
+  lines: { name: string; qty: number | null; unit?: string | null; unit_price: number | null; total: number; rate: number | null }[]
 }
 
 function taxFromLine(line: string, rate: number): TaxRow | null {

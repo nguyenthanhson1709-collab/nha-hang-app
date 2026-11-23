@@ -12,3 +12,10 @@ assert.deepStrictEqual(autoProblems({ ...ok, gross: 17.9 }, 'cash', T), ['tax_su
 assert.deepStrictEqual(autoProblems({ ...ok, doc_date: '2026-12-01' }, 'cash', T), ['date'])
 assert.ok(autoProblems({ ...ok, gross: 300, seller_tax_id: null }, 'cash', T).includes('tax_id'))
 console.log('autocheck ok')
+import { linesToGross } from '../src/lib/lines.ts'
+const net = [{ name: 'Tomaten', total: 25.98, unit_price: 12.99, rate: 7 }, { name: 'X', total: 10, unit_price: null, rate: null }]
+const g = linesToGross(net, [{ rate: 7, net: 35.98 }], 38.5)
+assert.deepStrictEqual(g.map((l) => l.total), [27.8, 10.7])
+assert.strictEqual(g[0].unit_price, 13.899)
+assert.strictEqual(linesToGross(ok.lines, ok.taxes, ok.gross), ok.lines)
+console.log('lines ok')

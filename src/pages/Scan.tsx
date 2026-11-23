@@ -118,7 +118,7 @@ export default function Scan() {
       await saveChildren(doc.id,
         payment ? [{ method: payment, amount: gross }] : [],
         pi.taxes,
-        pi.lines.map((l, i) => ({ pos: i, name: l.name, qty: l.qty, unit: null, unit_price: l.unit_price, total: l.total, rate: l.rate, category_id: guessCategory(l.name, categories, mem).id })),
+        pi.lines.map((l, i) => ({ pos: i, name: l.name, qty: l.qty, unit: l.unit || null, unit_price: l.unit_price, total: l.total, rate: l.rate, category_id: guessCategory(l.name, categories, mem).id })),
         false)
       if (!m) { setStaffDone(true); setPages([]); setPay(null); setBusy(''); return }
       if (auto) { toast(`✓ ${t('autoOk')}: ${pi.supplier} · ${gross.toFixed(2).replace('.', ',')} €`); setPages([]); setPay(null); setBusy(''); return }

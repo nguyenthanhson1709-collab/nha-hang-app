@@ -98,7 +98,7 @@ export async function bulkUpload(opts: {
       if (!ex?.length) await supabase.from('nh_suppliers').insert({ name: pi.supplier, tax_id: pi.seller_tax_id })
     }
     await saveChildren(doc.id, [{ method: payment, amount: gross }], pi.taxes,
-      pi.lines.map((l, i) => ({ pos: i, name: l.name, qty: l.qty, unit: null, unit_price: l.unit_price, total: l.total, rate: l.rate, category_id: guessCategory(l.name, categories, mem).id })),
+      pi.lines.map((l, i) => ({ pos: i, name: l.name, qty: l.qty, unit: l.unit || null, unit_price: l.unit_price, total: l.total, rate: l.rate, category_id: guessCategory(l.name, categories, mem).id })),
       false)
     res.added.push({ supplier: pi.supplier, date, gross, pages, ok })
   }
