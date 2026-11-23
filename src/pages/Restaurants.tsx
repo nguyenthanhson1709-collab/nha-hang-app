@@ -9,7 +9,6 @@ export default function Restaurants() {
   const t = useT()
   const nav = useNavigate()
   const { restaurants, reload, profile } = useApp()
-  const [sums, setSums] = useState<Record<string, { spend: number; rev: number }>>({})
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [addr, setAddr] = useState('')
