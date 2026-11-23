@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { supabase, errMsg, type CashCount, type KbRow } from '../lib/supabase'
+import { supabase, errMsg, signedUrl, type CashCount, type KbRow } from '../lib/supabase'
 import { canManage, useRole } from '../lib/app'
 import { useT } from '../lib/i18n'
 import { addMonths, dmy, eur, monthLabel, monthRange, r2, thisMonth, todayIso } from '../lib/format'
-import { balanceBefore, currentBalance, kassenbuch, lockedPeriods } from '../lib/data'
+import { balanceBefore, currentBalance, kassenbuch, lockedPeriods, uploadFiles } from '../lib/data'
+import Scanner, { type ScannedPage } from '../components/Scanner'
+import { autoScanImage } from '../lib/scanner'
+import { compressImage } from '../lib/ocr'
 import { download, kassenbuchPdf } from '../lib/pdf'
 import { Money, Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
 
@@ -22,16 +25,23 @@ export default function Kassenbuch() {
   const [opening, setOpening] = useState(0)
   const [locked, setLocked] = useState(false)
   const [move, setMove] = useState<{ type: MoveType; date: string; amount: number; description: string } | null>(null)
+  const [mvPages, setMvPages] = useState<{ blob: Blob; preview: string }[]>([])
+  const [scanner, setScanner] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [mvFiles, setMvFiles] = useState<Record<string, string[]>>({})
+  const cam = useRef<HTMLInputElement>(null)
   const [count, setCount] = useState<{ date: string; counted: number; book: number; reason: string } | null>(null)
 
   const load = useCallback(async () => {
     if (!r) return
     setRows(null)
-    const [kb, c, lk] = await Promise.all([
+    const [kb, c, lk, mv] = await Promise.all([
       kassenbuch(rid!, period),
       supabase.from('nh_cash_counts').select('*').eq('restaurant_id', rid!).eq('period', period).order('count_date'),
       lockedPeriods(rid!),
+      supabase.from('nh_cash_moves').select('id, files').eq('restaurant_id', rid!).eq('period', period),
     ])
+    setMvFiles(Object.fromEntries((mv.data || []).filter((x) => x.files?.length).map((x) => [x.id, x.files as string[]])))
     const op = kb.length ? r2(Number(kb[0].saldo) - Number(kb[0].einnahme) + Number(kb[0].ausgabe)) : await balanceBefore(rid!, monthRange(period).from, Number(r.opening_cash))
     setOpening(op); setRows(kb); setCounts((c.data || []) as CashCount[]); setLocked(lk.has(period))
   }, [rid, period, r])
@@ -46,9 +56,33 @@ export default function Kassenbuch() {
       const bal = await currentBalance(rid!, Number(r!.opening_cash))
       if (bal - move.amount < 0) { toast(t('negativeBalance')); return }
     }
-    const { error } = await supabase.from('nh_cash_moves').insert({ restaurant_id: rid, move_date: move.date, period: move.date.slice(0, 7), type: move.type, amount: move.amount, description: move.description || null })
-    if (error) { toast(errMsg(error)); return }
-    setMove(null); load()
+    setSaving(true)
+    try {
+      const files = mvPages.length ? await uploadFiles(rid!, move.date, mvPages.map((p) => p.blob), mvPages.map(() => 'beleg.jpg')) : []
+      const { error } = await supabase.from('nh_cash_moves').insert({ restaurant_id: rid, move_date: move.date, period: move.date.slice(0, 7), type: move.type, amount: move.amount, description: move.description || null, files })
+      if (error) throw error
+      closeMove(); load()
+    } catch (e) { toast(errMsg(e)) }
+    setSaving(false)
+  }
+  function closeMove() { mvPages.forEach((p) => URL.revokeObjectURL(p.preview)); setMvPages([]); setMove(null) }
+  async function addPhotos(fl: FileList | null) {
+    for (const f of Array.from(fl || [])) {
+      let blob: Blob
+      try { blob = await autoScanImage(f) } catch { blob = await compressImage(f) }
+      setMvPages((p) => [...p, { blob, preview: URL.createObjectURL(blob) }])
+    }
+  }
+  async function fromScanner(ps: ScannedPage[]) {
+    setScanner(false)
+    for (const p of ps) {
+      let blob = p.blob
+      if (p.raw) try { blob = await autoScanImage(p.blob) } catch { /* giữ ảnh gốc */ }
+      setMvPages((x) => [...x, { blob, preview: URL.createObjectURL(blob) }])
+    }
+  }
+  async function openFile(path: string) {
+    const u = await signedUrl(path); if (u) window.open(u, '_blank')
   }
   async function openCount() {
     const d = todayIso()
@@ -107,7 +141,7 @@ export default function Kassenbuch() {
         {!locked && (
           <div className="row wrap" style={{ marginBottom: 12 }}>
             <button className="primary" onClick={openCount}>🧮 {t('count')}</button>
-            {(['geldtransit', 'einlage', 'privatentnahme', 'sonstige_ausgabe', 'sonstige_einnahme'] as MoveType[]).map((x) => (
+            {(['geldtransit', 'sonstige_ausgabe', 'sonstige_einnahme'] as MoveType[]).map((x) => (
               <button key={x} onClick={() => setMove({ type: x, date: todayIso(), amount: 0, description: '' })}>{OUT.has(x) ? '−' : '+'} {t(x).split(' (')[0]}</button>
             ))}
           </div>
@@ -118,7 +152,7 @@ export default function Kassenbuch() {
               <thead><tr><th>Nr.</th><th>{t('description')}</th><th className="num">+</th><th className="num">−</th><th className="num">{t('cashBalance')}</th></tr></thead>
               <tbody>
                 {byDay.map(([d, xs]) => (
-                  <DayRows key={d} d={d} xs={xs} c={cmap.get(d)} link={link} onDel={locked ? undefined : delMove} t={t} />
+                  <DayRows key={d} d={d} xs={xs} c={cmap.get(d)} link={link} onDel={locked ? undefined : delMove} t={t} files={mvFiles} onFile={openFile} />
                 ))}
               </tbody>
               <tfoot><tr><td /><td>{t('total')}</td><td className="num kb-in">{eur(ein)}</td><td className="num kb-out">{eur(aus)}</td><td className="num">{eur(opening + ein - aus)}</td></tr></tfoot>
@@ -128,13 +162,28 @@ export default function Kassenbuch() {
         <div className="small muted">{monthLabel(period)} · Z-Bon <Link to={`/r/${rid}/scan?type=zbon`}>+ {t('scanZbon')}</Link></div>
       </div>
 
-      <Sheet open={!!move} onClose={() => setMove(null)} title={move ? t(move.type) : ''}>
+      {scanner && <Scanner onDone={fromScanner} onCancel={() => setScanner(false)} />}
+      <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { addPhotos(e.target.files); e.target.value = '' }} />
+      <Sheet open={!!move && !scanner} onClose={closeMove} title={move ? t(move.type) : ''}>
         {move && <>
           <label className="f"><span>{t('date')}</span><input type="date" value={move.date} onChange={(e) => setMove({ ...move, date: e.target.value })} /></label>
           <label className="f"><span>{t('amount')}</span><Money value={move.amount} onChange={(v) => setMove({ ...move, amount: v })} /></label>
           <label className="f"><span>{t('description')}</span><input value={move.description} onChange={(e) => setMove({ ...move, description: e.target.value })} /></label>
-          {(move.type === 'einlage' || move.type === 'privatentnahme') && <div className="small muted" style={{ marginBottom: 8 }}>Eigenbeleg mit Unterschrift aufbewahren.</div>}
-          <button className="primary block" onClick={saveMove}>{t('save')}</button>
+          {move.type !== 'geldtransit' && <>
+            <div className="grid2" style={{ marginBottom: 8 }}>
+              <button onClick={() => setScanner(true)}>📄 {t('scan')}</button>
+              <button onClick={() => cam.current?.click()}>📷 {t('takePhoto')}</button>
+            </div>
+            {mvPages.length > 0 && <div className="thumbs" style={{ marginBottom: 8 }}>
+              {mvPages.map((p, i) => (
+                <div key={i} style={{ position: 'relative' }}>
+                  <img src={p.preview} alt="" />
+                  <button className="ghost" style={{ position: 'absolute', top: 0, right: 0, minHeight: 30, padding: 4 }} onClick={() => setMvPages((ps) => ps.filter((_, j) => j !== i))}>✕</button>
+                </div>
+              ))}
+            </div>}
+          </>}
+          <button className="primary block" disabled={saving} onClick={saveMove}>{saving ? '…' : t('save')}</button>
         </>}
       </Sheet>
       <Sheet open={!!count} onClose={() => setCount(null)} title={t('count')}>
@@ -153,7 +202,7 @@ export default function Kassenbuch() {
   )
 }
 
-function DayRows({ d, xs, c, link, onDel, t }: { d: string; xs: KbRow[]; c?: CashCount; link: (x: KbRow) => string | null; onDel?: (id: string) => void; t: ReturnType<typeof useT> }) {
+function DayRows({ d, xs, c, link, onDel, t, files, onFile }: { d: string; xs: KbRow[]; c?: CashCount; link: (x: KbRow) => string | null; onDel?: (id: string) => void; t: ReturnType<typeof useT>; files: Record<string, string[]>; onFile: (p: string) => void }) {
   return (
     <>
       <tr><td colSpan={5} style={{ background: 'color-mix(in srgb, var(--line) 30%, transparent)', fontWeight: 600 }}>{dmy(d)}</td></tr>
@@ -163,6 +212,7 @@ function DayRows({ d, xs, c, link, onDel, t }: { d: string; xs: KbRow[]; c?: Cas
           <tr key={x.source + x.source_id}>
             <td className="muted">{x.nr}</td>
             <td>{l ? <Link to={l}>{x.text}</Link> : x.text}{x.mwst && <span className="small muted"> · {x.mwst}</span>}
+              {x.source === 'move' && files[x.source_id]?.map((f) => <button key={f} className="ghost small" style={{ minHeight: 0, padding: '0 4px' }} onClick={() => onFile(f)}>📎</button>)}
               {x.source === 'move' && onDel && <button className="ghost small" style={{ minHeight: 0, padding: '0 4px' }} onClick={() => onDel(x.source_id)}>✕</button>}</td>
             <td className="num kb-in">{Number(x.einnahme) ? eur(x.einnahme, false) : ''}</td>
             <td className="num kb-out">{Number(x.ausgabe) ? eur(x.ausgabe, false) : ''}</td>

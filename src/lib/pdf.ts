@@ -175,17 +175,18 @@ export async function folderPdf(folder: Folder, docs: Doc[], zbons: ZBon[], r: R
 }
 
 /** Chứng từ của một thư mục trong tháng, theo ngày: tên + danh sách file gốc */
-export function folderFiles(folder: Folder, docs: Doc[], zbons: ZBon[]): { date: string; name: string; files: string[] }[] {
-  const out: { date: string; name: string; files: string[] }[] = []
+export type ExtraBeleg = { date: string; name: string; files: string[] }
+export function folderFiles(folder: Folder, docs: Doc[], zbons: ZBon[], extra: ExtraBeleg[] = []): ExtraBeleg[] {
+  const out: ExtraBeleg[] = folder === 'Bargeld' ? [...extra] : []
   for (const d of docs) if (folderParts(d).some((p) => p.folder === folder)) out.push({ date: d.doc_date, name: d.supplier || 'Beleg', files: d.files || [] })
   if (folder === 'Rechnungsausgang') for (const z of zbons) out.push({ date: z.z_date, name: 'Z-Bon', files: z.files || [] })
   return out.sort((a, b) => a.date.localeCompare(b.date))
 }
 
 /** PDF chỉ gồm các bản scan (mỗi trang một ảnh), không có trang tổng hợp */
-export async function scansPdf(folder: Folder, docs: Doc[], zbons: ZBon[], onProgress?: (s: string) => void): Promise<Blob | null> {
+export async function scansPdf(folder: Folder, docs: Doc[], zbons: ZBon[], onProgress?: (s: string) => void, extra: ExtraBeleg[] = []): Promise<Blob | null> {
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
-  const items = folderFiles(folder, docs, zbons)
+  const items = folderFiles(folder, docs, zbons, extra)
   let first = true, n = 0
   for (const it of items) {
     n++; onProgress?.(`${folder} ${n}/${items.length}`)
@@ -202,8 +203,8 @@ export async function scansPdf(folder: Folder, docs: Doc[], zbons: ZBon[], onPro
 }
 
 /** Thêm file gốc vào ZIP: thư mục/ngày_tên_số.đuôi */
-export async function addOriginals(zip: { file: (name: string, data: Blob) => unknown }, dir: string, folder: Folder, docs: Doc[], zbons: ZBon[], onProgress?: (s: string) => void) {
-  const items = folderFiles(folder, docs, zbons)
+export async function addOriginals(zip: { file: (name: string, data: Blob) => unknown }, dir: string, folder: Folder, docs: Doc[], zbons: ZBon[], onProgress?: (s: string) => void, extra: ExtraBeleg[] = []) {
+  const items = folderFiles(folder, docs, zbons, extra)
   let n = 0
   for (const it of items) {
     n++; onProgress?.(`${folder} ${n}/${items.length}`)

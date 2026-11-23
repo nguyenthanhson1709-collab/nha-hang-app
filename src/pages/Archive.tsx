@@ -6,7 +6,7 @@ import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { addMonths, dmy, eur, monthLabel, monthRange, thisMonth } from '../lib/format'
 import { DOC_SELECT, docsInRange, folderParts, kassenbuch, lockedPeriods } from '../lib/data'
-import { addOriginals, download, folderFiles, kassenbuchPdf, scansPdf, type Folder } from '../lib/pdf'
+import { addOriginals, download, folderFiles, kassenbuchPdf, scansPdf, type ExtraBeleg, type Folder } from '../lib/pdf'
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
 
 const FOLDERS: Folder[] = ['Bargeld', 'Rechnungseingang', 'Rechnungsausgang']
@@ -28,6 +28,7 @@ export default function Archive() {
   const setFolder = (f: Folder | null) => nav(f ? `/r/${rid}/archive?f=${f}` : `/r/${rid}/archive`)
   const [docs, setDocs] = useState<Doc[]>([])
   const [zbons, setZbons] = useState<ZBon[]>([])
+  const [extra, setExtra] = useState<ExtraBeleg[]>([])
   const [locked, setLocked] = useState(false)
   const [q, setQ] = useState('')
   const [found, setFound] = useState<Doc[] | null>(null)
@@ -40,6 +41,9 @@ export default function Archive() {
     docsInRange(rid, from, to, true).then(setDocs).catch((e) => toast(errMsg(e)))
     if (m) supabase.from('nh_zbons').select('*').eq('restaurant_id', rid).eq('period', period).order('z_date').then(({ data }) => setZbons((data || []) as ZBon[]))
     lockedPeriods(rid).then((s) => setLocked(s.has(period)))
+    // Chi/thu khác trong Kassenbuch có ảnh hoá đơn -> thuộc thư mục Bargeld
+    if (m) supabase.from('nh_cash_moves').select('move_date, type, description, files').eq('restaurant_id', rid).eq('period', period).then(({ data }) =>
+      setExtra((data || []).filter((x) => x.files?.length).map((x) => ({ date: x.move_date, name: x.description || (x.type === 'sonstige_einnahme' ? 'Sonstige Einnahme' : 'Sonstige Ausgabe'), files: x.files }))))
   }, [rid, period, m])
 
   useEffect(() => {
@@ -80,14 +84,14 @@ export default function Archive() {
   const fail = (e: unknown) => toast(errMsg(e))
   async function pdfFolder(f: Folder) {
     setBusy('PDF…')
-    try { const b = await scansPdf(f, docs, zbons, setBusy); if (b) download(b, `${safe}_${period}_${f}.pdf`); else toast(t('noData')) } catch (e) { fail(e) }
+    try { const b = await scansPdf(f, docs, zbons, setBusy, extra); if (b) download(b, `${safe}_${period}_${f}.pdf`); else toast(t('noData')) } catch (e) { fail(e) }
     setBusy('')
   }
   async function originals(fs: Folder[], name: string) {
     setBusy('ZIP…')
     try {
       const z = new JSZip()
-      for (const f of fs) await addOriginals(z, fs.length > 1 ? `${f}/` : '', f, docs, zbons, setBusy)
+      for (const f of fs) await addOriginals(z, fs.length > 1 ? `${f}/` : '', f, docs, zbons, setBusy, extra)
       download(await z.generateAsync({ type: 'blob' }), name)
     } catch (e) { fail(e) }
     setBusy('')
@@ -96,7 +100,7 @@ export default function Archive() {
     setBusy('ZIP…')
     try {
       const z = new JSZip()
-      for (const f of FOLDERS) { const b = await scansPdf(f, docs, zbons, setBusy); if (b) z.file(`${safe}_${period}_${f}.pdf`, b) }
+      for (const f of FOLDERS) { const b = await scansPdf(f, docs, zbons, setBusy, extra); if (b) z.file(`${safe}_${period}_${f}.pdf`, b) }
       const rows = await kassenbuch(rid!, period)
       const { data: c } = await supabase.from('nh_cash_counts').select('*').eq('restaurant_id', rid!).eq('period', period)
       const opening = rows.length ? Number(rows[0].saldo) - Number(rows[0].einnahme) + Number(rows[0].ausgabe) : Number(r!.opening_cash)
@@ -132,7 +136,7 @@ export default function Archive() {
                   <button key={f} className="tile" onClick={() => setFolder(f)}>
                     <span className="ic">{f === 'Bargeld' ? '💶' : f === 'Rechnungseingang' ? '📥' : '📤'}</span>
                     <span>{LABEL[f]}</span>
-                    <span className="small muted">{folderFiles(f, docs, f === 'Rechnungsausgang' ? zbons : []).length} Belege</span>
+                    <span className="small muted">{folderFiles(f, docs, f === 'Rechnungsausgang' ? zbons : [], extra).length} Belege</span>
                   </button>
                 ))}
               </div>
