@@ -1,0 +1,100 @@
+// Đọc hoá đơn / Z-Bon bằng AI (Claude). Khoá API nằm trong Secrets: ANTHROPIC_API_KEY
+import { createClient } from "npm:@supabase/supabase-js@2";
+import Anthropic from "npm:@anthropic-ai/sdk";
+
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+const json = (b: unknown, status = 200) =>
+  new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json" } });
+
+const MODEL = "claude-sonnet-5-5";
+const num = { type: "number" };
+const nStr = { anyOf: [{ type: "string" }, { type: "null" }] };
+const nNum = { anyOf: [{ type: "number" }, { type: "null" }] };
+const obj = (properties: Record<string, unknown>) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+
+const INVOICE = obj({
+  doc_date: { ...nStr, description: "Rechnungs-/Belegdatum YYYY-MM-DD" },
+  supplier: { ...nStr, description: "Name des Verkäufers/Marktes, kurz (z.B. Lidl, METRO, REWE)" },
+  invoice_no: nStr,
+  seller_tax_id: { ...nStr, description: "USt-IdNr (DE...) oder Steuernummer des Verkäufers" },
+  gross: { ...num, description: "Endbetrag brutto, den der Kunde zahlen musste (NICHT 'Gegeben'/'Bar' bezahlter Betrag, NICHT Rückgeld)" },
+  taxes: { type: "array", items: obj({ rate: { type: "number", enum: [0, 7, 19] }, net: num, tax: num, gross: num }) },
+  payment: { anyOf: [{ type: "string", enum: ["cash", "card", "transfer"] }, { type: "null" }] },
+  lines: { type: "array", items: obj({ name: { type: "string" }, qty: nNum, unit_price: nNum, total: num, rate: { anyOf: [{ type: "number", enum: [0, 7, 19] }, { type: "null" }] } }) },
+});
+
+const ZBON = obj({
+  z_date: { ...nStr, description: "Geschäftstag des Z-Berichts YYYY-MM-DD" },
+  z_no: nStr,
+  net7: num, tax7: num, gross7: num, net19: num, tax19: num, gross19: num,
+  gross0: { ...num, description: "Umsatz mit 0% (z.B. Trinkgeld als 'Umsatz 0%', Gutscheine)" },
+  total: { ...num, description: "Gesamtumsatz brutto" },
+  cash_pos: { ...num, description: "Bar-Zahlungen laut Kasse" },
+  card_pos: { ...num, description: "Karten-Zahlungen laut Kasse (alle Kartenarten zusammen)" },
+  tip: { ...num, description: "Trinkgeld gesamt, 0 wenn nicht vorhanden" },
+  storno: num, storno_count: { type: "integer" },
+});
+
+const PROMPT_INV = `Du liest einen deutschen Kassenbon bzw. eine Eingangsrechnung eines Restaurants (Fotos/Scans, evtl. mehrere Seiten derselben Rechnung).
+Extrahiere die Daten exakt wie gedruckt. Regeln:
+- gross = zu zahlender Endbetrag (Summe / zu zahlen / Gesamt). "Bar", "Gegeben", "Rückgeld" sind Zahlungsangaben, nicht der Betrag.
+- taxes: aus dem MwSt-Block (z.B. "A 7% Netto Steuer Brutto"). Je Steuersatz eine Zeile. Prüfe: net + tax = gross, Summe aller gross = Endbetrag. Fehlt der Block, berechne aus den Positionen.
+- lines: jede Artikelzeile mit Endpreis; Pfand ist eine eigene Zeile. Rabatte als negative Zeile. rate über den Buchstaben (A/B) und die Legende.
+- payment: cash bei Bar/Gegeben, card bei EC/Girocard/Kreditkarte/Visa/Mastercard, transfer bei Überweisung/Zahlungsziel/Lastschrift, sonst null.
+- Unleserliches: bestmöglich schätzen; Felder, die nicht vorhanden sind: null.`;
+
+const PROMPT_Z = (map: Record<string, string>) => `Du liest einen Z-Bericht (Tagesabschluss) einer deutschen Restaurantkasse.
+Extrahiere die Tageswerte nach Steuersatz (7%, 19%, 0%), Gesamtumsatz, Zahlungsarten, Trinkgeld und Stornos.
+Zuordnung der Zahlungsarten-Bezeichnungen dieser Kasse: ${JSON.stringify(map)} (cash = bar, card = Karte). Unbekannte Kartenarten zählen als card.
+Prüfe: net + tax = gross je Satz; gross7 + gross19 + gross0 ≈ total. Nicht vorhandene Werte = 0.`;
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  try {
+    const key = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!key) return json({ error: "no_key" }, 503);
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+    const token = (req.headers.get("Authorization") || "").replace("Bearer ", "");
+    const { data: u } = await admin.auth.getUser(token);
+    if (!u?.user) return json({ error: "not_authenticated" }, 401);
+    const { kind, restaurant_id, files } = await req.json() as { kind: string; restaurant_id: string; files: { type: string; data: string }[] };
+    // Chỉ thành viên của quán (hoặc chủ) mới được dùng
+    const { data: prof } = await admin.from("nh_profiles").select("is_owner").eq("id", u.user.id).maybeSingle();
+    if (!prof?.is_owner) {
+      const { data: mem } = await admin.from("nh_members").select("role").eq("restaurant_id", restaurant_id).eq("user_id", u.user.id).maybeSingle();
+      if (!mem) return json({ error: "forbidden" }, 403);
+    }
+    if (!files?.length || files.length > 8) return json({ error: "invalid_input" }, 400);
+    let map: Record<string, string> = {};
+    if (kind === "zbon") {
+      const { data: r } = await admin.from("nh_restaurants").select("pos_payment_map").eq("id", restaurant_id).maybeSingle();
+      map = r?.pos_payment_map || {};
+    }
+
+    const content: Anthropic.ContentBlockParam[] = files.map((f) =>
+      f.type === "application/pdf"
+        ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: f.data } }
+        : { type: "image", source: { type: "base64", media_type: (["image/png", "image/webp", "image/gif"].includes(f.type) ? f.type : "image/jpeg") as "image/jpeg", data: f.data } });
+    content.push({ type: "text", text: kind === "zbon" ? PROMPT_Z(map) : PROMPT_INV });
+
+    const client = new Anthropic({ apiKey: key });
+    const msg = await client.messages.create({
+      model: MODEL,
+      max_tokens: 8000,
+      thinking: { type: "between_tools" },
+      output_config: { effort: "medium", format: { type: "json_schema", schema: kind === "zbon" ? ZBON : INVOICE } },
+      messages: [{ role: "user", content }],
+    } as never) as Anthropic.Message;
+    if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") return json({ error: msg.stop_reason }, 502);
+    const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    return json({ result: JSON.parse(text), usage: msg.usage, model: MODEL });
+  } catch (e) {
+    const status = (e as { status?: number })?.status;
+    return json({ error: "ai_failed", status, message: String((e as Error)?.message || e).slice(0, 500) }, 502);
+  }
+});
