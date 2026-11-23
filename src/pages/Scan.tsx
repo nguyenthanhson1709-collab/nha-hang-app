@@ -5,7 +5,7 @@ import { canManage, useApp, useRole } from '../lib/app'
 import { useT } from '../lib/i18n'
 import { todayIso, r2 } from '../lib/format'
 import { BLUR_LIMIT, compressImage, parseEInvoice, parseInvoice, parseZbon, pdfEmbeddedXml, readText, sharpness, type ParsedInvoice } from '../lib/ocr'
-import { saveChildren, uploadFiles } from '../lib/data'
+import { findDuplicate, saveChildren, uploadFiles } from '../lib/data'
 import { guessCategory, loadMemory } from '../lib/categorize'
 import { Top, toast, useRestaurant } from '../components/ui'
 import Scanner, { type ScannedPage } from '../components/Scanner'
@@ -92,6 +92,12 @@ export default function Scan() {
 
       const pi = parsedE || aiInv || parseInvoice(text)
       const date = pi.doc_date || todayIso()
+      const gross0 = r2(pi.gross || pi.taxes.reduce((s, x) => s + x.gross, 0))
+      // Báo trùng ngay khi scan: cùng nhà cung cấp, ngày, tổng tiền
+      const dup = await findDuplicate(rid!, pi.supplier, date, gross0)
+      if (dup && !window.confirm(`${t('duplicate')}\n\n${pi.supplier} · ${date.split('-').reverse().join('.')} · ${gross0.toFixed(2).replace('.', ',')} €\n\n${t('saveAnyway')}?`)) {
+        setBusy(''); toast(t('duplicate')); return
+      }
       const files = await uploadFiles(rid!, date, pages.map((p) => p.blob), pages.map((p) => p.name))
       const payment = pay || pi.payment
       const gross = r2(pi.gross || pi.taxes.reduce((s, x) => s + x.gross, 0))
