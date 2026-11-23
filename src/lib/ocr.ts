@@ -212,15 +212,56 @@ export function parseInvoice(text: string): ParsedInvoice {
       }
     }
   }
+  // Dòng "Summe" của bảng thuế (Lidl, Aldi...): MwSt / Netto / Brutto cộng lại
+  let sumRow: TaxRow | null = null
+  const hdr = lines.findIndex((l) => /(mwst|ust|steuer)/i.test(l) && /(netto|brutto|%)/i.test(l))
+  if (hdr >= 0) for (const l of lines.slice(hdr + 1, hdr + 8)) {
+    if (!/summe|gesamt|total/i.test(l)) continue
+    const ns = nums(l).filter((n) => n > 0)
+    for (let i = 0; i < ns.length && !sumRow; i++) for (let j = 0; j < ns.length && !sumRow; j++) {
+      if (i === j) continue
+      const [tax, net] = [ns[i], ns[j]]
+      if (tax / net < 0.065 || tax / net > 0.195) continue
+      const g = ns.find((n, k) => k !== i && k !== j && Math.abs(n - (tax + net)) <= 0.02)
+      if (g || ns.length === 2) sumRow = { rate: 0, net: r2(net), tax: r2(tax), gross: r2(g ?? net + tax) }
+    }
+    if (sumRow) break
+  }
+  // Thiếu một mức thuế: suy ra từ dòng Summe trừ mức đã đọc được
+  if (sumRow && res.taxes.length === 1) {
+    const k = res.taxes[0], rate = k.rate === 19 ? 7 : 19
+    const net = r2(sumRow.net - k.net), tax = r2(sumRow.tax - k.tax)
+    if (net > 0 && Math.abs(net * rate / 100 - tax) <= 0.03 + net * 0.003) res.taxes.push({ rate, net, tax, gross: r2(net + tax) })
+  }
+  if (sumRow && !res.taxes.length) {
+    const ratio = sumRow.tax / sumRow.net
+    if (Math.abs(ratio - 0.07) < 0.004) res.taxes.push({ ...sumRow, rate: 7 })
+    else if (Math.abs(ratio - 0.19) < 0.004) res.taxes.push({ ...sumRow, rate: 19 })
+  }
   res.taxes.sort((a, b) => a.rate - b.rate)
 
-  // Tổng
-  const totals: number[] = []
-  for (const l of lines) if (/(summe|total|gesamt|zu zahlen|endbetrag|rechnungsbetrag|betrag eur|bar\b|ec-?karte)/i.test(l)) totals.push(...nums(l))
+  // Tổng: chỉ lấy dòng tổng thật; "Bar 20,00" / "Gegeben" là tiền khách đưa, không phải tổng
+  const strong: number[] = [], weak: number[] = []
+  let tendered = 0
+  for (const l of lines) {
+    if (/(gegeben|r[uü]ckgeld|zur[uü]ck|wechselgeld|\bbar\b|bargeld)/i.test(l)) { tendered = Math.max(tendered, ...nums(l), 0); continue }
+    if (/(mwst|netto|steuer|%)/i.test(l)) continue
+    if (/(zu zahlen|summe|total|gesamt|endbetrag|rechnungsbetrag|betrag eur)/i.test(l)) strong.push(...nums(l).filter((n) => n > 0))
+    else if (/(ec-?karte|girocard|kartenzahlung|visa|mastercard|betrag)/i.test(l)) weak.push(...nums(l).filter((n) => n > 0))
+  }
   const taxSum = r2(res.taxes.reduce((s, t) => s + t.gross, 0))
-  if (taxSum > 0 && totals.some((t) => Math.abs(t - taxSum) <= 0.02)) res.gross = taxSum
-  else if (totals.length) res.gross = Math.max(...totals.filter((n) => n > 0), 0)
-  else res.gross = taxSum
+  const all = [...strong, ...weak]
+  if (sumRow) res.gross = sumRow.gross
+  else if (taxSum > 0 && all.some((t) => Math.abs(t - taxSum) <= 0.02)) res.gross = taxSum
+  else {
+    const pool = (strong.length ? strong : weak).filter((n) => !tendered || n <= tendered + 0.001)
+    res.gross = pool.length ? Math.max(...pool) : taxSum
+  }
+  // Bảng thuế không khớp tổng: bỏ bảng thuế sai, để người duyệt nhập
+  if (res.gross && taxSum && Math.abs(taxSum - res.gross) > 0.05 && res.taxes.length) {
+    const fixed = res.taxes.filter((t) => Math.abs(t.net * t.rate / 100 - t.tax) <= 0.03 && Math.abs(t.net + t.tax - t.gross) <= 0.02)
+    res.taxes = fixed
+  }
 
   // Ký hiệu A/B -> mức thuế
   const letterMap: Record<string, number> = {}
