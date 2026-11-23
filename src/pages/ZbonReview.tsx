@@ -7,6 +7,7 @@ import { eur, monthLabel, r2, todayIso } from '../lib/format'
 import { lockedPeriods } from '../lib/data'
 import type { ParsedZ } from '../lib/ocr'
 import { Money, Spinner, Top, toast, useRestaurant } from '../components/ui'
+import { PdfPreview } from '../components/PdfPreview'
 
 type Z = Omit<ZBon, 'id' | 'restaurant_id' | 'period' | 'cash_revenue' | 'created_by' | 'created_at'>
 
@@ -93,7 +94,7 @@ export default function ZbonReview() {
       <div className="page review">
         <div className="img-col">
           {urls.map((u) => /\.pdf$/i.test(u.path)
-            ? <a key={u.path} className="btn block" href={u.url} target="_blank" rel="noreferrer">📄 PDF</a>
+            ? <div key={u.path}><a className="btn block" href={u.url} target="_blank" rel="noreferrer">📄 PDF</a><PdfPreview url={u.url} /></div>
             : <a key={u.path} href={u.url} target="_blank" rel="noreferrer"><img src={u.url} alt="" /></a>)}
         </div>
         <div>

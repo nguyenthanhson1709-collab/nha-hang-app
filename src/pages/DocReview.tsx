@@ -9,6 +9,7 @@ import { guessCategory, loadMemory, remember } from '../lib/categorize'
 import { linesToGross } from '../lib/lines'
 import { docPdf } from '../lib/pdf'
 import { Money, PayTag, Sheet, Spinner, Top, toast, useRestaurant, ComboInput } from '../components/ui'
+import { PdfPreview } from '../components/PdfPreview'
 
 type PayMode = PayMethod | 'mixed' | null
 
@@ -146,7 +147,7 @@ export default function DocReview() {
       <div className="page review">
         <div className="img-col">
           {urls.map((u) => u.pdf
-            ? <a key={u.path} className="btn block" href={u.url} target="_blank" rel="noreferrer">📄 PDF {t('original')}</a>
+            ? <div key={u.path}><a className="btn block" href={u.url} target="_blank" rel="noreferrer">📄 PDF {t('original')}</a><PdfPreview url={u.url} /></div>
             : /\.xml$/i.test(u.path) ? <a key={u.path} className="btn block" href={u.url} target="_blank" rel="noreferrer">E-Rechnung (XML)</a>
             : <a key={u.path} href={u.url} target="_blank" rel="noreferrer"><img src={u.url} alt="" style={{ marginBottom: 8 }} /></a>)}
         </div>
