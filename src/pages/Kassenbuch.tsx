@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { supabase, errMsg, signedUrl, type CashCount, type CashMove, type ZBon } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
 import { useT } from '../lib/i18n'
-import { addMonths, eur, monthLabel, monthRange, r2, thisMonth, todayIso } from '../lib/format'
+import { addMonths, daysOfMonth, eur, monthLabel, monthRange, r2, thisMonth, todayIso } from '../lib/format'
 import { balanceBefore, currentBalance, kassenbuch, lockedPeriods, uploadFiles } from '../lib/data'
 import Scanner, { type ScannedPage } from '../components/Scanner'
 import { autoScanImage } from '../lib/scanner'
@@ -27,6 +27,7 @@ export default function Kassenbuch() {
   const [counts, setCounts] = useState<CashCount[]>([])
   const [opening, setOpening] = useState(0)
   const [locked, setLocked] = useState(false)
+  const [missing, setMissing] = useState<string[]>([])
   const [move, setMove] = useState<{ type: MoveType; date: string; amount: number; description: string } | null>(null)
   const [mvPages, setMvPages] = useState<{ blob: Blob; preview: string }[]>([])
   const [scanner, setScanner] = useState(false)
@@ -50,6 +51,10 @@ export default function Kassenbuch() {
     setMvFiles(Object.fromEntries((mv.data || []).filter((x) => x.files?.length).map((x) => [x.id, x.files as string[]])))
     const op = kb.length ? r2(Number(kb[0].saldo) - Number(kb[0].einnahme) + Number(kb[0].ausgabe)) : await balanceBefore(rid!, from, Number(r.opening_cash))
     setOpening(op); setCounts((c.data || []) as CashCount[]); setLocked(lk.has(period))
+    // Ngày đã qua trong tháng chưa có Z-Bon
+    const have = new Set(((zq.data || []) as ZBon[]).map((z) => z.z_date))
+    const today = todayIso()
+    setMissing(daysOfMonth(period).filter((d) => d < today && !have.has(d) && (!r.opening_date || d >= r.opening_date)))
     setRows(kbLines(docs, (zq.data || []) as ZBon[], (mv.data || []) as CashMove[], r, period, op, categories))
   }, [rid, period, r, categories])
   useEffect(() => { load() }, [load])
@@ -139,6 +144,12 @@ export default function Kassenbuch() {
         </div>
         {locked && <div className="alert warn">🔒 {t('locked')} · {t('lockedHint')}</div>}
         {negative && <div className="alert err">{t('negativeBalance')}</div>}
+        {missing.length > 0 && (
+          <div className="alert warn">
+            <b>{t('missingZbon')} ({missing.length}):</b> {missing.map((d) => d.slice(8) + '.').join(' ')}{' '}
+            <Link to={`/r/${rid}/scan?type=zbon`}>+ {t('scanZbon')}</Link>
+          </div>
+        )}
         <div className="grid3" style={{ marginBottom: 12 }}>
           <div className="stat"><div className="l">{t('openingCash')}</div><div className="v">{eur(opening)}</div></div>
           <div className="stat"><div className="l">+ / −</div><div className="v small"><span className="kb-in">{eur(ein)}</span><br /><span className="kb-out">{eur(aus)}</span></div></div>

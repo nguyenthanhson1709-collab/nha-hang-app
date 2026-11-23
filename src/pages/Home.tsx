@@ -63,12 +63,6 @@ export default function Home() {
       <Top title={r.name} sub={`${t('thisMonth')} · ${thisMonth().slice(5)}/${thisMonth().slice(0, 4)}`} back={profile.is_owner ? '/restaurants' : undefined}
         right={<Link className="btn" to={m ? `/r/${rid}/settings` : '/settings'}>⚙︎</Link>} />
       <div className="page">
-        {m && (
-          <div className="card" style={{ background: 'var(--brand-2)', borderColor: 'var(--brand)' }}>
-            <div className="small muted">{t('cashBalance')} · {t('today')} {dmy(todayIso())}</div>
-            <div className="big" style={{ color: s && s.bal < 0 ? 'var(--err)' : undefined }}>{s ? eur(s.bal) : '…'}</div>
-          </div>
-        )}
         <div className="tiles">
           {tiles.map((x) => (
             <button key={x.to} className="tile" onClick={() => nav(x.to)}>
@@ -78,12 +72,6 @@ export default function Home() {
             </button>
           ))}
         </div>
-        {m && s && s.missing.length > 0 && (
-          <div className="alert warn">
-            <b>{t('missingZbon')} ({s.missing.length}):</b> {s.missing.slice(-10).map((d) => d.slice(8) + '.').join(' ')}
-            {s.missing.length > 10 && ' …'}
-          </div>
-        )}
         {!m && s && (
           <>
             <h2>{t('myUploads')}</h2>
