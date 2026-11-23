@@ -117,3 +117,48 @@ export async function bulkUpload(opts: {
   res.added.sort((a, b) => a.pages.localeCompare(b.pages, undefined, { numeric: true }))
   return res
 }
+
+export type ZBulkResult = { added: { date: string; total: number; src: string; warn: boolean }[]; skipped: { src: string; date: string; why: string }[] }
+
+/** Tải nhiều Z-Bon (ảnh hoặc PDF, PDF nhiều ngày được tách theo ngày) -> lưu thẳng vào nh_zbons để viết Kassenbuch */
+export async function bulkZbon(opts: { rid: string; files: File[]; onProgress: (s: string) => void }): Promise<ZBulkResult> {
+  const { rid, files, onProgress } = opts
+  const parts: { blob: Blob; type: string; name: string; src: string }[] = []
+  for (const f of files) {
+    if (f.size > MAX_MB * 1024 * 1024) throw new Error(`${f.name} > ${MAX_MB} MB`)
+    const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
+    if (!isPdf) { parts.push({ blob: f, type: f.type || 'image/jpeg', name: f.name, src: f.name }); continue }
+    const src = await PDFDocument.load(await f.arrayBuffer(), { ignoreEncryption: true })
+    const n = src.getPageCount()
+    if (n > MAX_PAGES) throw new Error(`${f.name} > ${MAX_PAGES} Seiten`)
+    if (n === 1) { parts.push({ blob: f, type: 'application/pdf', name: 'zbon.pdf', src: f.name }); continue }
+    for (const sg of await segmentAll(rid, src, n, onProgress))
+      parts.push({ blob: await subPdf(src, sg.start_page, sg.end_page), type: 'application/pdf', name: 'zbon.pdf', src: `${f.name} S. ${sg.start_page}${sg.end_page > sg.start_page ? '–' + sg.end_page : ''}` })
+  }
+  const { aiReadZbon } = await import('./ai')
+  const res: ZBulkResult = { added: [], skipped: [] }
+  let next = 0, done = 0
+  const worker = async () => {
+    while (next < parts.length) {
+      const p = parts[next++]
+      try {
+        const z = await aiReadZbon(rid, [{ blob: p.blob, type: p.type }])
+        if (!z || !z.z_date || !/^\d{4}-\d{2}-\d{2}$/.test(z.z_date)) { res.skipped.push({ src: p.src, date: '', why: 'AI' }); continue }
+        const { data: ex } = await supabase.from('nh_zbons').select('id').eq('restaurant_id', rid).eq('z_date', z.z_date).limit(1)
+        if (ex?.length) { res.skipped.push({ src: p.src, date: z.z_date, why: 'dup' }); continue }
+        const fl = await uploadFiles(rid, z.z_date, [p.blob], [p.name])
+        const { details: _d, ...vals } = z
+        const row = { ...vals, restaurant_id: rid, period: z.z_date.slice(0, 7), files: fl, card_terminal: null, tip_card: 0, details: {}, ocr_text: ('AI: ' + JSON.stringify(z)).slice(0, 50000) }
+        const { error } = await supabase.from('nh_zbons').insert(row)
+        if (error) { res.skipped.push({ src: p.src, date: z.z_date, why: error.code === '23505' ? 'dup' : error.message.slice(0, 80) }); continue }
+        const warn = Math.abs(z.net7 + z.tax7 - z.gross7) > 0.02 || Math.abs(z.net19 + z.tax19 - z.gross19) > 0.02 || Math.abs(z.gross7 + z.gross19 + (z.gross0 || 0) - z.total) > 0.05
+        res.added.push({ date: z.z_date, total: Number(z.total), src: p.src, warn })
+      } catch (e) { res.skipped.push({ src: p.src, date: '', why: String((e as Error)?.message || e).slice(0, 80) }) }
+      finally { done++; onProgress(`🧾 ${done}/${parts.length}`) }
+    }
+  }
+  onProgress(`🧾 0/${parts.length}`)
+  await Promise.all([worker(), worker(), worker()])
+  res.added.sort((a, b) => a.date.localeCompare(b.date))
+  return res
+}

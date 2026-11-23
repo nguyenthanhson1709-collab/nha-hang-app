@@ -48,7 +48,7 @@ const SEGMENT = obj({
   }) },
 });
 
-const PROMPT_SEG = (n: number) => `Dieses PDF hat ${n} Seiten und enthält mehrere Eingangsrechnungen / Kassenbons hintereinander.
+const PROMPT_SEG = (n: number) => `Dieses PDF hat ${n} Seiten und enthält mehrere Belege hintereinander (Eingangsrechnungen, Kassenbons oder Z-Berichte/Tagesabschlüsse einer Kasse; bei Z-Berichten zählt jeder Geschäftstag als ein Beleg).
 Bestimme, welche Seiten zu welcher Rechnung gehören. WICHTIG: Eine Rechnung kann mehrere Seiten haben ("Seite 2 von 3", "Übertrag", gleiche Rechnungsnummer, Endsumme erst auf der letzten Seite, Folgeseite ohne Kopf). Folgeseiten gehören zur selben Rechnung, nicht jede Seite ist eine eigene Rechnung.
 Leere Seiten, Deckblätter oder AGB-Seiten gehören zur vorherigen Rechnung (oder werden weggelassen, wenn davor keine ist).
 Gib die Rechnungen in Reihenfolge zurück, ohne Überschneidungen, Seitenzahlen 1 bis ${n}.`;

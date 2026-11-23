@@ -7,7 +7,7 @@ import { addMonths, dmy, eur, monthLabel, monthRange, thisMonth } from '../lib/f
 import { DOC_SELECT, docsInRange, folderParts, lockedPeriods } from '../lib/data'
 import { download, folderFiles, folderPdf, scansPdf, type ExtraBeleg, type Folder } from '../lib/pdf'
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
-import { bulkUpload, MAX_MB, MAX_PAGES, type BulkResult } from '../lib/bulk'
+import { bulkUpload, bulkZbon, MAX_MB, MAX_PAGES, type BulkResult, type ZBulkResult } from '../lib/bulk'
 
 const FOLDERS: Folder[] = ['Bargeld', 'Rechnungseingang', 'Rechnungsausgang']
 // Tên hiển thị gọn; tên file xuất ra vẫn giữ tên chuyên môn (Rechnungseingang / Rechnungsausgang)
@@ -36,6 +36,7 @@ export default function Archive() {
   const [busy, setBusy] = useState('')
   const [tick, setTick] = useState(0)
   const [bulk, setBulk] = useState<BulkResult | null>(null)
+  const [zb, setZb] = useState<ZBulkResult | null>(null)
 
   useEffect(() => {
     if (!rid) return
@@ -105,6 +106,13 @@ export default function Archive() {
       const res = await bulkUpload({ rid: rid!, file, folder: f, period, categories, onProgress: setBusy })
       setBulk(res); setTick((x) => x + 1); reload()
     } catch (e) { fail(e) }
+    setBusy('')
+  }
+  async function uploadZ(list: FileList | null) {
+    const files = [...(list || [])]
+    if (!files.length) return
+    setZb(null); setBusy('…')
+    try { const res = await bulkZbon({ rid: rid!, files, onProgress: setBusy }); setZb(res); setTick((x) => x + 1) } catch (e) { fail(e) }
     setBusy('')
   }
   async function lock() {
@@ -186,6 +194,23 @@ export default function Archive() {
                 ⬆ {t('uploadData')}
                 <input type="file" accept="application/pdf,.pdf" hidden disabled={!!busy} onChange={(e) => { upload(folder, e.target.files?.[0]); e.target.value = '' }} />
               </label>
+            )}
+            {folder === 'Rechnungsausgang' && !locked && (
+              <label className={`btn primary block${busy ? ' disabled' : ''}`} style={{ marginTop: 8, textAlign: 'center' }}>
+                ⬆ {t('uploadZ')}
+                <input type="file" accept="application/pdf,.pdf,image/*" multiple hidden disabled={!!busy} onChange={(e) => { uploadZ(e.target.files); e.target.value = '' }} />
+              </label>
+            )}
+            {folder === 'Rechnungsausgang' && !locked && !busy && !zb && <div className="small muted" style={{ marginTop: 6 }}>{t('uploadZHint')}</div>}
+            {folder === 'Rechnungsausgang' && zb && (
+              <div style={{ marginTop: 10 }}>
+                <div className="alert ok">✓ {t('zAdded', { n: String(zb.added.length) })}{zb.skipped.length > 0 && ` · ${t('bulkSkipped', { n: String(zb.skipped.length) })}`}</div>
+                <div className="small">
+                  {zb.added.map((x, i) => <div key={'a' + i}>{x.warn ? '⚠️' : '✓'} {dmy(x.date)} · {eur(x.total)} <span className="muted">({x.src})</span>{x.warn && <> · <span className="tag warn">{t('zCheck')}</span></>}</div>)}
+                  {zb.skipped.map((x, i) => <div key={'s' + i} className="muted">✕ {x.src}{x.date && ` · ${dmy(x.date)}`} ({x.why === 'dup' ? t('zDup') : x.why === 'AI' ? t('bulkUnread') : x.why})</div>)}
+                </div>
+                {zb.added.length > 0 && <Link className="btn block" style={{ marginTop: 8, textAlign: 'center' }} to={`/r/${rid}/kb`}>Kassenbuch →</Link>}
+              </div>
             )}
             {folder && folder !== 'Rechnungsausgang' && !locked && !busy && !bulk && <div className="small muted" style={{ marginTop: 6 }}>{t('uploadHint', { p: String(MAX_PAGES), mb: String(MAX_MB) })}</div>}
             {bulk && (
