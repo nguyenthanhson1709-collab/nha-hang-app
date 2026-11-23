@@ -25,6 +25,8 @@ export default function Login() {
       const { data } = await supabase.auth.getSession()
       if (!data.session) setErr(lang === 'de' ? 'Bitte E-Mail bestätigen und dann anmelden.' : 'Hãy mở email xác nhận rồi đăng nhập.')
     } else {
+      // Đăng nhập xong luôn vào trang chủ, không quay lại trang cũ (vd. cài đặt)
+      history.replaceState(null, '', location.pathname + location.search + '#/')
       const { error } = await supabase.auth.signInWithPassword({ email, password: pw })
       if (error) setErr(t('loginFailed'))
     }
