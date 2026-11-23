@@ -12,3 +12,8 @@ assert.strictEqual(g('Becher 500ml'), 'Verpackung und Einwegartikel')
 assert.strictEqual(g("Beck's Pils"), 'Bier')
 assert.strictEqual(g('Ingwer'), 'Obst und Gemüse')
 console.log('categorize ok')
+import { accountFor } from '../src/lib/categorize.ts'
+assert.strictEqual(accountFor(undefined, 19, 'Pfand 0,25'), '3830')
+assert.strictEqual(accountFor(undefined, 7, 'Tomaten'), '3300')
+assert.strictEqual(accountFor(undefined, 19, 'Cola'), '3400')
+console.log('accounts ok')

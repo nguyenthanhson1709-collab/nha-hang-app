@@ -62,7 +62,7 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
     const card = Math.max(0, r2(total - Number(z.cash_revenue) - (viva.get(z.z_date) || 0)))
     if (card) out.push({ ...base, date: z.z_date, beleg, aus: card, ausNetto: card, konto: '1360', text: `Kartenzahlung - ${dm(z.z_date)}`, link, prio: 2.5, ts: z.created_at })
     if (r.tip_paid_cash && Number(z.tip_card) > 0)
-      out.push({ ...base, date: z.z_date, beleg, aus: Number(z.tip_card), ausNetto: Number(z.tip_card), konto: '1590', text: 'Auszahlung Trinkgeld (Karte) an Personal', link, prio: 3, ts: z.created_at })
+      out.push({ ...base, date: z.z_date, beleg, aus: Number(z.tip_card), ausNetto: Number(z.tip_card), konto: '1592', text: 'Auszahlung Trinkgeld (Karte) an Personal', link, prio: 3, ts: z.created_at })
   }
 
   // Thu/chi khác, nộp tiền vào ngân hàng

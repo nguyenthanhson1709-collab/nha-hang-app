@@ -33,7 +33,7 @@ export function docGroups(d: Doc, catMap: Map<string, Category>): { acc: string;
     if (taxes.length) taxes.forEach((t) => add(revAcc(Number(t.rate)), Number(t.rate), Number(t.gross)))
     else add('8400', 19, gross)
   } else if (lines.length && lines.every((l) => l.rate != null)) {
-    lines.forEach((l) => add(accountFor(catMap.get(l.category_id || ''), Number(l.rate)), Number(l.rate), Number(l.total)))
+    lines.forEach((l) => add(accountFor(catMap.get(l.category_id || ''), Number(l.rate), l.name), Number(l.rate), Number(l.total)))
   } else if (taxes.length) {
     taxes.forEach((t) => add(accountFor(undefined, Number(t.rate)), Number(t.rate), Number(t.gross)))
   } else add('3400', 19, gross)
@@ -75,8 +75,8 @@ export function buildBookings(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: 
     if (parts19[0]) out.push({ date: z.z_date, amount: parts19[0], soll: '1000', haben: '8400', bu: '', text: `${t} Bar 19%`, beleg: z.z_no || '', source: z.id })
     if (parts19[1]) out.push({ date: z.z_date, amount: parts19[1], soll: '1360', haben: '8400', bu: '', text: `${t} Karte 19%`, beleg: z.z_no || '', source: z.id })
     if (Number(z.tip_card) > 0) {
-      out.push({ date: z.z_date, amount: Number(z.tip_card), soll: '1360', haben: '1590', bu: '', text: `${t} Trinkgeld Karte`, beleg: z.z_no || '', source: z.id })
-      if (r.tip_paid_cash) out.push({ date: z.z_date, amount: Number(z.tip_card), soll: '1590', haben: '1000', bu: '', text: `${t} Auszahlung Trinkgeld`, beleg: z.z_no || '', source: z.id })
+      out.push({ date: z.z_date, amount: Number(z.tip_card), soll: '1360', haben: '1592', bu: '', text: `${t} Trinkgeld Karte`, beleg: z.z_no || '', source: z.id })
+      if (r.tip_paid_cash) out.push({ date: z.z_date, amount: Number(z.tip_card), soll: '1592', haben: '1000', bu: '', text: `${t} Auszahlung Trinkgeld`, beleg: z.z_no || '', source: z.id })
     }
   }
   const MV: Record<string, [string, string, string]> = {
@@ -84,7 +84,9 @@ export function buildBookings(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: 
     sonstige_einnahme: ['1000', '2700', 'Sonstige Einnahme'], sonstige_ausgabe: ['4900', '1000', 'Sonstige Ausgabe'],
   }
   for (const m of moves) {
-    const [s, h, txt] = MV[m.type]
+    const [s0, h, txt0] = MV[m.type]
+    const viva = m.channel === 'viva'
+    const s = viva ? '1210' : s0, txt = viva ? 'Kartenzahlung Viva Wallet' : txt0
     out.push({ date: m.move_date, amount: Number(m.amount), soll: s, haben: h, bu: '', text: m.description ? `${txt}: ${m.description}` : txt, beleg: '', source: m.id })
   }
   return out.sort((a, b) => a.date.localeCompare(b.date))

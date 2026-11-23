@@ -48,8 +48,9 @@ export function guessCategory(name: string, cats: Category[], mem: Map<string, s
   return { id: null, remembered: false }
 }
 
-/** Tài khoản SKR03 cho một dòng hàng */
-export function accountFor(cat: Category | undefined, rate: number): string {
+/** Tài khoản SKR03 cho một dòng hàng (theo sơ đồ tài khoản DATEV của Steuerberater) */
+export function accountFor(cat: Category | undefined, rate: number, name?: string): string {
+  if (name && /(pfand|leergut|mehrweg)/i.test(name)) return '3830' // Leergut
   if (cat?.skr_account) return cat.skr_account
   if (rate === 7) return '3300'
   if (rate === 19) return '3400'
