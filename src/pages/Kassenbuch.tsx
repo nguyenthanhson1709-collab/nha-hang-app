@@ -12,6 +12,7 @@ import { download } from '../lib/pdf'
 import { kbLines, kbPdf, kbTotals, kbXlsx, type KbLine } from '../lib/kassenbuch'
 import { docsInRange } from '../lib/data'
 import { Money, Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
+import { FitTable } from '../components/FitTable'
 
 type MoveType = 'einlage' | 'privatentnahme' | 'geldtransit' | 'sonstige_einnahme' | 'sonstige_ausgabe'
 const OUT = new Set(['privatentnahme', 'geldtransit', 'sonstige_ausgabe'])
@@ -58,6 +59,8 @@ export default function Kassenbuch() {
     setRows(kbLines(docs, (zq.data || []) as ZBon[], (mv.data || []) as CashMove[], r, period, op, categories))
   }, [rid, period, r, categories])
   useEffect(() => { load() }, [load])
+  // Trên máy tính: trang Kassenbuch rộng hơn để bảng hiện đầy đủ
+  useEffect(() => { const el = document.getElementById('root'); el?.classList.add('wide'); return () => el?.classList.remove('wide') }, [])
 
   if (!r) return null
   if (!canManage(role)) return null
@@ -172,7 +175,7 @@ export default function Kassenbuch() {
           </div>
         )}
         {!rows ? <Spinner /> : !rows.length && !counts.length ? <div className="card muted">{t('noData')}</div> : (
-          <div className="tbl-wrap">
+          <FitTable deps={[rows, counts]}>
             <table className="kb">
               <thead><tr><th>Datum</th><th>Beleg</th><th className="num">Einnahmen</th><th className="num">Ausgaben</th><th className="num">MwSt.</th><th className="num">USt</th><th className="num">VSt</th><th className="num">Ein.Netto</th><th className="num">Aus.Netto</th><th className="num">Saldo</th><th>Konto</th><th>Text</th></tr></thead>
               <tbody>
@@ -186,7 +189,7 @@ export default function Kassenbuch() {
               </tbody>
               <tfoot><tr><td /><td>Summe</td><td className="num">{eur(tot.ein, false)}</td><td className="num">{eur(tot.aus, false)}</td><td /><td className="num">{eur(tot.ust, false)}</td><td className="num">{eur(tot.vst, false)}</td><td className="num">{eur(tot.einNetto, false)}</td><td className="num">{eur(tot.ausNetto, false)}</td><td className="num">{eur(opening + tot.ein - tot.aus, false)}</td><td /><td>Endbestand</td></tr></tfoot>
             </table>
-          </div>
+          </FitTable>
         )}
         <div className="small muted">{monthLabel(period)} · Z-Bon <Link to={`/r/${rid}/scan?type=zbon`}>+ {t('scanZbon')}</Link></div>
       </div>
