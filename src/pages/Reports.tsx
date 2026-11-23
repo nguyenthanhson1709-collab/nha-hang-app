@@ -217,7 +217,7 @@ export default function Reports() {
   return (
     <>
       <Top title={tabName(tab)} sub={`${r?.name || t('allRestaurants')} · ${label}`}
-        right={<div className="row"><button onClick={() => (sup ? setSup(null) : setTab(null))}>‹</button></div>} />
+        onBack={() => (sup ? setSup(null) : setTab(null))} />
       <div className="page">
         <div className="seg" style={{ marginBottom: 8 }}>
           {(['month', 'quarter', 'year', 'custom'] as Mode[]).map((x) => <button key={x} className={mode === x ? 'sel' : ''} onClick={() => setMode(x)}>{t(x)}</button>)}

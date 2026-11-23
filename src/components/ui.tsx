@@ -6,11 +6,11 @@ import { parseNum } from '../lib/format'
 
 export function Spinner() { return <div className="center"><div className="spinner" /></div> }
 
-export function Top({ title, sub, back, right }: { title: string; sub?: string; back?: string | boolean; right?: ReactNode }) {
+export function Top({ title, sub, back, right, onBack }: { title: string; sub?: string; back?: string | boolean; right?: ReactNode; onBack?: () => void }) {
   const nav = useNavigate()
   return (
     <div className="top">
-      {back && <button className="ghost" aria-label="back" onClick={() => (typeof back === 'string' ? nav(back) : nav(-1))}>←</button>}
+      {(back || onBack) && <button className="ghost" aria-label="back" onClick={() => (onBack ? onBack() : typeof back === 'string' ? nav(back) : nav(-1))}>←</button>}
       <div className="grow">
         <h1 style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</h1>
         {sub && <div className="sub">{sub}</div>}
