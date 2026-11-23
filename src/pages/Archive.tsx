@@ -125,7 +125,7 @@ export default function Archive() {
 
   return (
     <>
-      <Top title={folder ? LABEL[folder] : t('archive')} sub={r.name} back={folder ? `/r/${rid}/archive` : undefined} />
+      <Top title={folder ? LABEL[folder] : t('archive')} sub={r.name} back={folder ? `/r/${rid}/archive` : `/r/${rid}`} />
       <div className="page">
         {!found && (
           <>

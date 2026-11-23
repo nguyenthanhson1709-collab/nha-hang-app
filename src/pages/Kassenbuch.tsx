@@ -138,7 +138,7 @@ export default function Kassenbuch() {
   }
   return (
     <>
-      <Top title={t('kassenbuch')} sub={r.name} />
+      <Top title={t('kassenbuch')} sub={r.name} back={`/r/${rid}`} />
       <div className="page">
         <div className="row" style={{ marginBottom: 10 }}>
           <button onClick={() => setPeriod(addMonths(period, -1))}>‹</button>

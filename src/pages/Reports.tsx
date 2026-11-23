@@ -198,7 +198,7 @@ export default function Reports() {
   // Màn hình chọn báo cáo
   if (!tab) return (
     <>
-      <Top title={t('reports')} sub={r?.name || t('allRestaurants')} back={!rid ? '/restaurants' : undefined} />
+      <Top title={t('reports')} sub={r?.name || t('allRestaurants')} back={!rid ? '/restaurants' : `/r/${rid}`} />
       <div className="page">
         <div className="tiles">
           {TABS.map((x) => (

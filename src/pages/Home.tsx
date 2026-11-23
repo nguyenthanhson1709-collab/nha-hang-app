@@ -59,6 +59,7 @@ export default function Home() {
     ...(m ? [{ icon: '🔎', label: t('toReview'), to: `/r/${rid}?v=review`, badge: s?.review.length }] : []),
     ...(m ? [{ icon: '📁', label: t('archive'), to: `/r/${rid}/archive` }] : []),
     ...(m ? [{ icon: '📒', label: t('kassenbuch'), to: `/r/${rid}/kb` }] : []),
+    ...(m ? [{ icon: '📊', label: t('reports'), to: `/r/${rid}/reports` }] : []),
   ]
   return (
     <>

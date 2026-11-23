@@ -133,7 +133,7 @@ export default function Scan() {
 
   return (
     <>
-      <Top title={t('scan')} sub={r.name} />
+      <Top title={t('scan')} sub={r.name} back={`/r/${rid}`} />
       <div className="page">
         {m && (
           <div className="seg" style={{ marginBottom: 12 }}>
