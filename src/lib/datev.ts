@@ -1,23 +1,43 @@
 // Định khoản tự động (SKR03) và xuất DATEV Buchungsstapel (EXTF 700)
 import type { CashMove, Category, Doc, Restaurant, ZBon } from './supabase'
 import { accountFor } from './categorize'
-import { r2 } from './format'
-import { pdfText } from './pdf'
+import { pdfText, r2 } from './format'
 
 export interface Booking { date: string; amount: number; soll: string; haben: string; bu: string; text: string; beleg: string; source: string }
 
 const AUTO = new Set(['3300', '3400', '3200', '8300', '8400', '8200'])
 const buFor = (acc: string, rate: number) => (AUTO.has(acc) ? '' : rate === 19 ? '9' : rate === 7 ? '8' : '')
 const payAcc = (m: string, sale: boolean) => (m === 'cash' ? '1000' : m === 'card' ? (sale ? '1360' : '1200') : '1200')
-const revAcc = (rate: number) => (rate === 7 ? '8300' : rate === 19 ? '8400' : '8200')
+export const revAcc = (rate: number) => (rate === 7 ? '8300' : rate === 19 ? '8400' : '8200')
 
 /** chia số tiền theo tỉ lệ, cộng phần làm tròn vào dòng cuối */
-function split(total: number, weights: number[]) {
+export function split(total: number, weights: number[]) {
   const sw = weights.reduce((a, b) => a + b, 0) || 1
   const out = weights.map((w) => r2((total * w) / sw))
   const diff = r2(total - out.reduce((a, b) => a + b, 0))
   if (out.length) out[out.length - 1] = r2(out[out.length - 1] + diff)
   return out
+}
+
+/** Chia một chứng từ theo (tài khoản, mức thuế): food/nonfood và 7%/19% thành nhóm riêng */
+export function docGroups(d: Doc, catMap: Map<string, Category>): { acc: string; rate: number; amount: number }[] {
+  const groups = new Map<string, { acc: string; rate: number; amount: number }>()
+  const add = (acc: string, rate: number, amount: number) => {
+    const k = `${acc}|${rate}`
+    const g = groups.get(k) || { acc, rate, amount: 0 }
+    g.amount += amount; groups.set(k, g)
+  }
+  const gross = Number(d.gross)
+  const lines = d.nh_document_lines || [], taxes = d.nh_document_taxes || []
+  if (d.kind === 'sales') {
+    if (taxes.length) taxes.forEach((t) => add(revAcc(Number(t.rate)), Number(t.rate), Number(t.gross)))
+    else add('8400', 19, gross)
+  } else if (lines.length && lines.every((l) => l.rate != null)) {
+    lines.forEach((l) => add(accountFor(catMap.get(l.category_id || ''), Number(l.rate)), Number(l.rate), Number(l.total)))
+  } else if (taxes.length) {
+    taxes.forEach((t) => add(accountFor(undefined, Number(t.rate)), Number(t.rate), Number(t.gross)))
+  } else add('3400', 19, gross)
+  return [...groups.values()].filter((g) => Math.abs(g.amount) > 0.001)
 }
 
 export function buildBookings(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restaurant, cats: Category[]): Booking[] {
@@ -29,24 +49,7 @@ export function buildBookings(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: 
     const pays = (d.nh_document_payments || []).filter((p) => Number(p.amount) > 0)
     if (!pays.length || !gross) continue
     const sale = d.kind === 'sales'
-    // Nhóm theo (tài khoản, mức thuế)
-    const groups = new Map<string, { acc: string; rate: number; amount: number }>()
-    const lines = d.nh_document_lines || []
-    const add = (acc: string, rate: number, amount: number) => {
-      const k = `${acc}|${rate}`
-      const g = groups.get(k) || { acc, rate, amount: 0 }
-      g.amount += amount; groups.set(k, g)
-    }
-    const taxes = d.nh_document_taxes || []
-    if (sale) {
-      if (taxes.length) taxes.forEach((t) => add(revAcc(Number(t.rate)), Number(t.rate), Number(t.gross)))
-      else add('8400', 19, gross)
-    } else if (lines.length && lines.every((l) => l.rate != null)) {
-      lines.forEach((l) => add(accountFor(catMap.get(l.category_id || ''), Number(l.rate)), Number(l.rate), Number(l.total)))
-    } else if (taxes.length) {
-      taxes.forEach((t) => add(accountFor(undefined, Number(t.rate)), Number(t.rate), Number(t.gross)))
-    } else add('3400', 19, gross)
-    const gl = [...groups.values()]
+    const gl = docGroups(d, catMap)
     const scaled = split(gross, gl.map((g) => g.amount))
     gl.forEach((g, i) => {
       const parts = split(scaled[i], pays.map((p) => Number(p.amount)))

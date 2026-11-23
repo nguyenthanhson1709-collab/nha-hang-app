@@ -49,3 +49,12 @@ export function daysOfMonth(p: string) {
   return Array.from({ length: n }, (_, i) => `${p}-${String(i + 1).padStart(2, '0')}`)
 }
 export const normName = (s: string) => s.toLowerCase().replace(/[0-9.,x×%]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+/** Font chuẩn của PDF không có dấu tiếng Việt: bỏ dấu, giữ ä ö ü ß € */
+export function pdfText(s: string | null | undefined) {
+  if (!s) return ''
+  return s.replace(/[đĐ]/g, (c) => (c === 'đ' ? 'd' : 'D'))
+    .replace(/[^\u0000-ÿ€]/g, (c) => c.normalize('NFD').replace(/[̀-ͯ]/g, ''))
+    .replace(/[^\u0000-ÿ€]/g, '?')
+}
+

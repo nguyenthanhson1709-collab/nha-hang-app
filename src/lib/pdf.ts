@@ -6,13 +6,8 @@ import { dmy, eur, monthLabel, r2 } from './format'
 import { folderParts } from './data'
 import { pdfToImages } from './ocr'
 
-/** Font chuẩn của PDF không có dấu tiếng Việt: bỏ dấu, giữ ä ö ü ß € */
-export function pdfText(s: string | null | undefined) {
-  if (!s) return ''
-  return s.replace(/[đĐ]/g, (c) => (c === 'đ' ? 'd' : 'D'))
-    .replace(/[^\u0000-ÿ€]/g, (c) => c.normalize('NFD').replace(/[̀-ͯ]/g, ''))
-    .replace(/[^\u0000-ÿ€]/g, '?')
-}
+export { pdfText } from './format'
+import { pdfText } from './format'
 
 const W = 210, H = 297, M = 14
 

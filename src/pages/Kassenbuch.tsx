@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { supabase, errMsg, signedUrl, type CashCount, type KbRow } from '../lib/supabase'
-import { canManage, useRole } from '../lib/app'
+import { supabase, errMsg, signedUrl, type CashCount, type CashMove, type ZBon } from '../lib/supabase'
+import { canManage, useApp, useRole } from '../lib/app'
 import { useT } from '../lib/i18n'
-import { addMonths, dmy, eur, monthLabel, monthRange, r2, thisMonth, todayIso } from '../lib/format'
+import { addMonths, eur, monthLabel, monthRange, r2, thisMonth, todayIso } from '../lib/format'
 import { balanceBefore, currentBalance, kassenbuch, lockedPeriods, uploadFiles } from '../lib/data'
 import Scanner, { type ScannedPage } from '../components/Scanner'
 import { autoScanImage } from '../lib/scanner'
 import { compressImage } from '../lib/ocr'
-import { download, kassenbuchPdf } from '../lib/pdf'
+import { download } from '../lib/pdf'
+import { kbLines, kbPdf, kbTotals, kbXlsx, type KbLine } from '../lib/kassenbuch'
+import { docsInRange } from '../lib/data'
 import { Money, Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
 
 type MoveType = 'einlage' | 'privatentnahme' | 'geldtransit' | 'sonstige_einnahme' | 'sonstige_ausgabe'
@@ -20,7 +22,8 @@ export default function Kassenbuch() {
   const r = useRestaurant(rid)
   const role = useRole(rid)
   const [period, setPeriod] = useState(thisMonth())
-  const [rows, setRows] = useState<KbRow[] | null>(null)
+  const [rows, setRows] = useState<KbLine[] | null>(null)
+  const { categories } = useApp()
   const [counts, setCounts] = useState<CashCount[]>([])
   const [opening, setOpening] = useState(0)
   const [locked, setLocked] = useState(false)
@@ -35,16 +38,20 @@ export default function Kassenbuch() {
   const load = useCallback(async () => {
     if (!r) return
     setRows(null)
-    const [kb, c, lk, mv] = await Promise.all([
+    const { from, to } = monthRange(period)
+    const [kb, c, lk, mv, docs, zq] = await Promise.all([
       kassenbuch(rid!, period),
       supabase.from('nh_cash_counts').select('*').eq('restaurant_id', rid!).eq('period', period).order('count_date'),
       lockedPeriods(rid!),
-      supabase.from('nh_cash_moves').select('id, files').eq('restaurant_id', rid!).eq('period', period),
+      supabase.from('nh_cash_moves').select('*').eq('restaurant_id', rid!).eq('period', period),
+      docsInRange(rid!, from, to, true),
+      supabase.from('nh_zbons').select('*').eq('restaurant_id', rid!).eq('period', period),
     ])
     setMvFiles(Object.fromEntries((mv.data || []).filter((x) => x.files?.length).map((x) => [x.id, x.files as string[]])))
-    const op = kb.length ? r2(Number(kb[0].saldo) - Number(kb[0].einnahme) + Number(kb[0].ausgabe)) : await balanceBefore(rid!, monthRange(period).from, Number(r.opening_cash))
-    setOpening(op); setRows(kb); setCounts((c.data || []) as CashCount[]); setLocked(lk.has(period))
-  }, [rid, period, r])
+    const op = kb.length ? r2(Number(kb[0].saldo) - Number(kb[0].einnahme) + Number(kb[0].ausgabe)) : await balanceBefore(rid!, from, Number(r.opening_cash))
+    setOpening(op); setCounts((c.data || []) as CashCount[]); setLocked(lk.has(period))
+    setRows(kbLines(docs, (zq.data || []) as ZBon[], (mv.data || []) as CashMove[], r, period, op, categories))
+  }, [rid, period, r, categories])
   useEffect(() => { load() }, [load])
 
   if (!r) return null
@@ -110,21 +117,20 @@ export default function Kassenbuch() {
   }
 
   const cmap = new Map(counts.map((c) => [c.count_date, c]))
-  const byDay: [string, KbRow[]][] = []
-  for (const x of rows || []) {
-    const last = byDay[byDay.length - 1]
-    if (last && last[0] === x.entry_date) last[1].push(x); else byDay.push([x.entry_date, [x]])
+  const tot = kbTotals(rows || [])
+  const ein = tot.ein, aus = tot.aus
+  const negative = (rows || []).some((x) => x.saldo < 0)
+  const fname = `Kasse_${r.name.replace(/\W+/g, '_')}_${period}`
+  const pdfBlob = () => kbPdf(rows || [], counts, r!, period, opening)
+  function viewPdf() {
+    // mở cửa sổ trước rồi mới gán (Safari chặn cửa sổ mở sau khi chờ)
+    const w = window.open('', '_blank')
+    const u = URL.createObjectURL(pdfBlob())
+    if (w) w.location.href = u; else location.href = u
   }
-  for (const c of counts) if (!byDay.some(([d]) => d === c.count_date)) byDay.push([c.count_date, []])
-  byDay.sort((a, b) => a[0].localeCompare(b[0]))
-  const ein = (rows || []).reduce((s, x) => s + Number(x.einnahme), 0), aus = (rows || []).reduce((s, x) => s + Number(x.ausgabe), 0)
-  const negative = (rows || []).some((x) => Number(x.saldo) < 0)
-
-  const link = (x: KbRow) => x.source === 'beleg' ? `/r/${rid}/doc/${x.source_id}` : x.source === 'zbon' || x.source === 'tip' ? `/r/${rid}/z/${x.source_id}` : null
-
   return (
     <>
-      <Top title={t('kassenbuch')} sub={r.name} right={<button onClick={() => rows && download(kassenbuchPdf(rows, counts, r, period, opening), `Kassenbuch_${r.name.replace(/\W+/g, '_')}_${period}.pdf`)}>PDF</button>} />
+      <Top title={t('kassenbuch')} sub={r.name} />
       <div className="page">
         <div className="row" style={{ marginBottom: 10 }}>
           <button onClick={() => setPeriod(addMonths(period, -1))}>‹</button>
@@ -146,16 +152,27 @@ export default function Kassenbuch() {
             ))}
           </div>
         )}
-        {!rows ? <Spinner /> : !byDay.length ? <div className="card muted">{t('noData')}</div> : (
+        {rows && (
+          <div className="grid3" style={{ marginBottom: 12 }}>
+            <button onClick={viewPdf}>👁 PDF</button>
+            <button onClick={() => download(pdfBlob(), fname + '.pdf')}>⬇ PDF</button>
+            <button onClick={() => download(kbXlsx(rows, r, period, opening), fname + '.xlsx')}>⬇ Excel</button>
+          </div>
+        )}
+        {!rows ? <Spinner /> : !rows.length && !counts.length ? <div className="card muted">{t('noData')}</div> : (
           <div className="tbl-wrap">
-            <table>
-              <thead><tr><th>Nr.</th><th>{t('description')}</th><th className="num">+</th><th className="num">−</th><th className="num">{t('cashBalance')}</th></tr></thead>
+            <table className="kb">
+              <thead><tr><th>Datum</th><th>Beleg</th><th className="num">Einnahmen</th><th className="num">Ausgaben</th><th className="num">MwSt.</th><th className="num">USt</th><th className="num">VSt</th><th className="num">Ein.Netto</th><th className="num">Aus.Netto</th><th className="num">Saldo</th><th>Konto</th><th>Text</th></tr></thead>
               <tbody>
-                {byDay.map(([d, xs]) => (
-                  <DayRows key={d} d={d} xs={xs} c={cmap.get(d)} link={link} onDel={locked ? undefined : delMove} t={t} files={mvFiles} onFile={openFile} />
-                ))}
+                <tr><td colSpan={9} /><td className="num">{eur(opening, false)}</td><td /><td className="muted">Saldo Vormonat</td></tr>
+                {rows.map((x, i) => {
+                  const c = rows[i + 1]?.date !== x.date ? cmap.get(x.date) : undefined
+                  return (
+                    <KbTr key={i} x={x} c={c} onDel={locked ? undefined : delMove} files={mvFiles} onFile={openFile} />
+                  )
+                })}
               </tbody>
-              <tfoot><tr><td /><td>{t('total')}</td><td className="num kb-in">{eur(ein)}</td><td className="num kb-out">{eur(aus)}</td><td className="num">{eur(opening + ein - aus)}</td></tr></tfoot>
+              <tfoot><tr><td /><td>Summe</td><td className="num">{eur(tot.ein, false)}</td><td className="num">{eur(tot.aus, false)}</td><td /><td className="num">{eur(tot.ust, false)}</td><td className="num">{eur(tot.vst, false)}</td><td className="num">{eur(tot.einNetto, false)}</td><td className="num">{eur(tot.ausNetto, false)}</td><td className="num">{eur(opening + tot.ein - tot.aus, false)}</td><td /><td>Endbestand</td></tr></tfoot>
             </table>
           </div>
         )}
@@ -202,27 +219,27 @@ export default function Kassenbuch() {
   )
 }
 
-function DayRows({ d, xs, c, link, onDel, t, files, onFile }: { d: string; xs: KbRow[]; c?: CashCount; link: (x: KbRow) => string | null; onDel?: (id: string) => void; t: ReturnType<typeof useT>; files: Record<string, string[]>; onFile: (p: string) => void }) {
+const nz = (v: number) => (v ? eur(v, false) : '')
+function KbTr({ x, c, onDel, files, onFile }: { x: KbLine; c?: CashCount; onDel?: (id: string) => void; files: Record<string, string[]>; onFile: (p: string) => void }) {
   return (
     <>
-      <tr><td colSpan={5} style={{ background: 'color-mix(in srgb, var(--line) 30%, transparent)', fontWeight: 600 }}>{dmy(d)}</td></tr>
-      {xs.map((x) => {
-        const l = link(x)
-        return (
-          <tr key={x.source + x.source_id}>
-            <td className="muted">{x.nr}</td>
-            <td>{l ? <Link to={l}>{x.text}</Link> : x.text}{x.mwst && <span className="small muted"> · {x.mwst}</span>}
-              {x.source === 'move' && files[x.source_id]?.map((f) => <button key={f} className="ghost small" style={{ minHeight: 0, padding: '0 4px' }} onClick={() => onFile(f)}>📎</button>)}
-              {x.source === 'move' && onDel && <button className="ghost small" style={{ minHeight: 0, padding: '0 4px' }} onClick={() => onDel(x.source_id)}>✕</button>}</td>
-            <td className="num kb-in">{Number(x.einnahme) ? eur(x.einnahme, false) : ''}</td>
-            <td className="num kb-out">{Number(x.ausgabe) ? eur(x.ausgabe, false) : ''}</td>
-            <td className="num" style={Number(x.saldo) < 0 ? { color: 'var(--err)', fontWeight: 700 } : undefined}>{eur(x.saldo, false)}</td>
-          </tr>
-        )
-      })}
-      {c && (
-        <tr><td /><td colSpan={3}>{t('count')}: {eur(c.counted)} {Number(c.difference) === 0 ? <span className="tag">✓</span> : <span className="tag err">{eur(c.difference)} · {c.reason}</span>}</td><td /></tr>
-      )}
+      <tr>
+        <td>{x.date.slice(8, 10)}.{x.date.slice(5, 7)}</td>
+        <td>{x.beleg}</td>
+        <td className="num kb-in">{nz(x.ein)}</td>
+        <td className="num kb-out">{nz(x.aus)}</td>
+        <td className="num">{x.rate == null ? '' : `${x.rate}%`}</td>
+        <td className="num">{nz(x.ust)}</td>
+        <td className="num">{nz(x.vst)}</td>
+        <td className="num">{nz(x.einNetto)}</td>
+        <td className="num">{nz(x.ausNetto)}</td>
+        <td className="num" style={x.saldo < 0 ? { color: 'var(--err)', fontWeight: 700 } : undefined}>{eur(x.saldo, false)}</td>
+        <td>{x.konto}</td>
+        <td style={{ whiteSpace: 'nowrap' }}>{x.link ? <Link to={x.link}>{x.text}</Link> : x.text}
+          {x.moveId && files[x.moveId]?.map((f) => <button key={f} className="ghost small" style={{ minHeight: 0, padding: '0 4px' }} onClick={() => onFile(f)}>📎</button>)}
+          {x.moveId && onDel && <button className="ghost small" style={{ minHeight: 0, padding: '0 4px' }} onClick={() => onDel(x.moveId!)}>✕</button>}</td>
+      </tr>
+      {c && <tr><td colSpan={11} /><td className="small">Kassensturz: {eur(c.counted)} {Number(c.difference) === 0 ? <span className="tag">✓</span> : <span className="tag err">{eur(c.difference)} · {c.reason}</span>}</td></tr>}
     </>
   )
 }

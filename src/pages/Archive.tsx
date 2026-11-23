@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import JSZip from 'jszip'
-import { supabase, errMsg, type Doc, type ZBon, type CashCount } from '../lib/supabase'
+import { supabase, errMsg, type Doc, type ZBon, type CashCount, type CashMove } from '../lib/supabase'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { addMonths, dmy, eur, monthLabel, monthRange, thisMonth } from '../lib/format'
-import { DOC_SELECT, docsInRange, folderParts, kassenbuch, lockedPeriods } from '../lib/data'
-import { addOriginals, download, folderFiles, kassenbuchPdf, scansPdf, type ExtraBeleg, type Folder } from '../lib/pdf'
+import { DOC_SELECT, balanceBefore, docsInRange, folderParts, kassenbuch, lockedPeriods } from '../lib/data'
+import { kbLines, kbPdf, kbXlsx } from '../lib/kassenbuch'
+import { addOriginals, download, folderFiles, scansPdf, type ExtraBeleg, type Folder } from '../lib/pdf'
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
 
 const FOLDERS: Folder[] = ['Bargeld', 'Rechnungseingang', 'Rechnungsausgang']
@@ -103,8 +104,11 @@ export default function Archive() {
       for (const f of FOLDERS) { const b = await scansPdf(f, docs, zbons, setBusy, extra); if (b) z.file(`${safe}_${period}_${f}.pdf`, b) }
       const rows = await kassenbuch(rid!, period)
       const { data: c } = await supabase.from('nh_cash_counts').select('*').eq('restaurant_id', rid!).eq('period', period)
-      const opening = rows.length ? Number(rows[0].saldo) - Number(rows[0].einnahme) + Number(rows[0].ausgabe) : Number(r!.opening_cash)
-      z.file(`${safe}_${period}_Kassenbuch.pdf`, kassenbuchPdf(rows, (c || []) as CashCount[], r!, period, opening))
+      const { data: mv } = await supabase.from('nh_cash_moves').select('*').eq('restaurant_id', rid!).eq('period', period)
+      const opening = rows.length ? Number(rows[0].saldo) - Number(rows[0].einnahme) + Number(rows[0].ausgabe) : await balanceBefore(rid!, monthRange(period).from, Number(r!.opening_cash))
+      const kl = kbLines(docs, zbons, (mv || []) as CashMove[], r!, period, opening, categories)
+      z.file(`${safe}_${period}_Kassenbuch.pdf`, kbPdf(kl, (c || []) as CashCount[], r!, period, opening))
+      z.file(`${safe}_${period}_Kassenbuch.xlsx`, kbXlsx(kl, r!, period, opening))
       download(await z.generateAsync({ type: 'blob' }), `${safe}_${period}.zip`)
     } catch (e) { fail(e) }
     setBusy('')
