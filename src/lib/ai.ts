@@ -10,11 +10,11 @@ async function toB64(b: Blob): Promise<string> {
   return btoa(s)
 }
 
-async function call<T>(kind: 'invoice' | 'zbon', rid: string, files: { blob: Blob; type: string }[]): Promise<T | null> {
+async function call<T>(kind: 'invoice' | 'zbon' | 'segment', rid: string, files: { blob: Blob; type: string }[], pages?: number): Promise<T | null> {
   const use = files.filter((f) => f.type.startsWith('image/') || f.type === 'application/pdf')
   if (!use.length) return null
   try {
-    const body = { kind, restaurant_id: rid, files: await Promise.all(use.map(async (f) => ({ type: f.type, data: await toB64(f.blob) }))) }
+    const body = { kind, restaurant_id: rid, pages, files: await Promise.all(use.map(async (f) => ({ type: f.type, data: await toB64(f.blob) }))) }
     const { data, error } = await supabase.functions.invoke('nh-read', { body })
     if (error || !data?.result) { console.warn('nh-read', error || data); return null }
     return data.result as T
@@ -34,4 +34,11 @@ export async function aiReadZbon(rid: string, files: { blob: Blob; type: string 
   const r = await call<ParsedZ>('zbon', rid, files)
   if (!r) return null
   return { ...r, details: {} }
+}
+
+export type Segment = { start_page: number; end_page: number; supplier: string | null; invoice_no: string | null }
+/** Chia một PDF nhiều hoá đơn thành từng hoá đơn (theo trang). null khi lỗi. */
+export async function aiSegment(rid: string, pdf: Blob, pages: number): Promise<Segment[] | null> {
+  const r = await call<{ invoices: Segment[] }>('segment', rid, [{ blob: pdf, type: 'application/pdf' }], pages)
+  return r?.invoices || null
 }

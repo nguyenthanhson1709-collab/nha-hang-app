@@ -21,7 +21,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npx tsx tests/db.mts && npx tsx tests/invoice-parse.mts && npx tsx tests/kassenbuch.mts
+      - run: npx tsx tests/db.mts && npx tsx tests/invoice-parse.mts && npx tsx tests/kassenbuch.mts && npx tsx tests/bulk.mts
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

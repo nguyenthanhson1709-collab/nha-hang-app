@@ -46,7 +46,8 @@ button.danger { color: var(--err); border-color: var(--err); }
 button.ghost { background: transparent; border-color: transparent; }
 button.sel { background: var(--brand-2); border-color: var(--brand); color: var(--brand); font-weight: 600; }
 button:disabled { opacity: .5; cursor: default; }
-button.block { width: 100%; }
+button.block, .btn.block { width: 100%; }
+.btn.disabled { opacity: .5; pointer-events: none; }
 button.huge { width: 100%; min-height: 64px; font-size: 1.15rem; }
 input, select, textarea { font: inherit; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); min-height: 44px; }
 input[type=checkbox] { width: 22px; min-height: 22px; height: 22px; }

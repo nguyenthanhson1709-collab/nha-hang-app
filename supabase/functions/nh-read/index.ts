@@ -39,6 +39,20 @@ const ZBON = obj({
   storno: num, storno_count: { type: "integer" },
 });
 
+const SEGMENT = obj({
+  invoices: { type: "array", items: obj({
+    start_page: { type: "integer", description: "erste Seite (1-basiert)" },
+    end_page: { type: "integer", description: "letzte Seite (inklusive)" },
+    supplier: nStr,
+    invoice_no: nStr,
+  }) },
+});
+
+const PROMPT_SEG = (n: number) => `Dieses PDF hat ${n} Seiten und enthält mehrere Eingangsrechnungen / Kassenbons hintereinander.
+Bestimme, welche Seiten zu welcher Rechnung gehören. WICHTIG: Eine Rechnung kann mehrere Seiten haben ("Seite 2 von 3", "Übertrag", gleiche Rechnungsnummer, Endsumme erst auf der letzten Seite, Folgeseite ohne Kopf). Folgeseiten gehören zur selben Rechnung, nicht jede Seite ist eine eigene Rechnung.
+Leere Seiten, Deckblätter oder AGB-Seiten gehören zur vorherigen Rechnung (oder werden weggelassen, wenn davor keine ist).
+Gib die Rechnungen in Reihenfolge zurück, ohne Überschneidungen, Seitenzahlen 1 bis ${n}.`;
+
 const PROMPT_INV = `Du liest einen deutschen Kassenbon bzw. eine Eingangsrechnung eines Restaurants (Fotos/Scans, evtl. mehrere Seiten derselben Rechnung).
 Extrahiere die Daten exakt wie gedruckt. Regeln:
 - gross = zu zahlender Endbetrag (Summe / zu zahlen / Gesamt). "Bar", "Gegeben", "Rückgeld" sind Zahlungsangaben, nicht der Betrag.
@@ -62,7 +76,7 @@ Deno.serve(async (req) => {
     const token = (req.headers.get("Authorization") || "").replace("Bearer ", "");
     const { data: u } = await admin.auth.getUser(token);
     if (!u?.user) return json({ error: "not_authenticated" }, 401);
-    const { kind, restaurant_id, files } = await req.json() as { kind: string; restaurant_id: string; files: { type: string; data: string }[] };
+    const { kind, restaurant_id, files, pages } = await req.json() as { kind: string; restaurant_id: string; files: { type: string; data: string }[]; pages?: number };
     // Chỉ thành viên của quán (hoặc chủ) mới được dùng
     const { data: prof } = await admin.from("nh_profiles").select("is_owner").eq("id", u.user.id).maybeSingle();
     if (!prof?.is_owner) {
@@ -80,14 +94,14 @@ Deno.serve(async (req) => {
       f.type === "application/pdf"
         ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: f.data } }
         : { type: "image", source: { type: "base64", media_type: (["image/png", "image/webp", "image/gif"].includes(f.type) ? f.type : "image/jpeg") as "image/jpeg", data: f.data } });
-    content.push({ type: "text", text: kind === "zbon" ? PROMPT_Z(map) : PROMPT_INV });
+    content.push({ type: "text", text: kind === "zbon" ? PROMPT_Z(map) : kind === "segment" ? PROMPT_SEG(pages || 0) : PROMPT_INV });
 
     const client = new Anthropic({ apiKey: key });
     const msg = await client.messages.create({
       model: MODEL,
       max_tokens: 8000,
       thinking: { type: "between_tools" },
-      output_config: { effort: "medium", format: { type: "json_schema", schema: kind === "zbon" ? ZBON : INVOICE } },
+      output_config: { effort: "medium", format: { type: "json_schema", schema: kind === "zbon" ? ZBON : kind === "segment" ? SEGMENT : INVOICE } },
       messages: [{ role: "user", content }],
     } as never) as Anthropic.Message;
     if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") return json({ error: msg.stop_reason }, 502);

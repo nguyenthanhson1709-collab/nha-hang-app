@@ -7,6 +7,7 @@ import { addMonths, dmy, eur, monthLabel, monthRange, thisMonth } from '../lib/f
 import { DOC_SELECT, docsInRange, folderParts, lockedPeriods } from '../lib/data'
 import { download, folderFiles, folderPdf, scansPdf, type ExtraBeleg, type Folder } from '../lib/pdf'
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
+import { bulkUpload, MAX_MB, MAX_PAGES, type BulkResult } from '../lib/bulk'
 
 const FOLDERS: Folder[] = ['Bargeld', 'Rechnungseingang', 'Rechnungsausgang']
 // Tên hiển thị gọn; tên file xuất ra vẫn giữ tên chuyên môn (Rechnungseingang / Rechnungsausgang)
@@ -33,6 +34,8 @@ export default function Archive() {
   const [found, setFound] = useState<Doc[] | null>(null)
   const [fPay, setFPay] = useState(''); const [fRate, setFRate] = useState(''); const [fCat, setFCat] = useState(''); const [fSup, setFSup] = useState('')
   const [busy, setBusy] = useState('')
+  const [tick, setTick] = useState(0)
+  const [bulk, setBulk] = useState<BulkResult | null>(null)
 
   useEffect(() => {
     if (!rid) return
@@ -43,7 +46,7 @@ export default function Archive() {
     // Chi/thu khác trong Kassenbuch có ảnh hoá đơn -> thuộc thư mục Bargeld
     if (m) supabase.from('nh_cash_moves').select('move_date, type, description, files').eq('restaurant_id', rid).eq('period', period).then(({ data }) =>
       setExtra((data || []).filter((x) => x.files?.length).map((x) => ({ date: x.move_date, name: x.description || (x.type === 'sonstige_einnahme' ? 'Sonstige Einnahme' : 'Sonstige Ausgabe'), files: x.files }))))
-  }, [rid, period, m])
+  }, [rid, period, m, tick])
 
   useEffect(() => {
     if (q.trim().length < 2) { setFound(null); return }
@@ -91,6 +94,17 @@ export default function Archive() {
   async function scans(f: Folder) {
     setBusy('PDF…')
     try { const b = await scansPdf(f, docs, zbons, setBusy, extra); if (b) download(b, `${safe}_${period}_${f}_Original.pdf`); else toast(t('noData')) } catch (e) { fail(e) }
+    setBusy('')
+  }
+  // Tải dữ liệu lên: 1 file PDF chứa nhiều hoá đơn
+  async function upload(f: Folder, file: File | undefined) {
+    if (!file || (f !== 'Bargeld' && f !== 'Rechnungseingang')) return
+    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) { toast('PDF'); return }
+    setBulk(null); setBusy('…')
+    try {
+      const res = await bulkUpload({ rid: rid!, file, folder: f, period, categories, onProgress: setBusy })
+      setBulk(res); setTick((x) => x + 1); reload()
+    } catch (e) { fail(e) }
     setBusy('')
   }
   async function lock() {
@@ -167,6 +181,23 @@ export default function Archive() {
                 <button disabled={!!busy} onClick={() => scans(folder)}>🗂 {t('originals')}</button>
               </> : null}
             </div>}
+            {folder && folder !== 'Rechnungsausgang' && !locked && (
+              <label className={`btn primary block${busy ? ' disabled' : ''}`} style={{ marginTop: 8, textAlign: 'center' }}>
+                ⬆ {t('uploadData')}
+                <input type="file" accept="application/pdf,.pdf" hidden disabled={!!busy} onChange={(e) => { upload(folder, e.target.files?.[0]); e.target.value = '' }} />
+              </label>
+            )}
+            {folder && folder !== 'Rechnungsausgang' && !locked && !busy && !bulk && <div className="small muted" style={{ marginTop: 6 }}>{t('uploadHint', { p: String(MAX_PAGES), mb: String(MAX_MB) })}</div>}
+            {bulk && (
+              <div style={{ marginTop: 10 }}>
+                <div className="alert ok">✓ {t('bulkAdded', { n: String(bulk.added.length) })}{bulk.skipped.length > 0 && ` · ${t('bulkSkipped', { n: String(bulk.skipped.length) })}`}</div>
+                <div className="small">
+                  {bulk.added.map((x, i) => <div key={'a' + i}>✓ {x.pages}: {x.supplier || '—'} · {dmy(x.date)} · {eur(x.gross)}</div>)}
+                  {bulk.skipped.map((x, i) => <div key={'s' + i} className="muted">✕ {x.pages}: {x.supplier || '—'}{x.gross ? ` · ${eur(x.gross)}` : ''} ({x.why === 'dup' ? t('dupShort') : x.why === 'AI' ? t('bulkUnread') : x.why})</div>)}
+                </div>
+                {bulk.added.length > 0 && <Link className="btn block" style={{ marginTop: 8, textAlign: 'center' }} to={`/r/${rid}?v=review`}>{t('toReview')} →</Link>}
+              </div>
+            )}
             {!folder && profile.is_owner && !locked && <button className="danger block" onClick={lock}>🔒 {t('lockMonth')} {monthLabel(period)}</button>}
             {busy && <div className="small muted" style={{ marginTop: 8 }}>{busy}</div>}
           </div>
