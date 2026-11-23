@@ -163,7 +163,7 @@ export default function Kassenbuch() {
             <button className="primary" onClick={openCount}>🧮 {t('count')}</button>
             <button onClick={() => setMove({ type: 'geldtransit', date: todayIso(), amount: 0, description: 'Kartenzahlung', channel: 'viva' })}>− Viva Wallet</button>
             {(['geldtransit', 'sonstige_ausgabe', 'sonstige_einnahme'] as MoveType[]).map((x) => (
-              <button key={x} onClick={() => setMove({ type: x, date: todayIso(), amount: 0, description: '' })}>{OUT.has(x) ? '−' : '+'} {t(x).split(' (')[0]}</button>
+              <button key={x} onClick={() => setMove({ type: x, date: todayIso(), amount: 0, description: x === 'geldtransit' ? 'Einzahlung' : '' })}>{OUT.has(x) ? '−' : '+'} {t(x).split(' (')[0]}</button>
             ))}
           </div>
         )}
