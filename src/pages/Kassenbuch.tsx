@@ -28,7 +28,7 @@ export default function Kassenbuch() {
   const [opening, setOpening] = useState(0)
   const [locked, setLocked] = useState(false)
   const [missing, setMissing] = useState<string[]>([])
-  const [move, setMove] = useState<{ type: MoveType; date: string; amount: number; description: string } | null>(null)
+  const [move, setMove] = useState<{ type: MoveType; date: string; amount: number; description: string; channel?: string } | null>(null)
   const [mvPages, setMvPages] = useState<{ blob: Blob; preview: string }[]>([])
   const [scanner, setScanner] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -64,14 +64,14 @@ export default function Kassenbuch() {
 
   async function saveMove() {
     if (!move || move.amount <= 0) return
-    if (OUT.has(move.type)) {
+    if (OUT.has(move.type) && move.channel !== 'viva') {
       const bal = await currentBalance(rid!, Number(r!.opening_cash))
       if (bal - move.amount < 0) { toast(t('negativeBalance')); return }
     }
     setSaving(true)
     try {
       const files = mvPages.length ? await uploadFiles(rid!, move.date, mvPages.map((p) => p.blob), mvPages.map(() => 'beleg.jpg')) : []
-      const { error } = await supabase.from('nh_cash_moves').insert({ restaurant_id: rid, move_date: move.date, period: move.date.slice(0, 7), type: move.type, amount: move.amount, description: move.description || null, files })
+      const { error } = await supabase.from('nh_cash_moves').insert({ restaurant_id: rid, move_date: move.date, period: move.date.slice(0, 7), type: move.type, amount: move.amount, description: move.description || null, files, channel: move.channel || null })
       if (error) throw error
       closeMove(); load()
     } catch (e) { toast(errMsg(e)) }
@@ -158,6 +158,7 @@ export default function Kassenbuch() {
         {!locked && (
           <div className="row wrap" style={{ marginBottom: 12 }}>
             <button className="primary" onClick={openCount}>🧮 {t('count')}</button>
+            <button onClick={() => setMove({ type: 'geldtransit', date: todayIso(), amount: 0, description: '', channel: 'viva' })}>− Viva Wallet</button>
             {(['geldtransit', 'sonstige_ausgabe', 'sonstige_einnahme'] as MoveType[]).map((x) => (
               <button key={x} onClick={() => setMove({ type: x, date: todayIso(), amount: 0, description: '' })}>{OUT.has(x) ? '−' : '+'} {t(x).split(' (')[0]}</button>
             ))}
@@ -192,12 +193,12 @@ export default function Kassenbuch() {
 
       {scanner && <Scanner onDone={fromScanner} onCancel={() => setScanner(false)} />}
       <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { addPhotos(e.target.files); e.target.value = '' }} />
-      <Sheet open={!!move && !scanner} onClose={closeMove} title={move ? t(move.type) : ''}>
+      <Sheet open={!!move && !scanner} onClose={closeMove} title={move ? (move.channel === 'viva' ? 'Viva Wallet (Kartenzahlung)' : t(move.type)) : ''}>
         {move && <>
           <label className="f"><span>{t('date')}</span><input type="date" value={move.date} onChange={(e) => setMove({ ...move, date: e.target.value })} /></label>
           <label className="f"><span>{t('amount')}</span><Money value={move.amount} onChange={(v) => setMove({ ...move, amount: v })} /></label>
           <label className="f"><span>{t('description')}</span><input value={move.description} onChange={(e) => setMove({ ...move, description: e.target.value })} /></label>
-          {move.type !== 'geldtransit' && <>
+          {(move.type !== 'geldtransit' || move.channel === 'viva') && <>
             <div className="grid2" style={{ marginBottom: 8 }}>
               <button onClick={() => setScanner(true)}>📄 {t('scan')}</button>
               <button onClick={() => cam.current?.click()}>📷 {t('takePhoto')}</button>

@@ -16,7 +16,7 @@ create function storage.foldername(name text) returns text[] language sql as $$ 
 grant usage on schema public, auth, storage to authenticated, anon;
 grant execute on function auth.uid() to authenticated, anon;
 `)
-for (const f of ['001_nh_schema.sql', '003_nh_hardening.sql', '004_nh_kassenbuch_order.sql']) await db.exec(readFileSync(`supabase/migrations/${f}`, 'utf8'))
+for (const f of ['001_nh_schema.sql', '003_nh_hardening.sql', '004_nh_kassenbuch_order.sql', '005_nh_cash_moves_channel.sql']) await db.exec(readFileSync(`supabase/migrations/${f}`, 'utf8'))
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;`)
 
 const O = '11111111-1111-4111-8111-111111111111', M = '22222222-2222-4222-8222-222222222222', S = '33333333-3333-4333-8333-333333333333', X = '44444444-4444-4444-8444-444444444444'
@@ -78,6 +78,11 @@ const cnt = await as(M, () => q(`insert into nh_cash_counts(restaurant_id, count
 ok(cnt instanceof Error, 'Đếm két lệch mà không ghi lý do: bị chặn')
 const own = await as(M, () => q(`update nh_profiles set is_owner = true where id = $1`, [M]))
 ok(own instanceof Error || (Array.isArray(own) && own.length === 0), 'Không tự nâng quyền chủ được')
+// Viva Wallet: thay phần thẻ của Z-Bon ngày đó, chỉ phần vượt quá (650 − 600 = 50) làm giảm tồn quỹ
+await as(M, () => q(`insert into nh_zbons(restaurant_id, z_date, period, gross7, gross19, total, card_pos, cash_pos) values ($1,'2026-11-03','2026-11',1000,0,1000,600,400)`, [A]))
+await as(M, () => q(`insert into nh_cash_moves(restaurant_id, move_date, period, type, amount, channel) values ($1,'2026-11-03','2026-11','geldtransit',650,'viva')`, [A]))
+const vv = await as(M, () => q(`select text, einnahme, ausgabe from nh_kassenbuch where restaurant_id=$1 and entry_date='2026-11-03' order by nr`, [A]))
+ok(!(vv instanceof Error) && vv.some((r) => /Viva/.test(String(r.text)) && Number(r.ausgabe) === 50) && vv.some((r) => Number(r.einnahme) === 400), 'Viva Wallet: chỉ phần vượt thẻ Z-Bon (50) ra khỏi két')
 const aud = await q(`select count(*)::int n from nh_audit`)
 ok(Number(aud[0].n) > 3, 'Nhật ký sửa đổi được ghi')
 

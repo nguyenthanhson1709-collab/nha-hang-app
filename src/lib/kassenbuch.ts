@@ -43,6 +43,10 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
     })
   }
 
+  // Thu thẻ nhập tay (Viva Wallet) theo ngày: thay cho phần thẻ tính từ Z-Bon của ngày đó
+  const viva = new Map<string, number>()
+  for (const m of moves) if (m.channel === 'viva') viva.set(m.move_date, r2((viva.get(m.move_date) || 0) + Number(m.amount)))
+
   // Z-Bon: cả doanh thu trong ngày vào Einnahmen, phần khách trả thẻ ra Ausgaben (về ngân hàng)
   for (const z of zbons) {
     const total = Number(z.total); if (!total) continue
@@ -55,7 +59,7 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
       ...base, date: z.z_date, beleg, ein: r2(g), rate, ust: r2(tax), einNetto: r2(g - tax), konto: rate ? revAcc(rate) : '8200',
       text: `Einnahmen Z-Bon ${dm(z.z_date)}${rate ? '' : ' (0 %)'}`, link, prio: 0, ts: z.created_at,
     })
-    const card = r2(total - Number(z.cash_revenue))
+    const card = Math.max(0, r2(total - Number(z.cash_revenue) - (viva.get(z.z_date) || 0)))
     if (card) out.push({ ...base, date: z.z_date, beleg, aus: card, ausNetto: card, konto: '1360', text: `Kartenzahlung - ${dm(z.z_date)}`, link, prio: 2.5, ts: z.created_at })
     if (r.tip_paid_cash && Number(z.tip_card) > 0)
       out.push({ ...base, date: z.z_date, beleg, aus: Number(z.tip_card), ausNetto: Number(z.tip_card), konto: '1590', text: 'Auszahlung Trinkgeld (Karte) an Personal', link, prio: 3, ts: z.created_at })
@@ -67,7 +71,8 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
     sonstige_ausgabe: ['4900', 'Sonstige Ausgabe', false], einlage: ['1890', 'Einlage', true], privatentnahme: ['1800', 'Privatentnahme', false],
   }
   for (const m of moves) {
-    const [konto, txt, isIn] = MV[m.type]
+    const [konto, txt0, isIn] = MV[m.type]
+    const txt = m.channel === 'viva' ? 'Kartenzahlung' : txt0
     const a = Number(m.amount)
     out.push({
       ...base, date: m.move_date, konto, text: m.description ? `${txt}: ${m.description}` : txt, moveId: m.id, prio: isIn ? 1 : 4, ts: m.created_at,
