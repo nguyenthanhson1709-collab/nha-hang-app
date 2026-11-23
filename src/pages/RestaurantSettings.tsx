@@ -82,7 +82,7 @@ export default function RestaurantSettings() {
             ))}
             {!members.length && <div className="it muted">{t('noData')}</div>}
           </div>
-          <button onClick={() => setAdd({ email: '', full_name: '', password: '', role: owner && !members.some((m) => m.role === 'manager') ? 'manager' : 'staff' })}>+ {t('addUser')}</button>
+          <button onClick={() => setAdd({ email: '', full_name: '', password: '', role: 'staff' })}>+ {t('addUser')}</button>
         </div>
 
         <fieldset disabled={!owner} style={{ border: 0, padding: 0, margin: 0 }}>
@@ -122,6 +122,7 @@ export default function RestaurantSettings() {
             </div>
           </div>
           {owner && <button className="primary block" onClick={save}>{t('save')}</button>}
+          <button className="block" style={{ marginTop: 16 }} onClick={() => supabase.auth.signOut()}>{t('logout')}</button>
         </fieldset>
       </div>
 
