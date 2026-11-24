@@ -66,14 +66,15 @@ export function Toaster() {
 }
 
 /** Ô nhập tiền kiểu Đức (dấu phẩy) */
-export function Money({ value, onChange, className, placeholder, disabled }: { value: number | null; onChange: (n: number) => void; className?: string; placeholder?: string; disabled?: boolean }) {
-  const fmt = (n: number | null) => (n == null || isNaN(n) ? '' : n.toFixed(2).replace('.', ','))
+export function Money({ value, onChange, className, placeholder, disabled, autoFocus }: { value: number | null; onChange: (n: number) => void; className?: string; placeholder?: string; disabled?: boolean; autoFocus?: boolean }) {
+  // Số 0 để trống (chỉ hiện chữ mờ 0,00) để bấm thẳng số, không phải xoá "0,00" trước
+  const fmt = (n: number | null) => (n == null || isNaN(n) || n === 0 ? '' : n.toFixed(2).replace('.', ','))
   const [s, setS] = useState(fmt(value))
   const [focus, setFocus] = useState(false)
   useEffect(() => { if (!focus) setS(fmt(value)) }, [value, focus])
   return (
-    <input inputMode="decimal" className={className} placeholder={placeholder} disabled={disabled} value={s}
-      onFocus={() => setFocus(true)}
+    <input type="text" inputMode="decimal" enterKeyHint="done" autoComplete="off" className={className} placeholder={placeholder ?? '0,00'} disabled={disabled} value={s} autoFocus={autoFocus}
+      onFocus={(e) => { setFocus(true); const el = e.currentTarget; setTimeout(() => el.select(), 0) }}
       onBlur={() => { setFocus(false); setS(fmt(parseNum(s))) }}
       onChange={(e) => { setS(e.target.value); onChange(parseNum(e.target.value)) }} />
   )

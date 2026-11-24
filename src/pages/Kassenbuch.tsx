@@ -197,7 +197,7 @@ export default function Kassenbuch() {
       <Sheet open={!!move && !scanner} onClose={closeMove} title={move ? (move.channel === 'viva' ? 'Viva Wallet (Kartenzahlung)' : t(move.type)) : ''}>
         {move && <>
           <div className="f"><span>{t('date')}</span><DateField value={move.date} onChange={(d) => d && setMove({ ...move, date: d })} /></div>
-          <label className="f"><span>{t('amount')}</span><Money value={move.amount} onChange={(v) => setMove({ ...move, amount: v })} /></label>
+          <label className="f"><span>{t('amount')}</span><Money autoFocus value={move.amount} onChange={(v) => setMove({ ...move, amount: v })} /></label>
           <label className="f"><span>{t('description')}</span><input value={move.description} onChange={(e) => setMove({ ...move, description: e.target.value })} /></label>
           {(move.type !== 'geldtransit' || move.channel === 'viva') && <>
             <div className="grid2" style={{ marginBottom: 8 }}>
@@ -220,7 +220,7 @@ export default function Kassenbuch() {
         {count && <>
           <div className="f"><span>{t('date')}</span><DateField value={count.date} onChange={(d) => d && changeCountDate(d)} /></div>
           <div className="row between" style={{ marginBottom: 8 }}><span>{t('bookBalance')}</span><b>{eur(count.book)}</b></div>
-          <label className="f"><span>{t('counted')}</span><Money value={count.counted} onChange={(v) => setCount({ ...count, counted: v })} /></label>
+          <label className="f"><span>{t('counted')}</span><Money autoFocus value={count.counted} onChange={(v) => setCount({ ...count, counted: v })} /></label>
           {r2(count.counted - count.book) !== 0 && <>
             <div className="alert warn">{t('difference')}: {eur(count.counted - count.book)}</div>
             <label className="f"><span>{t('reason')}</span><input value={count.reason} onChange={(e) => setCount({ ...count, reason: e.target.value })} /></label>
