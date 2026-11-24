@@ -10,7 +10,7 @@ export function Top({ title, sub, back, right, onBack }: { title: string; sub?: 
   const nav = useNavigate()
   return (
     <div className="top">
-      {(back || onBack) && <button className="ghost" aria-label="back" onClick={() => (onBack ? onBack() : typeof back === 'string' ? nav(back) : nav(-1))}>←</button>}
+      {(back || onBack) && <button className="back-btn" aria-label="back" onClick={() => (onBack ? onBack() : typeof back === 'string' ? nav(back) : nav(-1))}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 5l-7 7 7 7" /></svg></button>}
       <div className="grow">
         <h1 style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</h1>
         {sub && <div className="sub">{sub}</div>}

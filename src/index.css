@@ -245,3 +245,9 @@ tr.no-cat-row td:first-child { color: var(--err); box-shadow: inset 3px 0 0 var(
 .monthbar:not(.compact) .mb-label { min-height: 38px; height: 38px; padding: 0 14px; font-size: 1rem; }
 .monthbar.compact .mb-label { min-height: 40px; font-size: .95rem; }
 @media (min-width: 820px) { .tile { justify-content: flex-start; padding-top: 18px; } }
+
+/* Nút quay lại nổi bật */
+.top .back-btn { flex: 0 0 auto; width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--brand); color: var(--on-brand); border: 0; box-shadow: 0 4px 12px rgb(246 135 18 / .35); }
+.top .back-btn:hover { filter: brightness(1.08); }
+.top .back-btn:active { transform: scale(.94); }
