@@ -2,7 +2,7 @@
 import { supabase, BUCKET } from './supabase'
 import { r2 } from './format'
 import { flipNegative } from './lines'
-import type { ParsedInvoice, ParsedZ } from './ocr'
+import { shrinkImage, type ParsedInvoice, type ParsedZ } from './ocr'
 
 async function toB64(b: Blob): Promise<string> {
   const buf = new Uint8Array(await b.arrayBuffer())
@@ -11,15 +11,58 @@ async function toB64(b: Blob): Promise<string> {
   return btoa(s)
 }
 
-async function call<T>(kind: 'invoice' | 'zbon' | 'segment', rid: string, files: { blob: Blob; type: string }[], pages?: number): Promise<T | null> {
-  const use = files.filter((f) => f.type.startsWith('image/') || f.type === 'application/pdf')
+type F = { blob: Blob; type: string }
+const MAX_FILES = 8 // giới hạn của nh-read
+const MB = 1024 * 1024
+
+/** Gộp nhiều ảnh/PDF thành một PDF (khi quá MAX_FILES file) */
+async function mergeToPdf(files: F[]): Promise<F> {
+  const { PDFDocument } = await import('pdf-lib')
+  const out = await PDFDocument.create()
+  for (const f of files) {
+    const bytes = new Uint8Array(await f.blob.arrayBuffer())
+    if (f.type === 'application/pdf') {
+      const src = await PDFDocument.load(bytes, { ignoreEncryption: true })
+      for (const p of await out.copyPages(src, src.getPageIndices())) out.addPage(p)
+    } else {
+      const img = f.type === 'image/png' ? await out.embedPng(bytes) : await out.embedJpg(bytes)
+      out.addPage([img.width, img.height]).drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
+    }
+  }
+  return { blob: new Blob([await out.save() as BlobPart], { type: 'application/pdf' }), type: 'application/pdf' }
+}
+
+/** Ảnh chụp điện thoại rất nặng: thu nhỏ bản gửi AI để yêu cầu không quá lớn (ảnh lưu trữ không đổi) */
+export async function prepareForAi(files: F[]): Promise<F[]> {
+  let use = files.filter((f) => f.type.startsWith('image/') || f.type === 'application/pdf')
+  const total = () => use.reduce((s, f) => s + f.blob.size, 0)
+  const shrink = async (max: number, q: number, over: number) => {
+    use = await Promise.all(use.map(async (f) => {
+      if (!f.type.startsWith('image/') || f.blob.size <= over) return f
+      try { return { blob: await shrinkImage(f.blob, max, q), type: 'image/jpeg' } } catch { return f }
+    }))
+  }
+  await shrink(2000, 0.8, 1.2 * MB)
+  if (total() > 8 * MB) await shrink(1500, 0.65, 300 * 1024)
+  if (use.length > MAX_FILES) use = [await mergeToPdf(use)]
+  return use
+}
+
+async function call<T>(kind: 'invoice' | 'zbon' | 'segment', rid: string, files: F[], pages?: number): Promise<T | null> {
+  let use: F[]
+  try { use = await prepareForAi(files) } catch (e) { console.warn('nh-read prepare', e); return null }
   if (!use.length) return null
-  try {
-    const body = { kind, restaurant_id: rid, pages, files: await Promise.all(use.map(async (f) => ({ type: f.type, data: await toB64(f.blob) }))) }
-    const { data, error } = await supabase.functions.invoke('nh-read', { body })
-    if (error || !data?.result) { console.warn('nh-read', error || data); return null }
-    return data.result as T
-  } catch (e) { console.warn('nh-read', e); return null }
+  const body = { kind, restaurant_id: rid, pages, files: await Promise.all(use.map(async (f) => ({ type: f.type, data: await toB64(f.blob) }))) }
+  // Mạng di động hay rớt khi gửi file lớn: thử lại 1 lần
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { data, error } = await supabase.functions.invoke('nh-read', { body })
+      if (!error && data?.result) return data.result as T
+      console.warn('nh-read', error || data)
+      if (error && 'context' in error && (error.context as Response)?.status && (error.context as Response).status < 500) return null
+    } catch (e) { console.warn('nh-read', e) }
+  }
+  return null
 }
 
 export async function aiReadInvoice(rid: string, files: { blob: Blob; type: string }[]): Promise<ParsedInvoice | null> {
