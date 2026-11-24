@@ -124,7 +124,7 @@ export default function ZbonReview() {
               <Row label={t('tipCard')} k="tip_card" />
               <div className="row between"><span>{t('cashRevenue')}</span><b className="num">{eur(cashRev)}</b></div>
               {z.card_terminal != null && Math.abs(diff) > 0.01 && <div className="alert warn">{t('cardDiff')}: {eur(diff)}</div>}
-              {r.card_source !== 'viva' && z.tip_card > 0 && <div className="small muted" style={{ marginTop: 6 }}>Kassenbuch: − {eur(z.tip_card)} Trinkgeld</div>}
+              {r.card_source !== 'viva' && (z.tip_card || z.tip) > 0 && <div className="small muted" style={{ marginTop: 6 }}>Kassenbuch: − {eur(z.tip_card || z.tip)} Trinkgeld</div>}
             </div>
           </fieldset>
           {!readOnly && (

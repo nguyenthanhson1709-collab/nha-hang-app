@@ -26,9 +26,9 @@ with rows as (
   from public.nh_zbons z
   union all
   select z.restaurant_id, z.z_date, z.period, z.created_at, 'tip', z.id,
-         'Auszahlung Trinkgeld (Karte) an Personal', 0, z.tip_card, null
+         'Auszahlung Trinkgeld (Karte) an Personal', 0, case when z.tip_card > 0 then z.tip_card else z.tip end, null
   from public.nh_zbons z join public.nh_restaurants r on r.id = z.restaurant_id
-  where r.card_source is distinct from 'viva' and z.tip_card > 0
+  where r.card_source is distinct from 'viva' and (z.tip_card > 0 or z.tip > 0)
   union all
   select m.restaurant_id, m.move_date, m.period, m.created_at, 'move', m.id,
          case m.type when 'einlage' then 'Einlage' when 'privatentnahme' then 'Privatentnahme'

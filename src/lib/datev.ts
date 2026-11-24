@@ -75,9 +75,10 @@ export function buildBookings(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: 
     if (parts7[1]) out.push({ date: z.z_date, amount: parts7[1], soll: '1360', haben: '8300', bu: '', text: `${t} Karte 7%`, beleg: z.z_no || '', source: z.id })
     if (parts19[0]) out.push({ date: z.z_date, amount: parts19[0], soll: '1000', haben: '8400', bu: '', text: `${t} Bar 19%`, beleg: z.z_no || '', source: z.id })
     if (parts19[1]) out.push({ date: z.z_date, amount: parts19[1], soll: '1360', haben: '8400', bu: '', text: `${t} Karte 19%`, beleg: z.z_no || '', source: z.id })
-    if (Number(z.tip_card) > 0) {
-      out.push({ date: z.z_date, amount: Number(z.tip_card), soll: '1360', haben: '1592', bu: '', text: `${t} Trinkgeld Karte`, beleg: z.z_no || '', source: z.id })
-      if (r.card_source !== 'viva') out.push({ date: z.z_date, amount: Number(z.tip_card), soll: '1592', haben: '1000', bu: '', text: `${t} Auszahlung Trinkgeld`, beleg: z.z_no || '', source: z.id })
+    const tipZ = Number(z.tip_card) > 0 ? Number(z.tip_card) : Number(z.tip) || 0
+    if (tipZ > 0) {
+      out.push({ date: z.z_date, amount: tipZ, soll: '1360', haben: '1592', bu: '', text: `${t} Trinkgeld Karte`, beleg: z.z_no || '', source: z.id })
+      if (r.card_source !== 'viva') out.push({ date: z.z_date, amount: tipZ, soll: '1592', haben: '1000', bu: '', text: `${t} Auszahlung Trinkgeld`, beleg: z.z_no || '', source: z.id })
     }
   }
   const MV: Record<string, [string, string, string]> = {

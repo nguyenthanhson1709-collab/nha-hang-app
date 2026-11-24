@@ -14,6 +14,8 @@ export interface KbLine {
 
 const taxOf = (gross: number, rate: number) => r2((gross * rate) / (100 + rate))
 const deMonth = (p: string) => new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)) - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
+/** Trinkgeld trên Z-Bon: ô tip thẻ nếu có, không thì số Trinkgeld in trên Z-Bon */
+export const zTip = (z: ZBon) => (Number(z.tip_card) > 0 ? Number(z.tip_card) : Number(z.tip) || 0)
 const dm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`
 
 export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restaurant, period: string, opening: number, cats: Category[]): KbLine[] {
@@ -70,8 +72,9 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
       if (tip > 0) out.push({ ...base, date: z.z_date, ein: tip, einNetto: tip, aus: tip, ausNetto: tip, konto: '1592', text: `Trinkgeld (Viva − Z-Bon) an Personal ausgezahlt`, link, prio: 2.6, ts: z.created_at })
     } else {
       if (cardZ) out.push({ ...base, date: z.z_date, aus: cardZ, ausNetto: cardZ, konto: '1360', text: `Kartenzahlung - ${dm(z.z_date)}${vivaMode ? ' (lt. Z-Bon, Viva fehlt)' : ''}`, link, prio: 2.5, ts: z.created_at })
-      if (!vivaMode && Number(z.tip_card) > 0)
-        out.push({ ...base, date: z.z_date, aus: Number(z.tip_card), ausNetto: Number(z.tip_card), konto: '1592', text: 'Trinkgeld (Karte) an Personal ausgezahlt', link, prio: 2.6, ts: z.created_at })
+      const tipZ = zTip(z)
+      if (!vivaMode && tipZ > 0)
+        out.push({ ...base, date: z.z_date, aus: tipZ, ausNetto: tipZ, konto: '1592', text: 'Trinkgeld (Karte) an Personal ausgezahlt', link, prio: 2.6, ts: z.created_at })
     }
   }
 
