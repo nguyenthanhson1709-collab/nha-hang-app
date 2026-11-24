@@ -8,6 +8,7 @@ import { DOC_SELECT, docsInRange, folderParts, lockedPeriods } from '../lib/data
 import { download, folderFiles, folderPdf, scansPdf, type ExtraBeleg, type Folder } from '../lib/pdf'
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
 import { MonthBar } from '../components/MonthBar'
+import { liveFlags } from '../lib/lines'
 import { bulkUpload, bulkZbon, MAX_MB, MAX_PAGES, type BulkResult, type ZBulkResult } from '../lib/bulk'
 
 const FOLDERS: Folder[] = ['Bargeld', 'Rechnungseingang', 'Rechnungsausgang']
@@ -167,7 +168,7 @@ export default function Archive() {
             <Link className="it" key={d.id + i} to={`/r/${rid}/doc/${d.id}`}>
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="t">{d.supplier || '—'}{folderParts(d).length > 1 && <span className="tag" style={{ marginLeft: 6 }}>⇄</span>}</div>
-                <div className="small muted">{dmy(d.doc_date)}{found && ` · ${LABEL[fo]}`}{d.status === 'uploaded' && <> · <span className="tag warn">{t('uploaded')}</span></>}{d.flags?.length > 0 && <> · <span className="tag err">!</span></>}</div>
+                <div className="small muted">{dmy(d.doc_date)}{found && ` · ${LABEL[fo]}`}{d.status === 'uploaded' && <> · <span className="tag warn">{t('uploaded')}</span></>}{liveFlags(d).length > 0 && <> · <span className="tag err">!</span></>}</div>
               </div>
               <div className="right"><div className="num">{eur(amount)}</div>{method && <PayTag m={method.split('+')[0]} />}</div>
             </Link>

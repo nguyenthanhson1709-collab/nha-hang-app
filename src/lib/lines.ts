@@ -46,3 +46,12 @@ export function linesToGross<T extends L>(lines: T[], taxes: { rate: number; net
   }
   return out
 }
+
+/** Cờ cảnh báo tính lại theo dữ liệu hiện tại: bỏ 'lines_mismatch' cũ nếu dòng hàng nay khớp Netto hoặc Brutto */
+export function liveFlags(d: Doc): string[] {
+  const f = d.flags || []
+  if (!f.includes('lines_mismatch')) return f
+  const ls = (d.nh_document_lines || []).map((l) => ({ total: Number(l.total) }))
+  const taxes = (d.nh_document_taxes || []).map((t) => ({ net: Number(t.net) }))
+  return ls.length && linesBasis(ls, taxes, Number(d.gross)) ? f.filter((x) => x !== 'lines_mismatch') : f
+}
