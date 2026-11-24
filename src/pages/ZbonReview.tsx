@@ -37,7 +37,6 @@ export default function ZbonReview() {
       if (id === 'new') {
         const st = loc.state as { parsed: ParsedZ; files: string[]; ocr_text: string } | null
         v = { ...empty(), ...(st?.parsed || {}), z_date: st?.parsed?.z_date || todayIso(), files: st?.files || [], ocr_text: st?.ocr_text || null }
-        if (r?.tip_paid_cash === false) v.tip_card = 0
       } else {
         const { data, error } = await supabase.from('nh_zbons').select('*').eq('id', id!).single()
         if (error) { toast(errMsg(error)); return }
@@ -125,7 +124,7 @@ export default function ZbonReview() {
               <Row label={t('tipCard')} k="tip_card" />
               <div className="row between"><span>{t('cashRevenue')}</span><b className="num">{eur(cashRev)}</b></div>
               {z.card_terminal != null && Math.abs(diff) > 0.01 && <div className="alert warn">{t('cardDiff')}: {eur(diff)}</div>}
-              {r.tip_paid_cash && z.tip_card > 0 && <div className="small muted" style={{ marginTop: 6 }}>Kassenbuch: − {eur(z.tip_card)} Trinkgeld</div>}
+              {r.card_source !== 'viva' && z.tip_card > 0 && <div className="small muted" style={{ marginTop: 6 }}>Kassenbuch: − {eur(z.tip_card)} Trinkgeld</div>}
             </div>
           </fieldset>
           {!readOnly && (

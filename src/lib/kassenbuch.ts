@@ -43,11 +43,13 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
     })
   }
 
-  // Thu thẻ nhập tay (Viva Wallet) theo ngày: thay cho phần thẻ tính từ Z-Bon của ngày đó
+  // Cách tính thẻ của quán: 'zbon' = mọi thứ theo Z-Bon; 'viva' = Umsatz theo Z-Bon, Kartenzahlung theo Viva Wallet
+  const vivaMode = r.card_source === 'viva'
   const viva = new Map<string, number>()
-  for (const m of moves) if (m.channel === 'viva') viva.set(m.move_date, r2((viva.get(m.move_date) || 0) + Number(m.amount)))
+  if (vivaMode) for (const m of moves) if (m.channel === 'viva') viva.set(m.move_date, r2((viva.get(m.move_date) || 0) + Number(m.amount)))
+  const zDays = new Set(zbons.filter((z) => Number(z.total)).map((z) => z.z_date))
 
-  // Z-Bon: cả doanh thu trong ngày vào Einnahmen, phần khách trả thẻ ra Ausgaben (về ngân hàng)
+  // Z-Bon: cả doanh thu trong ngày vào Einnahmen; ngay dưới là Kartenzahlung, rồi Trinkgeld
   for (const z of zbons) {
     const total = Number(z.total); if (!total) continue
     const beleg = z.z_no || ''
@@ -59,10 +61,18 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
       ...base, date: z.z_date, beleg, ein: r2(g), rate, ust: r2(tax), einNetto: r2(g - tax), konto: rate ? revAcc(rate) : '8200',
       text: `Einnahmen Z-Bon ${dm(z.z_date)}${rate ? '' : ' (0 %)'}`, link, prio: 0, ts: z.created_at,
     })
-    const card = Math.max(0, r2(total - Number(z.cash_revenue) - (viva.get(z.z_date) || 0)))
-    if (card) out.push({ ...base, date: z.z_date, aus: card, ausNetto: card, konto: '1360', text: `Kartenzahlung - ${dm(z.z_date)}`, link, prio: 2.5, ts: z.created_at })
-    if (r.tip_paid_cash && Number(z.tip_card) > 0)
-      out.push({ ...base, date: z.z_date, aus: Number(z.tip_card), ausNetto: Number(z.tip_card), konto: '1592', text: 'Auszahlung Trinkgeld (Karte) an Personal', link, prio: 3, ts: z.created_at })
+    const cardZ = Math.max(0, r2(total - Number(z.cash_revenue))) // Kreditzahlung lt. Z-Bon
+    const v = viva.get(z.z_date)
+    if (vivaMode && v != null) {
+      // Kartenzahlung theo Viva Wallet; Trinkgeld = Viva − Kreditzahlung Z-Bon (đã nằm trong Kartenzahlung, trả nhân viên từ két)
+      out.push({ ...base, date: z.z_date, aus: v, ausNetto: v, konto: '1210', text: `Kartenzahlung Viva Wallet - ${dm(z.z_date)}`, link, prio: 2.5, ts: z.created_at })
+      const tip = r2(v - cardZ)
+      if (tip > 0) out.push({ ...base, date: z.z_date, ein: tip, einNetto: tip, aus: tip, ausNetto: tip, konto: '1592', text: `Trinkgeld (Viva − Z-Bon) an Personal ausgezahlt`, link, prio: 2.6, ts: z.created_at })
+    } else {
+      if (cardZ) out.push({ ...base, date: z.z_date, aus: cardZ, ausNetto: cardZ, konto: '1360', text: `Kartenzahlung - ${dm(z.z_date)}${vivaMode ? ' (lt. Z-Bon, Viva fehlt)' : ''}`, link, prio: 2.5, ts: z.created_at })
+      if (!vivaMode && Number(z.tip_card) > 0)
+        out.push({ ...base, date: z.z_date, aus: Number(z.tip_card), ausNetto: Number(z.tip_card), konto: '1592', text: 'Trinkgeld (Karte) an Personal ausgezahlt', link, prio: 2.6, ts: z.created_at })
+    }
   }
 
   // Thu/chi khác, nộp tiền vào ngân hàng
@@ -71,6 +81,8 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
     sonstige_ausgabe: ['4900', 'Sonstige Ausgabe', false], einlage: ['1890', 'Einlage', true], privatentnahme: ['1800', 'Privatentnahme', false],
   }
   for (const m of moves) {
+    // Viva Wallet: quán theo Z-Bon thì bỏ qua; quán theo Viva thì ngày có Z-Bon đã gộp vào dòng Kartenzahlung ở trên
+    if (m.channel === 'viva' && (!vivaMode || zDays.has(m.move_date))) continue
     const [konto0, txt0, isIn] = MV[m.type]
     // Viva Wallet có tài khoản riêng 1210 trong DATEV của Steuerberater (SKR03)
     const konto = m.channel === 'viva' ? '1210' : konto0

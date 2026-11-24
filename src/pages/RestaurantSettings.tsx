@@ -127,6 +127,16 @@ export default function RestaurantSettings() {
             <label className="f"><span>{t('taxNumber')}</span><input value={f.tax_number || ''} onChange={(e) => setF({ ...f, tax_number: e.target.value })} /></label>
           </div>
           <div className="card">
+            <h3 style={{ marginTop: 0 }}>{lang === 'de' ? 'Kartenzahlung im Kassenbuch' : 'Kartenzahlung trong Kassenbuch'}</h3>
+            <div className="seg" style={{ marginBottom: 8 }}>
+              <button className={(f.card_source || 'zbon') === 'zbon' ? 'sel' : ''} onClick={() => setF({ ...f, card_source: 'zbon' })}>{lang === 'de' ? 'lt. Z-Bon' : 'Theo Z-Bon'}</button>
+              <button className={f.card_source === 'viva' ? 'sel' : ''} onClick={() => setF({ ...f, card_source: 'viva' })}>{lang === 'de' ? 'lt. Viva Wallet' : 'Theo Viva Wallet'}</button>
+            </div>
+            <div className="small muted">{(f.card_source || 'zbon') === 'zbon'
+              ? (lang === 'de' ? 'Umsatz, Kartenzahlung und Trinkgeld lt. Z-Bon. Trinkgeld steht direkt unter der Kartenzahlung.' : 'Umsatz, Kartenzahlung và Trinkgeld đều lấy theo Z-Bon. Trinkgeld ghi ngay dưới dòng Kartenzahlung.')
+              : (lang === 'de' ? 'Umsatz lt. Z-Bon, Kartenzahlung lt. Viva Wallet (im Kassenbuch eintragen). Trinkgeld = Viva Wallet − Kreditzahlung Z-Bon, direkt unter der Kartenzahlung.' : 'Umsatz theo Z-Bon. Kartenzahlung theo Viva Wallet (nhập ở Kassenbuch, nút − Viva Wallet). Trinkgeld = Viva Wallet − Kreditzahlung trên Z-Bon, ghi ngay dưới dòng Kartenzahlung.')}</div>
+          </div>
+          <div className="card">
             <h3 style={{ marginTop: 0 }}>{t('posMap')}</h3>
             {Object.entries(map).map(([k, v]) => (
               <div className="row" key={k} style={{ marginBottom: 6 }}>

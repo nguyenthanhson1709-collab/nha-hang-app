@@ -14,7 +14,7 @@ export type PayMethod = 'cash' | 'card' | 'transfer'
 export interface Profile { id: string; email: string; full_name: string; is_owner: boolean; lang: 'vi' | 'de'; home_title?: string | null }
 export interface Restaurant {
   id: string; name: string; address: string | null; tax_number: string | null; active: boolean
-  opening_cash: number; opening_date: string | null; tip_paid_cash: boolean; pos_type: string
+  opening_cash: number; opening_date: string | null; tip_paid_cash: boolean; pos_type: string; card_source?: 'zbon' | 'viva'
   datev_consultant_no: string | null; datev_client_no: string | null
   pos_payment_map: Record<string, PayMethod>
 }
