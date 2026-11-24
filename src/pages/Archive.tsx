@@ -77,9 +77,11 @@ export default function Archive() {
   const dupIds = useMemo(() => {
     const seen = new Map<string, string>(), out = new Set<string>()
     for (const d of docs) {
-      const sk = supplierKey(d.supplier); if (!sk) continue
-      const keys = [`${sk}|${d.doc_date}|${Number(d.gross)}`]
-      if (invKey(d.invoice_no).length >= 3) keys.push(`${sk}|#${invKey(d.invoice_no)}`)
+      const sk = supplierKey(d.supplier), ik = invKey(d.invoice_no)
+      const keys: string[] = []
+      if (ik) keys.push(`#${ik}|${d.doc_date}|${Number(d.gross)}`) // số HĐ + ngày + số tiền trùng nhau
+      if (sk) keys.push(`${sk}|${d.doc_date}|${Number(d.gross)}`)
+      if (sk && ik.length >= 3) keys.push(`${sk}|#${ik}`)
       for (const k of keys) { const o = seen.get(k); if (o && o !== d.id) { out.add(o); out.add(d.id) } else seen.set(k, d.id) }
     }
     return out

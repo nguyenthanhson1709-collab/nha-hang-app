@@ -45,16 +45,17 @@ export function supplierKey(s: string | null | undefined) {
 }
 export const invKey = (s: string | null | undefined) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
-/** Tìm chứng từ trùng: cùng số hoá đơn + cùng nhà cung cấp, hoặc cùng ngày + cùng số tiền + cùng nhà cung cấp (tên rút gọn) */
+/** Tìm chứng từ trùng. Quan trọng nhất: cùng số hoá đơn + cùng ngày + cùng số tiền (bất kể tên NCC đọc ra thế nào).
+ *  Ngoài ra: cùng số hoá đơn + cùng nhà cung cấp, hoặc cùng ngày + cùng số tiền + cùng nhà cung cấp (tên rút gọn) */
 export async function findDuplicate(rid: string, supplier: string | null, date: string, gross: number, excludeId?: string, invoiceNo?: string | null) {
   const sk = supplierKey(supplier)
   const ik = invKey(invoiceNo)
   const same = (x: { supplier: string | null }) => { const k = supplierKey(x.supplier); return !sk || !k || k === sk || k.startsWith(sk) || sk.startsWith(k) }
   if (gross) {
-    let q = supabase.from('nh_documents').select('id, supplier').eq('restaurant_id', rid).eq('doc_date', date).eq('gross', gross)
+    let q = supabase.from('nh_documents').select('id, supplier, invoice_no').eq('restaurant_id', rid).eq('doc_date', date).eq('gross', gross)
     if (excludeId) q = q.neq('id', excludeId)
     const { data } = await q.limit(20)
-    const hit = (data || []).find((x) => sk && same(x))
+    const hit = (data || []).find((x) => (ik && invKey(x.invoice_no) === ik) || (sk && same(x)))
     if (hit) return hit.id as string
   }
   if (ik.length >= 3) {
