@@ -32,7 +32,7 @@ export interface Doc {
 export interface ZBon {
   id: string; restaurant_id: string; z_date: string; period: string; z_no: string | null
   net7: number; tax7: number; gross7: number; net19: number; tax19: number; gross19: number; gross0: number
-  total: number; cash_pos: number; card_pos: number; card_terminal: number | null; tip: number; tip_card: number
+  total: number; cash_pos: number; card_pos: number; transfer_pos: number; card_terminal: number | null; tip: number; tip_card: number
   storno: number; storno_count: number; details: Record<string, unknown>; files: string[]; ocr_text: string | null
   cash_revenue: number; created_by: string | null; created_at: string
 }

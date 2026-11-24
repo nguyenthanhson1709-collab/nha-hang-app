@@ -2,6 +2,8 @@
 --  'zbon' : Umsatz, Kartenzahlung, Trinkgeld đều theo Z-Bon; Trinkgeld (Karte) luôn trả nhân viên từ két.
 --  'viva' : Umsatz theo Z-Bon; Kartenzahlung theo Viva Wallet; Trinkgeld = Viva - phần thẻ Z-Bon (đã nằm trong Kartenzahlung).
 alter table public.nh_restaurants add column if not exists card_source text not null default 'zbon';
+-- Überweisung trên Z-Bon: không vào két, ghi Ausgaben "Überweisung"
+alter table public.nh_zbons add column if not exists transfer_pos numeric(12,2) not null default 0;
 
 create or replace view public.nh_kassenbuch with (security_invoker = true) as
 with rows as (
@@ -22,7 +24,7 @@ with rows as (
   union all
   select z.restaurant_id, z.z_date, z.period, z.created_at, 'zbon', z.id,
          'Bareinnahmen lt. Z-Bon ' || to_char(z.z_date,'DD.MM.YYYY') || coalesce(' Nr. '||z.z_no,''),
-         z.cash_revenue, 0, '7%/19%'
+         z.cash_revenue - coalesce(z.transfer_pos, 0), 0, '7%/19%'
   from public.nh_zbons z
   union all
   select z.restaurant_id, z.z_date, z.period, z.created_at, 'tip', z.id,

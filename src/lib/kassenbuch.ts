@@ -64,6 +64,7 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
       text: `Einnahmen Z-Bon ${dm(z.z_date)}${rate ? '' : ' (0 %)'}`, link, prio: 0, ts: z.created_at,
     })
     const cardZ = Math.max(0, r2(total - Number(z.cash_revenue))) // Kreditzahlung lt. Z-Bon
+    const transfer = Number(z.transfer_pos) || 0 // Überweisung lt. Z-Bon: không vào két
     const v = viva.get(z.z_date)
     if (vivaMode && v != null) {
       // Kartenzahlung theo Viva Wallet; Trinkgeld = Viva − Kreditzahlung Z-Bon (đã nằm trong Kartenzahlung, trả nhân viên từ két)
@@ -76,6 +77,7 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
       if (!vivaMode && tipZ > 0)
         out.push({ ...base, date: z.z_date, aus: tipZ, ausNetto: tipZ, konto: '1592', text: 'Trinkgeld (Karte) an Personal ausgezahlt', link, prio: 2.6, ts: z.created_at })
     }
+    if (transfer > 0) out.push({ ...base, date: z.z_date, aus: transfer, ausNetto: transfer, konto: '1360', text: 'Überweisung', link, prio: 2.7, ts: z.created_at })
   }
 
   // Thu/chi khác, nộp tiền vào ngân hàng

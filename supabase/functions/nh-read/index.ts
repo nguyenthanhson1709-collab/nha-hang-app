@@ -34,7 +34,8 @@ const ZBON = obj({
   gross0: { ...num, description: "Umsatz mit 0% (z.B. Trinkgeld als 'Umsatz 0%', Gutscheine)" },
   total: { ...num, description: "Gesamtumsatz brutto" },
   cash_pos: { ...num, description: "Bar-Zahlungen laut Kasse" },
-  card_pos: { ...num, description: "Karten-Zahlungen laut Kasse (alle Kartenarten zusammen)" },
+  card_pos: { ...num, description: "Karten-Zahlungen laut Kasse (alle Kartenarten zusammen, ohne Überweisung)" },
+  transfer_pos: { ...num, description: "Zahlungen per Überweisung / auf Rechnung laut Kasse, 0 wenn nicht vorhanden" },
   tip: { ...num, description: "Trinkgeld gesamt, 0 wenn nicht vorhanden" },
   storno: num, storno_count: { type: "integer" },
 });
@@ -63,7 +64,8 @@ Extrahiere die Daten exakt wie gedruckt. Regeln:
 
 const PROMPT_Z = (map: Record<string, string>) => `Du liest einen Z-Bericht (Tagesabschluss) einer deutschen Restaurantkasse.
 Extrahiere die Tageswerte nach Steuersatz (7%, 19%, 0%), Gesamtumsatz, Zahlungsarten, Trinkgeld und Stornos.
-Zuordnung der Zahlungsarten-Bezeichnungen dieser Kasse: ${JSON.stringify(map)} (cash = bar, card = Karte). Unbekannte Kartenarten zählen als card.
+Zuordnung der Zahlungsarten-Bezeichnungen dieser Kasse: ${JSON.stringify(map)} (cash = bar, card = Karte, transfer = Überweisung). Unbekannte Kartenarten zählen als card; Überweisung / Rechnung / auf Rechnung zählt als transfer_pos (nicht card_pos).
+Trinkgeld: der auf dem Bericht ausgewiesene Trinkgeld-Betrag (wird per Karte bezahlt).
 Prüfe: net + tax = gross je Satz; gross7 + gross19 + gross0 ≈ total. Nicht vorhandene Werte = 0.`;
 
 Deno.serve(async (req) => {

@@ -68,13 +68,16 @@ export function buildBookings(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: 
     const total = Number(z.total)
     if (!total) continue
     const cardRev = z.card_terminal == null ? Number(z.card_pos) : r2(Number(z.card_terminal) - Number(z.tip_card))
-    const cashRev = r2(total - cardRev)
-    const parts7 = split(Number(z.gross7), [cashRev, cardRev]), parts19 = split(Number(z.gross19), [cashRev, cardRev])
+    const trRev = Number(z.transfer_pos) || 0
+    const cashRev = r2(total - cardRev - trRev)
+    const parts7 = split(Number(z.gross7), [cashRev, cardRev, trRev]), parts19 = split(Number(z.gross19), [cashRev, cardRev, trRev])
     const t = `Z-Bon ${z.z_date.slice(8, 10)}.${z.z_date.slice(5, 7)}.`
     if (parts7[0]) out.push({ date: z.z_date, amount: parts7[0], soll: '1000', haben: '8300', bu: '', text: `${t} Bar 7%`, beleg: z.z_no || '', source: z.id })
     if (parts7[1]) out.push({ date: z.z_date, amount: parts7[1], soll: '1360', haben: '8300', bu: '', text: `${t} Karte 7%`, beleg: z.z_no || '', source: z.id })
     if (parts19[0]) out.push({ date: z.z_date, amount: parts19[0], soll: '1000', haben: '8400', bu: '', text: `${t} Bar 19%`, beleg: z.z_no || '', source: z.id })
     if (parts19[1]) out.push({ date: z.z_date, amount: parts19[1], soll: '1360', haben: '8400', bu: '', text: `${t} Karte 19%`, beleg: z.z_no || '', source: z.id })
+    if (parts7[2]) out.push({ date: z.z_date, amount: parts7[2], soll: '1360', haben: '8300', bu: '', text: `${t} Überweisung 7%`, beleg: z.z_no || '', source: z.id })
+    if (parts19[2]) out.push({ date: z.z_date, amount: parts19[2], soll: '1360', haben: '8400', bu: '', text: `${t} Überweisung 19%`, beleg: z.z_no || '', source: z.id })
     const tipZ = Number(z.tip_card) > 0 ? Number(z.tip_card) : Number(z.tip) || 0
     if (tipZ > 0) {
       out.push({ date: z.z_date, amount: tipZ, soll: '1360', haben: '1592', bu: '', text: `${t} Trinkgeld Karte`, beleg: z.z_no || '', source: z.id })

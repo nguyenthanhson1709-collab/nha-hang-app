@@ -15,7 +15,7 @@ type Z = Omit<ZBon, 'id' | 'restaurant_id' | 'period' | 'cash_revenue' | 'create
 
 const empty = (): Z => ({
   z_date: todayIso(), z_no: null, net7: 0, tax7: 0, gross7: 0, net19: 0, tax19: 0, gross19: 0, gross0: 0, total: 0,
-  cash_pos: 0, card_pos: 0, card_terminal: null, tip: 0, tip_card: 0, storno: 0, storno_count: 0, details: {}, files: [], ocr_text: null,
+  cash_pos: 0, card_pos: 0, transfer_pos: 0, card_terminal: null, tip: 0, tip_card: 0, storno: 0, storno_count: 0, details: {}, files: [], ocr_text: null,
 })
 
 export default function ZbonReview() {
@@ -55,12 +55,12 @@ export default function ZbonReview() {
   if (!canManage(role)) return null
   const set = (k: keyof Z, v: number | string | null) => setZ({ ...z, [k]: v })
   const cardRev = z.card_terminal == null ? z.card_pos : r2(z.card_terminal - z.tip_card)
-  const cashRev = r2(z.total - cardRev)
+  const cashRev = r2(z.total - cardRev - (z.transfer_pos || 0))
   const diff = z.card_terminal == null ? 0 : r2(z.card_pos - cardRev)
   const bad7 = Math.abs(z.net7 + z.tax7 - z.gross7) > 0.02
   const bad19 = Math.abs(z.net19 + z.tax19 - z.gross19) > 0.02
   const badTotal = Math.abs(z.gross7 + z.gross19 - z.total) > 0.02
-  const badPay = Math.abs(z.cash_pos + z.card_pos - z.total) > 0.02
+  const badPay = Math.abs(z.cash_pos + z.card_pos + (z.transfer_pos || 0) - z.total) > 0.02
   const readOnly = locked
 
   async function save() {
@@ -117,6 +117,7 @@ export default function ZbonReview() {
             </div>
             <div className="card">
               <div className="grid2"><Row label={t('cashPos')} k="cash_pos" bad={badPay} /><Row label={t('cardPos')} k="card_pos" bad={badPay} /></div>
+              <Row label="Überweisung" k="transfer_pos" bad={badPay} />
               <div className="grid2"><Row label={t('tip')} k="tip" /><Row label={`${t('storno')} (€)`} k="storno" /></div>
             </div>
             <div className="card" style={{ borderColor: 'var(--brand)' }}>
