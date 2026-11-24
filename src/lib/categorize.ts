@@ -9,8 +9,8 @@ const RULES: [RegExp, string][] = [
   [/(wasser|mineral|vittel|gerolsteiner|evian|volvic|selters|sprudel|still)/i, 'Wasser'],
   [/(\bcola\b|coca|fanta|sprite|\blimo|saft|juice|eistee|ice tea|schorle|red bull|energy|\bmate\b|nektar)/i, 'Softdrinks und Säfte'],
   [/(kaffee|coffee|tee\b|tea\b|eis\s?würfel|eiswürfel)/i, 'Sonstige Getränke'],
-  [/(rind|schwein|hähnchen|hahnchen|huhn|geflügel|\bente\b|lamm|hack|steak|filet|brust|keule|wurst|speck|thịt|bò|gà|heo|vịt)/i, 'Fleisch'],
-  [/(garnele|shrimp|lachs|fisch|tintenfisch|calamar|muschel|thunfisch|pangasius|tôm|cá|mực)/i, 'Fisch und Meeresfrüchte'],
+  [/(rind|schwein|hähnchen|hahnchen|huhn|geflügel|\bente\b|lamm|hack|steak|filet|brust|keule|wurst|speck|thịt|bò|gà|heo|vịt)/i, 'Fleisch und Meeresfrüchte|Fleisch|Fisch und Meeresfrüchte'],
+  [/(garnele|shrimp|lachs|fisch|tintenfisch|calamar|muschel|thunfisch|pangasius|tôm|cá|mực)/i, 'Fleisch und Meeresfrüchte|Fisch und Meeresfrüchte|Fleisch'],
   [/(ei\b|eier|milch|sahne|butter|käse|kase|joghurt|quark|trứng|sữa)/i, 'Eier und Milchprodukte'],
   [/(salat|zwiebel|knoblauch|tomate|rucola|rukola|gurke|paprika|kohl|möhre|mohre|karotte|kartoffel|zitrone|limette|ingwer|chili|koriander|minze|basilikum|lauch|pilz|champignon|banane|apfel|mango|ananas|sprossen|rau|hành|tỏi|chanh|ớt)/i, 'Obst und Gemüse'],
   [/(reis|nudel|mehl|bohne|linse|glasnudel|reisnudel|reispapier|\bmie\b|udon|ramen|stärke|starke|gạo|bún|mì|phở)/i, 'Trockenware'],
@@ -42,8 +42,11 @@ export function guessCategory(name: string, cats: Category[], mem: Map<string, s
   const k = normName(name)
   if (mem?.has(k)) return { id: mem.get(k)!, remembered: true }
   for (const [re, de] of RULES) if (re.test(name)) {
-    const c = cats.find((x) => x.parent_id && x.name_de === de)
-    if (c) return { id: c.id, remembered: false }
+    // de có thể liệt kê nhiều tên (cách nhau bởi |), lấy nhóm đầu tiên còn tồn tại
+    for (const n of de.split('|')) {
+      const c = cats.find((x) => x.parent_id && x.name_de === n)
+      if (c) return { id: c.id, remembered: false }
+    }
   }
   return { id: null, remembered: false }
 }

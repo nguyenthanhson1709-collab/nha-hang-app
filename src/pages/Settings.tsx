@@ -10,6 +10,7 @@ export default function Settings() {
   const { profile, categories, reload } = useApp()
   const [pw, setPw] = useState('')
   const [edit, setEdit] = useState<Partial<Category> | null>(null)
+  const [mergeTo, setMergeTo] = useState('')
 
   async function changeLang(l: Lang) {
     setLang(l)
@@ -31,6 +32,22 @@ export default function Settings() {
     if (!confirm(t('confirmDelete'))) return
     const { error } = await supabase.from('nh_categories').delete().eq('id', id)
     if (error) toast(lang === 'de' ? 'Gruppe wird noch verwendet' : 'Nhóm đang được dùng, không xoá được'); else { setEdit(null); reload() }
+  }
+
+  async function merge() {
+    const src = edit?.id, dst = mergeTo
+    const target = categories.find((c) => c.id === dst)
+    if (!src || !target) return
+    const vi = lang === 'de' ? `„${edit!.name_de}“ in „${target.name_de}“ zusammenführen? Alle Positionen werden verschoben.` : `Gộp nhóm "${edit!.name_vi}" vào "${target.name_vi}"? Mọi mặt hàng của nhóm này sẽ chuyển sang nhóm kia.`
+    if (!confirm(vi)) return
+    const a = await supabase.from('nh_document_lines').update({ category_id: dst }).eq('category_id', src)
+    if (a.error) { toast(errMsg(a.error)); return }
+    const b = await supabase.from('nh_item_memory').update({ category_id: dst }).eq('category_id', src)
+    if (b.error) { toast(errMsg(b.error)); return }
+    const c = await supabase.from('nh_categories').delete().eq('id', src)
+    if (c.error) { toast(lang === 'de' ? 'Einige Positionen liegen in gesperrten Monaten' : 'Còn mặt hàng ở tháng đã khoá sổ, không gộp hết được'); return }
+    toast(t('saved')); setMergeTo(''); reload()
+    setEdit({ ...target }) // mở nhóm đích để đổi tên, ví dụ "Thịt & hải sản"
   }
 
   const tops = categories.filter((c) => !c.parent_id)
@@ -76,6 +93,16 @@ export default function Settings() {
           <label className="f"><span>Deutsch</span><input value={edit.name_de || ''} onChange={(e) => setEdit({ ...edit, name_de: e.target.value })} /></label>
           <label className="f"><span>{t('account')}</span><input inputMode="numeric" placeholder="3300 / 3400" value={edit.skr_account || ''} onChange={(e) => setEdit({ ...edit, skr_account: e.target.value })} /></label>
           <div className="row">{edit.id && <button className="danger" onClick={() => delCat(edit.id!)}>{t('delete')}</button>}<button className="primary grow" onClick={saveCat}>{t('save')}</button></div>
+          {edit.id && edit.parent_id && <div style={{ marginTop: 16, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+            <div className="small muted" style={{ marginBottom: 6 }}>{lang === 'de' ? 'Mit anderer Gruppe zusammenführen' : 'Gộp nhóm này vào nhóm khác'}</div>
+            <div className="row">
+              <select className="grow" value={mergeTo} onChange={(e) => setMergeTo(e.target.value)}>
+                <option value="">—</option>
+                {tops.map((tp) => <optgroup key={tp.id} label={tp.name_vi}>{categories.filter((c) => c.parent_id === tp.id && c.id !== edit.id).map((c) => <option key={c.id} value={c.id}>{lang === 'de' ? c.name_de : c.name_vi}</option>)}</optgroup>)}
+              </select>
+              <button disabled={!mergeTo} onClick={merge}>{lang === 'de' ? 'Zusammenführen' : 'Gộp'}</button>
+            </div>
+          </div>}
         </>}
       </Sheet>
     </>
