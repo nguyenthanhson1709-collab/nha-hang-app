@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { supabase, errMsg, signedUrl, type Doc, type Line, type PayMethod, type TaxRow } from '../lib/supabase'
+import { supabase, errMsg, signedUrl, BUCKET, type Doc, type Line, type PayMethod, type TaxRow } from '../lib/supabase'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { dmy, eur, monthLabel, normName, r2 } from '../lib/format'
@@ -8,6 +8,7 @@ import { deleteDoc, findDuplicate, folderParts, getDoc, lockedPeriods, saveChild
 import { guessCategory, loadMemory, remember } from '../lib/categorize'
 import { linesBasis, linesToNet } from '../lib/lines'
 import { docPdf } from '../lib/pdf'
+import { aiReadInvoice } from '../lib/ai'
 import { Money, PayTag, Sheet, Spinner, Top, toast, useRestaurant, ComboInput } from '../components/ui'
 import { PdfPreview } from '../components/PdfPreview'
 
@@ -37,6 +38,7 @@ export default function DocReview() {
   const [suppliers, setSuppliers] = useState<string[]>([])
   const [dupId, setDupId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [rereading, setRereading] = useState(false)
   const [remembered, setRemembered] = useState<Set<number>>(new Set())
   const [hist, setHist] = useState<{ at: string; action: string; user_id: string; name?: string }[] | null>(null)
 
@@ -122,6 +124,30 @@ export default function DocReview() {
       nav(`/r/${rid}`)
     } catch (e) { toast(errMsg(e)) }
     setBusy(false)
+  }
+
+  // Đọc lại dòng hàng bằng AI (lấy đủ số lượng, đơn vị, giá/đơn vị như in trên hoá đơn). Giữ nhóm đã chọn theo tên hàng.
+  async function rereadLines() {
+    if (!doc || !rid) return
+    if (lines.length && !confirm(lang === 'de' ? 'Positionen neu lesen? Die aktuellen Positionen werden ersetzt.' : 'Đọc lại dòng hàng từ ảnh hoá đơn? Các dòng hiện tại sẽ được thay.')) return
+    setRereading(true)
+    try {
+      const files = await Promise.all(doc.files.map(async (p) => {
+        const { data, error } = await supabase.storage.from(BUCKET).download(p)
+        if (error || !data) throw error || new Error('download')
+        return { blob: data, type: data.type || (/\.pdf$/i.test(p) ? 'application/pdf' : 'image/jpeg') }
+      }))
+      const pi = await aiReadInvoice(rid, files)
+      if (!pi?.lines?.length) { toast(lang === 'de' ? 'Keine Positionen erkannt' : 'AI không đọc được dòng hàng'); return }
+      const mem = await loadMemory()
+      const old = new Map(lines.filter((l) => l.category_id).map((l) => [normName(l.name), l.category_id]))
+      setLines(pi.lines.map((l, i) => ({
+        pos: i, name: l.name, qty: l.qty, unit: l.unit || null, unit_price: l.unit_price, total: l.total, rate: l.rate,
+        category_id: old.get(normName(l.name)) ?? guessCategory(l.name, categories, mem).id,
+      })))
+      setRemembered(new Set()); setOpenLines(true)
+      toast(lang === 'de' ? 'Neu gelesen – bitte prüfen und Speichern' : 'Đã đọc lại, kiểm tra rồi bấm Lưu')
+    } catch (e) { toast(errMsg(e)) } finally { setRereading(false) }
   }
 
   async function del() {
@@ -234,6 +260,8 @@ export default function DocReview() {
                 {noCat > 0 && <span className="tag err" style={{ marginLeft: 'auto', marginRight: 8 }}>{noCat} {t('noCat')}</span>}
                 <span className={`small ${linesBad ? 'kb-out' : 'muted'}`}>Σ {eur(lineSum)}{basis === 'net' && ' Netto'}</span></button>
               {basis === 'net' && <div className="small muted" style={{ marginTop: 4 }}>{t('linesNet')}: {eur(lineSum)} + MwSt {eur(vatSum)} = <b>{eur(r2(lineSum + vatSum))}</b> Brutto</div>}
+              {!readOnly && doc.files.length > 0 && <button className="ghost small" style={{ minHeight: 30, marginTop: 4 }} disabled={rereading} onClick={rereadLines}>
+                {rereading ? '… ' + t('reading') : `🔄 ${lang === 'de' ? 'Positionen neu lesen (Menge, Einheit, Preis)' : 'Đọc lại dòng hàng (số lượng, đơn vị, giá)'}`}</button>}
               {basis === 'gross' && !readOnly && taxes.some((x) => x.rate > 0) && lines.length > 0 && <div className="small muted" style={{ marginTop: 4 }}>
                 {t('linesGross')} <button className="ghost small" style={{ minHeight: 30 }} onClick={() => setLines(linesToNet(lines, taxes))}>{t('toNet')}</button></div>}
               {linesBad && <div className="alert warn">{t('linesMismatch')}<br /><span className="small">Σ {eur(lineSum)} ≠ Netto {eur(netSum)} / Brutto {eur(f.gross)}</span></div>}
