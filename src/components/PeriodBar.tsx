@@ -131,3 +131,25 @@ export function DateField({ value, onChange, allowEmpty }: { value: string | nul
     </Bar>
   )
 }
+
+export const mondayOf = (d: string) => addDays(d, -((new Date(d + 'T12:00:00Z').getUTCDay() + 6) % 7))
+export const weekDays = (mon: string) => Array.from({ length: 7 }, (_, i) => addDays(mon, i))
+function isoWeek(d: string) {
+  const t = new Date(d + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + 3 - ((t.getUTCDay() + 6) % 7))
+  const y = new Date(Date.UTC(t.getUTCFullYear(), 0, 4))
+  return 1 + Math.round(((t.getTime() - y.getTime()) / 864e5 - 3 + ((y.getUTCDay() + 6) % 7)) / 7)
+}
+const dm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.`
+
+// Chọn tuần (Thứ Hai đến Chủ nhật): ‹ [KW 48 · 24.11. – 30.11. ▾] ›
+export function WeekBar({ value, onChange }: { value: string; onChange: (monday: string) => void }) {
+  const { lang } = useLang()
+  const pop = usePop()
+  const mon = mondayOf(value)
+  return (
+    <Bar pop={pop} label={<>{lang === 'de' ? 'KW' : 'Tuần'} {isoWeek(mon)} · {dm(mon)} – {dm(addDays(mon, 6))}</>}
+      onPrev={() => onChange(addDays(mon, -7))} onNext={() => onChange(addDays(mon, 7))}>
+      <Calendar value={mon} onPick={(d) => { onChange(mondayOf(d)); pop.setOpen(false) }} />
+    </Bar>
+  )
+}

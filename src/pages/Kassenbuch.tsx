@@ -15,6 +15,7 @@ import { docsInRange } from '../lib/data'
 import { Money, Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
 import { MonthBar } from '../components/MonthBar'
 import { FitTable } from '../components/FitTable'
+import { VivaWeek } from '../components/VivaWeek'
 
 type MoveType = 'einlage' | 'privatentnahme' | 'geldtransit' | 'sonstige_einnahme' | 'sonstige_ausgabe'
 const OUT = new Set(['privatentnahme', 'geldtransit', 'sonstige_ausgabe'])
@@ -32,6 +33,7 @@ export default function Kassenbuch() {
   const [locked, setLocked] = useState(false)
   const [missing, setMissing] = useState<string[]>([])
   const [move, setMove] = useState<{ type: MoveType; date: string; amount: number; description: string; channel?: string } | null>(null)
+  const [viva, setViva] = useState(false)
   const [mvPages, setMvPages] = useState<{ blob: Blob; preview: string }[]>([])
   const [scanner, setScanner] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -159,7 +161,7 @@ export default function Kassenbuch() {
         {!locked && (
           <div className="row wrap" style={{ marginBottom: 12 }}>
             <button className="primary" onClick={openCount}>🧮 {t('count')}</button>
-            <button onClick={() => setMove({ type: 'geldtransit', date: todayIso(), amount: 0, description: 'Kartenzahlung', channel: 'viva' })}>− Viva Wallet</button>
+            <button onClick={() => setViva(true)}>− Viva Wallet</button>
             {(['geldtransit', 'sonstige_ausgabe', 'sonstige_einnahme'] as MoveType[]).map((x) => (
               <button key={x} onClick={() => setMove({ type: x, date: todayIso(), amount: 0, description: x === 'geldtransit' ? 'Einzahlung' : '' })}>{OUT.has(x) ? '−' : '+'} {t(x).split(' (')[0]}</button>
             ))}
@@ -192,6 +194,7 @@ export default function Kassenbuch() {
         <div className="small muted">{monthLabel(period)} · Z-Bon <Link to={`/r/${rid}/scan?type=zbon`}>+ {t('scanZbon')}</Link></div>
       </div>
 
+      <VivaWeek rid={rid!} open={viva} start={period === thisMonth() ? todayIso() : period + '-01'} vivaMode={r.card_source === 'viva'} onClose={() => setViva(false)} onSaved={load} />
       {scanner && <Scanner onDone={fromScanner} onCancel={() => setScanner(false)} />}
       <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { addPhotos(e.target.files); e.target.value = '' }} />
       <Sheet open={!!move && !scanner} onClose={closeMove} title={move ? (move.channel === 'viva' ? 'Viva Wallet (Kartenzahlung)' : t(move.type)) : ''}>

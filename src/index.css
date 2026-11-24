@@ -212,3 +212,13 @@ tr.no-cat-row td:first-child { color: var(--err); box-shadow: inset 3px 0 0 var(
 .mb-prefix { font-family: var(--f-body, inherit); font-size: .8rem; color: var(--muted); margin-right: 6px; }
 .period-custom { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
 @media (max-width: 520px) { .period-custom { grid-template-columns: 1fr; } }
+
+/* Viva Wallet theo tuần */
+.viva-week { display: flex; flex-direction: column; gap: 6px; }
+.vw-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 12px; }
+.vw-row.we .vw-day b { color: var(--err); }
+.vw-row.now { border-color: var(--brand); }
+.vw-day { flex: 0 0 64px; display: flex; flex-direction: column; line-height: 1.2; }
+.vw-day span { font-size: .85rem; opacity: .7; }
+.vw-in { flex: 1; min-width: 0; }
+.vw-in input { width: 100%; text-align: right; }
