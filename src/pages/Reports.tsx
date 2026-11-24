@@ -4,6 +4,8 @@ import * as XLSX from 'xlsx'
 import { supabase, errMsg, type Category, type Doc, type ZBon } from '../lib/supabase'
 import { remember } from '../lib/categorize'
 import { canManage, catName, useApp, useRole } from '../lib/app'
+import { DayBar, QuarterBar, YearBar } from '../components/PeriodBar'
+import { MonthBar } from '../components/MonthBar'
 import { useLang, useT } from '../lib/i18n'
 import { addMonths, daysOfMonth, dmy, eur, monthLabel, monthRange, r2, thisMonth } from '../lib/format'
 import { grossDoc } from '../lib/lines'
@@ -232,22 +234,14 @@ export default function Reports() {
         <div className="seg" style={{ marginBottom: 8 }}>
           {(['day', 'month', 'quarter', 'year', 'custom'] as Mode[]).map((x) => <button key={x} className={mode === x ? 'sel' : ''} onClick={() => setMode(x)}>{t(x)}</button>)}
         </div>
-        {mode === 'day' ? (
-          <div className="row" style={{ marginBottom: 10 }}>
-            <button onClick={() => setDay(new Date(Date.parse(day) - 864e5).toISOString().slice(0, 10))}>‹</button>
-            <input className="grow" type="date" style={{ textAlign: 'center', fontWeight: 600 }} value={day} onChange={(e) => e.target.value && setDay(e.target.value)} />
-            <button onClick={() => setDay(new Date(Date.parse(day) + 864e5).toISOString().slice(0, 10))}>›</button>
-          </div>
-        ) : mode !== 'custom' ? (
-          <div className="row" style={{ marginBottom: 10 }}>
-            <button onClick={() => setAnchor(addMonths(anchor, mode === 'month' ? -1 : mode === 'quarter' ? -3 : -12))}>‹</button>
-            <div className="grow" style={{ textAlign: 'center', fontWeight: 600 }}>{label}</div>
-            <button onClick={() => setAnchor(addMonths(anchor, mode === 'month' ? 1 : mode === 'quarter' ? 3 : 12))}>›</button>
-          </div>
-        ) : (
-          <div className="grid2" style={{ marginBottom: 10 }}>
-            <input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} />
-            <input type="date" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} />
+        {mode === 'day' && <DayBar value={day} onChange={setDay} />}
+        {mode === 'month' && <MonthBar value={anchor} onChange={setAnchor} />}
+        {mode === 'quarter' && <QuarterBar value={anchor} onChange={setAnchor} />}
+        {mode === 'year' && <YearBar value={anchor} onChange={setAnchor} />}
+        {mode === 'custom' && (
+          <div className="period-custom">
+            <DayBar arrows={false} prefix={lang === 'de' ? 'Von' : 'Từ'} value={custom.from} onChange={(d) => setCustom({ from: d, to: d > custom.to ? d : custom.to })} />
+            <DayBar arrows={false} prefix={lang === 'de' ? 'Bis' : 'Đến'} value={custom.to} onChange={(d) => setCustom({ from: d < custom.from ? d : custom.from, to: d })} />
           </div>
         )}
         <div className="grid2" style={{ marginBottom: 12 }}>

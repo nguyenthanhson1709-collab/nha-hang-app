@@ -196,3 +196,19 @@ tr.no-cat-row td:first-child { color: var(--err); box-shadow: inset 3px 0 0 var(
 .clock b { color: var(--brand); }
 .clock-time { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--sun); }
 .clock-sec { opacity: .7; font-weight: 500; }
+
+/* Lịch chọn ngày / quý / năm (cùng kiểu thanh chọn tháng) */
+.mb-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.mb-cal .mb-wd { text-align: center; font-size: .75rem; color: var(--muted); font-weight: 700; padding: 2px 0; }
+.mb-cal .mb-wd.we { color: var(--brand); }
+.mb-cal button { min-height: 38px; padding: 0; border-radius: 10px; font-weight: 600; }
+.mb-cal button.now { border-color: var(--brand); }
+.mb-cal button.sel { background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
+.mb-grid.q { grid-template-columns: repeat(2, 1fr); }
+.mb-grid.q button { flex-direction: column; min-height: 62px; gap: 2px; }
+.mb-grid.q button .small { opacity: .8; font-weight: 500; }
+.monthbar.compact { margin-bottom: 0; }
+.monthbar.compact .mb-label { font-size: 1rem; }
+.mb-prefix { font-family: var(--f-body, inherit); font-size: .8rem; color: var(--muted); margin-right: 6px; }
+.period-custom { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+@media (max-width: 520px) { .period-custom { grid-template-columns: 1fr; } }
