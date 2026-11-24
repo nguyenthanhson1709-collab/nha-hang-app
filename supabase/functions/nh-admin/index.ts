@@ -99,6 +99,51 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    if (action === "update_user") {
+      // Chủ sửa thông tin nhân viên / người phụ trách: họ tên, email, ngôn ngữ, mật khẩu
+      if (!isOwner) return json({ error: "forbidden" }, 403);
+      const { user_id, full_name, email, lang, password } = body;
+      if (!user_id) return json({ error: "invalid_input" }, 400);
+      const { data: tp } = await admin.from("nh_profiles").select("id, email, is_owner").eq("id", user_id).maybeSingle();
+      if (!tp) return json({ error: "not_found" }, 404);
+      if (tp.is_owner && user_id !== caller) return json({ error: "forbidden" }, 403);
+      if (password && password.length < 8) return json({ error: "invalid_input" }, 400);
+      const em = typeof email === "string" ? email.trim().toLowerCase() : "";
+      if (em && !/^\S+@\S+\.\S+$/.test(em)) return json({ error: "invalid_input" }, 400);
+      const authUpd: Record<string, unknown> = {};
+      if (em && em !== (tp.email || "").toLowerCase()) { authUpd.email = em; authUpd.email_confirm = true; }
+      if (password) authUpd.password = password;
+      if (Object.keys(authUpd).length) {
+        const { error } = await admin.auth.admin.updateUserById(user_id, authUpd);
+        if (error) return json({ error: /already|exists|registered/i.test(error.message) ? "email_exists" : error.message }, 400);
+      }
+      const upd: Record<string, unknown> = {};
+      if (typeof full_name === "string") upd.full_name = full_name.trim();
+      if (authUpd.email) upd.email = em;
+      if (lang === "vi" || lang === "de") upd.lang = lang;
+      if (Object.keys(upd).length) {
+        const { error } = await admin.from("nh_profiles").update(upd).eq("id", user_id);
+        if (error) return json({ error: error.message }, 400);
+      }
+      return json({ ok: true });
+    }
+
+    if (action === "set_member") {
+      // Chủ gán / đổi / gỡ quán làm việc của một tài khoản. role = null: gỡ khỏi quán
+      if (!isOwner) return json({ error: "forbidden" }, 403);
+      const { user_id } = body;
+      if (!user_id || !restaurant_id) return json({ error: "invalid_input" }, 400);
+      if (!role) {
+        await admin.from("nh_members").delete().eq("restaurant_id", restaurant_id).eq("user_id", user_id);
+        return json({ ok: true });
+      }
+      if (!["manager", "staff"].includes(role)) return json({ error: "invalid_role" }, 400);
+      if (role === "manager") await admin.from("nh_members").update({ role: "staff" }).eq("restaurant_id", restaurant_id).eq("role", "manager").neq("user_id", user_id);
+      const { error } = await admin.from("nh_members").upsert({ restaurant_id, user_id, role });
+      if (error) return json({ error: error.message }, 400);
+      return json({ ok: true });
+    }
+
     return json({ error: "unknown_action" }, 400);
   } catch (e) {
     return json({ error: String(e) }, 500);

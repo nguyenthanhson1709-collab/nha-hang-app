@@ -5,7 +5,8 @@ import { canManage, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { Sheet, Top, toast, useRestaurant } from '../components/ui'
 
-interface Member { user_id: string; role: 'manager' | 'staff'; nh_profiles: { email: string; full_name: string } | null }
+interface Member { user_id: string; role: 'manager' | 'staff'; nh_profiles: { email: string; full_name: string; lang: 'vi' | 'de' } | null }
+interface EditUser { user_id: string; full_name: string; email: string; origEmail: string; lang: 'vi' | 'de'; password: string; roles: Record<string, '' | 'manager' | 'staff'>; orig: Record<string, '' | 'manager' | 'staff'> }
 
 async function adminCall(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke('nh-admin', { body })
@@ -29,15 +30,17 @@ export default function RestaurantSettings() {
   const { lang } = useLang()
   const r = useRestaurant(rid)
   const role = useRole(rid)
-  const { profile, reload } = useApp()
+  const { profile, reload, restaurants } = useApp()
   const owner = profile.is_owner
   const [f, setF] = useState<Restaurant | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [add, setAdd] = useState<{ email: string; full_name: string; password: string; role: 'manager' | 'staff' } | null>(null)
   const [pwFor, setPwFor] = useState<{ user_id: string; password: string } | null>(null)
   const [newLabel, setNewLabel] = useState('')
+  const [ed, setEd] = useState<EditUser | null>(null)
+  const [busy, setBusy] = useState(false)
 
-  const loadMembers = () => supabase.from('nh_members').select('user_id, role, nh_profiles(email, full_name)').eq('restaurant_id', rid!).then(({ data }) => setMembers((data || []) as unknown as Member[]))
+  const loadMembers = () => supabase.from('nh_members').select('user_id, role, nh_profiles(email, full_name, lang)').eq('restaurant_id', rid!).then(({ data }) => setMembers((data || []) as unknown as Member[]))
   useEffect(() => { if (r) setF({ ...r }); loadMembers() }, [r]) // eslint-disable-line
 
   if (!r || !f || !canManage(role)) return null
@@ -65,6 +68,30 @@ export default function RestaurantSettings() {
   async function setRole(uid: string, role: string) {
     try { await adminCall({ action: 'set_role', restaurant_id: rid, user_id: uid, role }); loadMembers(); toast(t('saved')) } catch (e) { toast(errMsg(e)) }
   }
+  async function openEdit(m: Member) {
+    const { data } = await supabase.from('nh_members').select('restaurant_id, role').eq('user_id', m.user_id)
+    const roles: EditUser['roles'] = {}
+    for (const x of restaurants) roles[x.id] = ''
+    for (const x of data || []) roles[x.restaurant_id] = x.role as 'manager' | 'staff'
+    const email = m.nh_profiles?.email || ''
+    setEd({ user_id: m.user_id, full_name: m.nh_profiles?.full_name || '', email, origEmail: email, lang: m.nh_profiles?.lang || 'vi', password: '', roles, orig: { ...roles } })
+  }
+  async function saveEdit() {
+    if (!ed) return
+    if (ed.password && ed.password.length < 8) { toast(t('password') + ': ≥ 8'); return }
+    if (!/^\S+@\S+\.\S+$/.test(ed.email.trim())) { toast(t('email') + '?'); return }
+    if (ed.email.trim().toLowerCase() !== ed.origEmail.toLowerCase() && !confirm(lang === 'de'
+      ? 'E-Mail ändern? Die Person meldet sich danach mit der neuen E-Mail an (auch in der Rechnungs-App).'
+      : 'Đổi email? Người này sẽ đăng nhập bằng email mới (cả ở app viết hoá đơn).')) return
+    setBusy(true)
+    try {
+      await adminCall({ action: 'update_user', user_id: ed.user_id, full_name: ed.full_name, email: ed.email, lang: ed.lang, password: ed.password || undefined })
+      for (const [rest, ro] of Object.entries(ed.roles)) {
+        if (ro !== ed.orig[rest]) await adminCall({ action: 'set_member', restaurant_id: rest, user_id: ed.user_id, role: ro || null })
+      }
+      setEd(null); loadMembers(); toast(t('saved'))
+    } catch (e) { toast(errMsg(e)) } finally { setBusy(false) }
+  }
   const map = f.pos_payment_map || {}
 
   return (
@@ -81,6 +108,7 @@ export default function RestaurantSettings() {
                     <option value="manager">{t('manager')}</option><option value="staff">{t('staff')}</option>
                   </select>}
                 </div>
+                {owner && <button className="ghost small" title={t('edit')} onClick={() => openEdit(m)}>✎</button>}
                 {(owner || m.role === 'staff') && <>
                   <button className="ghost small" onClick={() => setPwFor({ user_id: m.user_id, password: '' })}>🔑</button>
                   <button className="ghost small" onClick={() => remove(m.user_id)}>✕</button>
@@ -133,6 +161,29 @@ export default function RestaurantSettings() {
           <label className="f"><span>{t('password')} (≥ 8)</span><input value={add.password} onChange={(e) => setAdd({ ...add, password: e.target.value })} /></label>
           {add.role === 'manager' && members.some((m) => m.role === 'manager') && <div className="alert warn">{lang === 'de' ? 'Die bisherige Filialleitung wird ersetzt.' : 'Người phụ trách hiện tại sẽ được thay.'}</div>}
           <button className="primary block" onClick={createUser}>{t('save')}</button>
+        </>}
+      </Sheet>
+      <Sheet open={!!ed} onClose={() => setEd(null)} title={lang === 'de' ? 'Benutzer bearbeiten' : 'Sửa thông tin'}>
+        {ed && <>
+          <label className="f"><span>{t('fullName')}</span><input value={ed.full_name} onChange={(e) => setEd({ ...ed, full_name: e.target.value })} /></label>
+          <label className="f"><span>{t('email')}</span><input type="email" value={ed.email} onChange={(e) => setEd({ ...ed, email: e.target.value })} /></label>
+          <div className="f"><span>{t('language')}</span>
+            <div className="seg"><button className={ed.lang === 'vi' ? 'sel' : ''} onClick={() => setEd({ ...ed, lang: 'vi' })}>Tiếng Việt</button><button className={ed.lang === 'de' ? 'sel' : ''} onClick={() => setEd({ ...ed, lang: 'de' })}>Deutsch</button></div>
+          </div>
+          <label className="f"><span>{lang === 'de' ? 'Neues Passwort (leer = unverändert)' : 'Mật khẩu mới (để trống = giữ nguyên)'}</span><input value={ed.password} onChange={(e) => setEd({ ...ed, password: e.target.value })} /></label>
+          <h3>{lang === 'de' ? 'Filialen & Rolle' : 'Quán làm việc & vai trò'}</h3>
+          <div className="list" style={{ marginBottom: 12 }}>
+            {restaurants.map((x) => (
+              <div className="it" key={x.id}>
+                <div className="grow" style={{ minWidth: 0 }}>{x.name}</div>
+                <select style={{ width: 170 }} value={ed.roles[x.id] || ''} onChange={(e) => setEd({ ...ed, roles: { ...ed.roles, [x.id]: e.target.value as '' | 'manager' | 'staff' } })}>
+                  <option value="">—</option><option value="staff">{t('staff')}</option><option value="manager">{t('manager')}</option>
+                </select>
+              </div>
+            ))}
+          </div>
+          {restaurants.some((x) => ed.roles[x.id] === 'manager' && ed.orig[x.id] !== 'manager') && <div className="alert warn">{lang === 'de' ? 'Die bisherige Filialleitung wird zu Mitarbeiter.' : 'Người phụ trách cũ của quán sẽ thành nhân viên.'}</div>}
+          <button className="primary block" disabled={busy} onClick={saveEdit}>{t('save')}</button>
         </>}
       </Sheet>
       <Sheet open={!!pwFor} onClose={() => setPwFor(null)} title={t('resetPassword')}>
