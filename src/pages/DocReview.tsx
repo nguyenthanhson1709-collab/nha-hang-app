@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { supabase, errMsg, signedUrl, BUCKET, type Doc, type Line, type PayMethod, type TaxRow } from '../lib/supabase'
+import { supabase, errMsg, signedUrl, type Doc, type Line, type PayMethod, type TaxRow } from '../lib/supabase'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { dmy, eur, monthLabel, normName, r2 } from '../lib/format'
