@@ -12,6 +12,7 @@ import { MonthBar } from '../components/MonthBar'
 import { liveFlags } from '../lib/lines'
 import { fillUnits } from '../lib/ai'
 import { bulkUpload, bulkZbon, MAX_MB, MAX_PAGES, type BulkResult, type ZBulkResult } from '../lib/bulk'
+import { TileIcon } from '../components/Icons'
 
 const FOLDERS: Folder[] = ['Bargeld', 'Rechnungseingang', 'Rechnungsausgang']
 // Tên hiển thị gọn; tên file xuất ra vẫn giữ tên chuyên môn (Rechnungseingang / Rechnungsausgang)
@@ -156,16 +157,16 @@ export default function Archive() {
               <div className="tiles">
                 {FOLDERS.map((f) => (
                   <button key={f} className="tile" onClick={() => setFolder(f)}>
-                    <span className="ic">{f === 'Bargeld' ? '💶' : f === 'Rechnungseingang' ? '📥' : '📤'}</span>
+                    <TileIcon name={f === 'Bargeld' ? 'cash' : f === 'Rechnungseingang' ? 'inbox' : 'outbox'} />
                     <span>{LABEL[f]}</span>
                     <span className="small muted">{folderFiles(f, docs, f === 'Rechnungsausgang' ? zbons : [], extra).length} Belege</span>
                   </button>
                 ))}
                 <Link className="tile" to={`/r/${rid}/statements`}>
-                  <span className="ic">🏦</span><span>Kontoauszug</span>
+                  <TileIcon name="bank" /><span>Kontoauszug</span>
                 </Link>
                 <Link className="tile" to={`/r/${rid}/contracts`}>
-                  <span className="ic">📑</span><span>{t('contracts')}</span><span className="small muted">Lastschrift</span>
+                  <TileIcon name="contract" /><span>{t('contracts')}</span><span className="small muted">Lastschrift</span>
                 </Link>
               </div>
             )}

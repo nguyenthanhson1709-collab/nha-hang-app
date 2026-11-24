@@ -8,6 +8,7 @@ import { daysOfMonth, dmy, eur, monthRange, thisMonth, todayIso } from '../lib/f
 import { currentBalance, docsInRange, DOC_SELECT, zbonsInRange } from '../lib/data'
 import { PayTag, Top, useRestaurant } from '../components/ui'
 import { QuickReview } from '../components/QuickReview'
+import { TileIcon } from '../components/Icons'
 
 export default function Home() {
   const { rid } = useParams()
@@ -56,11 +57,11 @@ export default function Home() {
     </>
   )
   const tiles = [
-    { icon: '📷', label: t('scanTile'), to: `/r/${rid}/scan` },
-    ...(m ? [{ icon: '🔎', label: t('toReview'), to: `/r/${rid}?v=review`, badge: s?.review.length }] : []),
-    ...(m ? [{ icon: '📁', label: t('archive'), to: `/r/${rid}/archive` }] : []),
-    ...(m ? [{ icon: '📒', label: t('kassenbuch'), to: `/r/${rid}/kb` }] : []),
-    ...(m ? [{ icon: '📊', label: t('reports'), to: `/r/${rid}/reports` }] : []),
+    { icon: 'scan', label: t('scanTile'), to: `/r/${rid}/scan` },
+    ...(m ? [{ icon: 'review', label: t('toReview'), to: `/r/${rid}?v=review`, badge: s?.review.length }] : []),
+    ...(m ? [{ icon: 'archive', label: t('archive'), to: `/r/${rid}/archive` }] : []),
+    ...(m ? [{ icon: 'book', label: t('kassenbuch'), to: `/r/${rid}/kb` }] : []),
+    ...(m ? [{ icon: 'chart', label: t('reports'), to: `/r/${rid}/reports` }] : []),
   ]
   return (
     <>
@@ -70,7 +71,7 @@ export default function Home() {
         <div className="tiles">
           {tiles.map((x) => (
             <button key={x.to} className="tile" onClick={() => nav(x.to)}>
-              <span className="ic">{x.icon}</span>
+              <TileIcon name={x.icon} />
               <span>{x.label}</span>
               {!!('badge' in x && x.badge) && <span className="badge">{x.badge}</span>}
             </button>

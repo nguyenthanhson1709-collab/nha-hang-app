@@ -12,6 +12,7 @@ import { grossDoc } from '../lib/lines'
 import { docsInRange, zbonsInRange } from '../lib/data'
 import { download, reportPdf } from '../lib/pdf'
 import { Spinner, Top, toast, useRestaurant } from '../components/ui'
+import { TileIcon } from '../components/Icons'
 
 type Mode = 'day' | 'month' | 'quarter' | 'year' | 'custom'
 type Tab = 'umsatz' | 'supplier' | 'food' | 'drink' | 'nonfood'
@@ -19,11 +20,11 @@ type Item = { name: string; qty: number; sum: number; n: number; last: string; s
 type DL = NonNullable<Doc['nh_document_lines']>[number]
 
 const TABS: { k: Tab; icon: string; vi: string; de: string }[] = [
-  { k: 'umsatz', icon: '📊', vi: 'Umsatz', de: 'Umsatz' },
-  { k: 'supplier', icon: '🏪', vi: 'Theo nhà cung cấp', de: 'Nach Lieferant' },
-  { k: 'food', icon: '🥩', vi: 'Thực phẩm', de: 'Lebensmittel' },
-  { k: 'drink', icon: '🥤', vi: 'Đồ uống', de: 'Getränke' },
-  { k: 'nonfood', icon: '🧻', vi: 'Nonfood', de: 'Non-Food' },
+  { k: 'umsatz', icon: 'trend', vi: 'Umsatz', de: 'Umsatz' },
+  { k: 'supplier', icon: 'store', vi: 'Theo nhà cung cấp', de: 'Nach Lieferant' },
+  { k: 'food', icon: 'food', vi: 'Thực phẩm', de: 'Lebensmittel' },
+  { k: 'drink', icon: 'drink', vi: 'Đồ uống', de: 'Getränke' },
+  { k: 'nonfood', icon: 'box', vi: 'Nonfood', de: 'Non-Food' },
 ]
 
 function Bars({ data }: { data: { label: string; value: number }[] }) {
@@ -215,7 +216,7 @@ export default function Reports() {
         <div className="tiles">
           {TABS.map((x) => (
             <button key={x.k} className="tile" onClick={() => { setTab(x.k); setSup(null) }}>
-              <span className="ic">{x.icon}</span><span>{lang === 'de' ? x.de : x.vi}</span>
+              <TileIcon name={x.icon} /><span>{lang === 'de' ? x.de : x.vi}</span>
             </button>
           ))}
         </div>
