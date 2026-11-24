@@ -66,3 +66,13 @@ export function linesToNet<T extends L>(lines: T[], taxes: { rate: number }[]): 
     return { ...l, total: r2(Number(l.total) / f), unit_price: l.unit_price == null ? null : r2(Number(l.unit_price) / f) }
   })
 }
+
+/** Gutschrift trong báo cáo chi phí: đổi dấu (trừ vào chi phí) */
+export function signCredit(d: Doc): Doc {
+  if (!d.is_credit) return d
+  return {
+    ...d, gross: -Number(d.gross),
+    nh_document_lines: (d.nh_document_lines || []).map((l) => ({ ...l, total: -Number(l.total), qty: l.qty == null ? l.qty : -Number(l.qty) })),
+    nh_document_taxes: (d.nh_document_taxes || []).map((t) => ({ ...t, net: -Number(t.net), tax: -Number(t.tax), gross: -Number(t.gross) })),
+  }
+}

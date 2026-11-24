@@ -88,7 +88,7 @@ export async function bulkUpload(opts: {
     const files = await uploadFiles(rid, date, [part], ['rechnung.pdf'])
     const ok = autoProblems(pi, payment).length === 0
     const { data: doc, error } = await supabase.from('nh_documents').insert({
-      restaurant_id: rid, kind: 'purchase', status: ok ? 'reviewed' : 'uploaded', doc_date: date, period: date.slice(0, 7),
+      restaurant_id: rid, kind: 'purchase', is_credit: !!pi.is_credit, status: ok ? 'reviewed' : 'uploaded', doc_date: date, period: date.slice(0, 7),
       supplier: pi.supplier, invoice_no: pi.invoice_no, seller_tax_id: pi.seller_tax_id, gross, files,
       ocr_text: ('AI: ' + JSON.stringify(pi)).slice(0, 50000),
     }).select().single()

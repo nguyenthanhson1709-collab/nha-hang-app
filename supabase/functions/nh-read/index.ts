@@ -19,6 +19,7 @@ const obj = (properties: Record<string, unknown>) => ({ type: "object", properti
 const INVOICE = obj({
   doc_date: { ...nStr, description: "Rechnungs-/Belegdatum YYYY-MM-DD" },
   date_uncertain: { type: "boolean", description: "true, wenn das Datum handschriftlich, unleserlich oder mehrdeutig ist" },
+  is_credit: { type: "boolean", description: "true bei Gutschrift / Rückvergütung / Erstattung / Rechnungskorrektur zugunsten des Restaurants (Lieferant zahlt Geld zurück)" },
   supplier: { ...nStr, description: "Name des Verkäufers/Marktes, kurz (z.B. Lidl, METRO, REWE)" },
   invoice_no: nStr,
   seller_tax_id: { ...nStr, description: "USt-IdNr (DE...) oder Steuernummer des Verkäufers" },
@@ -62,6 +63,7 @@ Extrahiere die Daten exakt wie gedruckt. Regeln:
 - lines: jede Artikelzeile mit Zeilenbetrag; qty, unit und unit_price genau wie in der Zeile (z.B. "2,350 kg x 3,99 €/kg" -> qty 2.35, unit kg, unit_price 3.99; "3 Bund à 0,99" -> qty 3, unit Bund; "1 Kiste"); Pfand ist eine eigene Zeile. Rabatte als negative Zeile. rate über den Buchstaben (A/B) und die Legende.
 - payment: cash bei Bar/Gegeben, card bei EC/Girocard/Kreditkarte/Visa/Mastercard, transfer bei Überweisung/Zahlungsziel/Lastschrift, sonst null.
 - Datum: deutsches Format TT.MM.JJ oder TT.MM.JJJJ (Tag zuerst, dann Monat, dann Jahr). Bei "06.10.26" ist 26 das JAHR (2026), Tag 06, Monat 10 – die letzte Zahl nie als Tag lesen. Handschriftliche Daten Ziffer für Ziffer lesen. date_uncertain = true bei handschriftlichem, schwer lesbarem oder mehrdeutigem Datum (dann wird der Beleg manuell geprüft).
+- Gutschrift (is_credit = true): Beträge trotzdem positiv angeben, wie gedruckt ohne Minus.
 - Unleserliches: bestmöglich schätzen; Felder, die nicht vorhanden sind: null.`;
 
 const PROMPT_Z = (map: Record<string, string>) => `Du liest einen Z-Bericht (Tagesabschluss) einer deutschen Restaurantkasse.

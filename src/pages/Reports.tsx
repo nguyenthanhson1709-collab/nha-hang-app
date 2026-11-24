@@ -8,7 +8,7 @@ import { DayBar, QuarterBar, YearBar } from '../components/PeriodBar'
 import { MonthBar } from '../components/MonthBar'
 import { useLang, useT } from '../lib/i18n'
 import { addMonths, daysOfMonth, dmy, eur, monthLabel, monthRange, r2, thisMonth } from '../lib/format'
-import { grossDoc } from '../lib/lines'
+import { grossDoc, signCredit } from '../lib/lines'
 import { docsInRange, zbonsInRange } from '../lib/data'
 import { download, reportPdf } from '../lib/pdf'
 import { Spinner, Top, toast, useRestaurant } from '../components/ui'
@@ -90,7 +90,7 @@ export default function Reports() {
     setDocs(null)
     ;(async () => {
       const [d, z] = await Promise.all([docsInRange(rid || null, range.from, range.to, false), zbonsInRange(rid || null, range.from, range.to)])
-      setDocs(d.filter((x) => x.kind === 'purchase' && x.status === 'reviewed').map(grossDoc)); setZs(z)
+      setDocs(d.filter((x) => x.kind === 'purchase' && x.status === 'reviewed').map(grossDoc).map(signCredit)); setZs(z)
     })().catch((e) => toast(errMsg(e)))
   }, [rid, range.from, range.to])
 

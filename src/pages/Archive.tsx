@@ -196,7 +196,7 @@ export default function Archive() {
             <Link className="it" key={d.id + i} to={`/r/${rid}/doc/${d.id}`}>
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="t">{d.supplier || '—'}{folderParts(d).length > 1 && <span className="tag" style={{ marginLeft: 6 }}>⇄</span>}</div>
-                <div className="small muted">{dmy(d.doc_date)}{found && ` · ${LABEL[fo]}`}{d.status === 'uploaded' && <> · <span className="tag warn">{t('uploaded')}</span></>}{liveFlags(d).length > 0 && <> · <span className="tag err">!</span></>}{dupIds.has(d.id) && <> · <span className="tag err">⧉ {t('dupShort')}</span></>}</div>
+                <div className="small muted">{dmy(d.doc_date)}{found && ` · ${LABEL[fo]}`}{d.status === 'uploaded' && <> · <span className="tag warn">{t('uploaded')}</span></>}{liveFlags(d).length > 0 && <> · <span className="tag err">!</span></>}{dupIds.has(d.id) && <> · <span className="tag err">⧉ {t('dupShort')}</span></>}{d.is_credit && <> · <span className="tag ok">Gutschrift</span></>}</div>
               </div>
               <div className="right"><div className="num">{eur(amount)}</div>{method && <PayTag m={method.split('+')[0]} />}</div>
               {m && !locked && <button className="ghost small" title={t('delete')} style={{ marginLeft: 4 }} onClick={async (e) => {

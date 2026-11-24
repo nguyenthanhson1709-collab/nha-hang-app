@@ -25,7 +25,7 @@ export interface Line { id?: string; pos: number; name: string; qty: number | nu
 export interface Doc {
   id: string; restaurant_id: string; kind: 'purchase' | 'sales'; status: 'uploaded' | 'reviewed'
   doc_date: string; period: string; supplier: string | null; invoice_no: string | null; seller_tax_id: string | null
-  gross: number; note: string | null; files: string[]; ocr_text: string | null; flags: string[]
+  gross: number; note: string | null; files: string[]; ocr_text: string | null; flags: string[]; is_credit?: boolean
   created_by: string | null; created_at: string; updated_by: string | null; updated_at: string
   nh_document_payments?: Payment[]; nh_document_taxes?: TaxRow[]; nh_document_lines?: Line[]
 }

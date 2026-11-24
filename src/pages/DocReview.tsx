@@ -31,7 +31,7 @@ export default function DocReview() {
   const [doc, setDoc] = useState<Doc | null>(null)
   const [urls, setUrls] = useState<{ path: string; url: string; pdf: boolean }[]>([])
   const [locked, setLocked] = useState(false)
-  const [f, setF] = useState({ supplier: '', doc_date: '', invoice_no: '', seller_tax_id: '', note: '', gross: 0, kind: 'purchase' as 'purchase' | 'sales' })
+  const [f, setF] = useState({ supplier: '', doc_date: '', invoice_no: '', seller_tax_id: '', note: '', gross: 0, kind: 'purchase' as 'purchase' | 'sales', is_credit: false })
   const [taxes, setTaxes] = useState<TaxRow[]>([])
   const [lines, setLines] = useState<Line[]>([])
   const [openLines, setOpenLines] = useState(false)
@@ -48,7 +48,7 @@ export default function DocReview() {
     (async () => {
       const d = await getDoc(id!)
       setDoc(d)
-      setF({ supplier: d.supplier || '', doc_date: d.doc_date, invoice_no: d.invoice_no || '', seller_tax_id: d.seller_tax_id || '', note: d.note || '', gross: Number(d.gross), kind: d.kind })
+      setF({ supplier: d.supplier || '', doc_date: d.doc_date, invoice_no: d.invoice_no || '', seller_tax_id: d.seller_tax_id || '', note: d.note || '', gross: Number(d.gross), kind: d.kind, is_credit: !!d.is_credit })
       setTaxes((d.nh_document_taxes || []).map((x) => ({ rate: Number(x.rate), net: Number(x.net), tax: Number(x.tax), gross: Number(x.gross) })))
       const mem = await loadMemory()
       const rem = new Set<number>()
@@ -116,7 +116,7 @@ export default function DocReview() {
       const flags = [taxBad && 'sum_mismatch', linesBad && 'lines_mismatch', over250 && 'missing_tax_id'].filter(Boolean) as string[]
       const { error } = await supabase.from('nh_documents').update({
         supplier: f.supplier || null, doc_date: f.doc_date, period: f.doc_date.slice(0, 7), invoice_no: f.invoice_no || null, seller_tax_id: f.seller_tax_id || null,
-        note: f.note || null, gross: f.gross, kind: f.kind, status: 'reviewed', flags,
+        note: f.note || null, gross: f.gross, kind: f.kind, is_credit: f.kind === 'purchase' && f.is_credit, status: 'reviewed', flags,
       }).eq('id', doc.id)
       if (error) throw error
       await saveChildren(doc.id, payments, taxes, lines, true)
@@ -187,8 +187,9 @@ export default function DocReview() {
             <div className="card">
               {m && (
                 <div className="seg" style={{ marginBottom: 10 }}>
-                  <button className={f.kind === 'purchase' ? 'sel' : ''} onClick={() => setF({ ...f, kind: 'purchase' })}>{t('scanInvoice')}</button>
-                  <button className={f.kind === 'sales' ? 'sel' : ''} onClick={() => setF({ ...f, kind: 'sales' })}>{t('scanSales')}</button>
+                  <button className={f.kind === 'purchase' && !f.is_credit ? 'sel' : ''} onClick={() => setF({ ...f, kind: 'purchase', is_credit: false })}>{t('scanInvoice')}</button>
+                  <button className={f.kind === 'purchase' && f.is_credit ? 'sel' : ''} onClick={() => setF({ ...f, kind: 'purchase', is_credit: true })}>Gutschrift</button>
+                  <button className={f.kind === 'sales' ? 'sel' : ''} onClick={() => setF({ ...f, kind: 'sales', is_credit: false })}>{t('scanSales')}</button>
                 </div>
               )}
               <div className="f"><span>{t('supplier')}</span>

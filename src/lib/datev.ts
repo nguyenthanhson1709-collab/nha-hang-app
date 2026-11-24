@@ -58,8 +58,9 @@ export function buildBookings(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: 
         if (!parts[j]) return
         const pa = payAcc(p.method, sale)
         out.push({
-          date: d.doc_date, amount: parts[j], soll: sale ? pa : g.acc, haben: sale ? g.acc : pa, bu: sale ? '' : buFor(g.acc, g.rate),
-          text: `${d.supplier || 'Beleg'}${pays.length > 1 ? ` (${p.method === 'cash' ? 'Bar' : 'Karte'})` : ''}`, beleg: d.invoice_no || '', source: d.id,
+          // Gutschrift: đảo bút toán chi (Kasse/Bank Soll, chi phí Haben, giữ BU để Vorsteuer được điều chỉnh)
+          date: d.doc_date, amount: parts[j], soll: sale || d.is_credit ? pa : g.acc, haben: sale || d.is_credit ? g.acc : pa, bu: sale ? '' : buFor(g.acc, g.rate),
+          text: `${d.is_credit ? 'Gutschrift ' : ''}${d.supplier || 'Beleg'}${pays.length > 1 ? ` (${p.method === 'cash' ? 'Bar' : 'Karte'})` : ''}`, beleg: d.invoice_no || '', source: d.id,
         })
       })
     })

@@ -39,8 +39,9 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
       const tax = taxOf(amt, g.rate)
       out.push({
         ...base, date, rate: g.rate, konto: g.acc, link: `/r/${r.id}/doc/${d.id}`, prio: 1, ts: d.created_at,
-        text: `${d.supplier || 'Beleg'}${d.invoice_no ? ' - ' + d.invoice_no : ''}${late}`,
-        ...(sale ? { ein: amt, ust: tax, einNetto: r2(amt - tax) } : { aus: amt, vst: tax, ausNetto: r2(amt - tax) }),
+        text: `${d.is_credit ? 'Gutschrift ' : ''}${d.supplier || 'Beleg'}${d.invoice_no ? ' - ' + d.invoice_no : ''}${late}`,
+        // Gutschrift: tiền nhận lại vào Einnahmen, Vorsteuer giảm (VSt âm)
+        ...(sale ? { ein: amt, ust: tax, einNetto: r2(amt - tax) } : d.is_credit ? { ein: amt, vst: -tax, einNetto: r2(amt - tax) } : { aus: amt, vst: tax, ausNetto: r2(amt - tax) }),
       })
     })
   }
