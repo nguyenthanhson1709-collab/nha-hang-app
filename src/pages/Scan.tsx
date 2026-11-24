@@ -11,7 +11,7 @@ import { splitScan, type ScanGroup } from '../lib/bulk'
 import { guessCategory, loadMemory } from '../lib/categorize'
 import { Top, toast, useRestaurant } from '../components/ui'
 import Scanner, { type ScannedPage } from '../components/Scanner'
-import { autoScanImage } from '../lib/scanner'
+import { autoScanImage, loadCv } from '../lib/scanner'
 import { aiReadInvoice, aiReadZbon } from '../lib/ai'
 import { autoProblems } from '../lib/autocheck'
 
@@ -22,6 +22,12 @@ interface Page { blob: Blob; name: string; type: string; preview: string; blurry
 const queue = { n: 0, subs: new Set<() => void>() }
 function bump(d: number) { queue.n += d; queue.subs.forEach((f) => f()) }
 if (typeof window !== 'undefined') window.addEventListener('beforeunload', (e) => { if (queue.n > 0) { e.preventDefault(); e.returnValue = '' } })
+
+/** Chạy tối đa 3 việc cùng lúc (AI đọc mỗi hoá đơn mất vài giây) */
+async function eachParallel<T>(items: T[], fn: (x: T) => Promise<void>, n = 3) {
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (next < items.length) await fn(items[next++]) }))
+}
 
 /** Đọc một hoá đơn (AI, lỗi thì e-Rechnung/Tesseract) và lưu. null = trùng, bỏ qua.
  *  Nhân viên: luôn Chờ kiểm tra, không gán Bar/Thẻ (người phụ trách/chủ quyết định). */
@@ -46,9 +52,10 @@ async function saveInvoice(rid: string, g: ScanGroup, o: {
   const gross = r2(pi.gross || pi.taxes.reduce((s, x) => s + x.gross, 0))
   // Trùng: cùng số HĐ + ngày + số tiền (cả trong cùng lượt scan)
   const key = dupKey({ supplier: pi.supplier, invoice_no: pi.invoice_no, doc_date: date, gross })
-  const dup = (key && o.known?.has(key)) || await findDuplicate(rid, pi.supplier, date, gross, undefined, pi.invoice_no)
+  const inBatch = !!key && !!o.known?.has(key)
+  if (key) o.known?.add(key) // đánh dấu trước khi chờ, vì các hoá đơn khác đang đọc song song
+  const dup = inBatch || await findDuplicate(rid, pi.supplier, date, gross, undefined, pi.invoice_no)
   if (dup && !(o.onDup?.(pi, date, gross))) return null
-  if (key) o.known?.add(key)
   const files = await uploadFiles(rid, date, g.blobs, g.names)
   const payment = o.manage ? o.pay || pi.payment : null
   // Chủ/quản lý tải lên, AI (hoặc e-Rechnung) đọc đủ và khớp, không trùng -> duyệt luôn
@@ -91,6 +98,8 @@ export default function Scan() {
   const pick = useRef<HTMLInputElement>(null)
 
   useEffect(() => () => pages.forEach((p) => URL.revokeObjectURL(p.preview)), []) // eslint-disable-line
+  // tải sẵn bộ xử lý ảnh khi mở trang scan, để máy scan và ảnh chụp xử lý ngay
+  useEffect(() => { const id = setTimeout(() => { loadCv().catch(() => {}) }, 300); return () => clearTimeout(id) }, [])
   const [, rerender] = useState(0)
   useEffect(() => { const f = () => rerender((x) => x + 1); queue.subs.add(f); return () => { queue.subs.delete(f) } }, [])
 
@@ -133,10 +142,10 @@ export default function Scan() {
         const groups = await splitScan(rr, ps)
         const known = new Set<string>()
         let ok = 0, dup = 0, err = ''
-        for (const g of groups) {
+        await eachParallel(groups, async (g) => {
           try { if (await saveInvoice(rr, g, { manage: false, pay: null, categories, known })) ok++; else dup++ }
           catch (e) { err = errMsg(e) }
-        }
+        })
         toast(`${ok ? '✓' : '⚠'} ${tt('staffResult', { n: String(ok) })}${dup ? ` · ${tt('dupSkipped', { n: String(dup) })}` : ''}${err ? ` · ${err}` : ''}`)
       } catch (e) { toast(errMsg(e)) }
       finally { ps.forEach((p) => p.preview && URL.revokeObjectURL(p.preview)); bump(-1) }
@@ -154,12 +163,13 @@ export default function Scan() {
         const groups = kind === 'purchase' ? await splitScan(rid!, pages, setBusy) : [all]
         if (groups.length > 1) {
           const known = new Set<string>()
-          let auto = 0, open = 0, dup = 0
-          for (let i = 0; i < groups.length; i++) {
-            setBusy(`📄 ${i + 1}/${groups.length}`)
-            const res = await saveInvoice(rid!, groups[i], { manage: m, pay, categories, known })
+          let auto = 0, open = 0, dup = 0, done = 0
+          setBusy(`📄 0/${groups.length}`)
+          await eachParallel(groups, async (g) => {
+            const res = await saveInvoice(rid!, g, { manage: m, pay, categories, known })
             if (!res) dup++; else if (res.auto) auto++; else open++
-          }
+            setBusy(`📄 ${++done}/${groups.length}`)
+          })
           toast(`✓ ${t('staffResult', { n: String(auto + open) })}${auto ? ` · ${t('autoOk')}: ${auto}` : ''}${dup ? ` · ${t('dupSkipped', { n: String(dup) })}` : ''}`)
           setPages([]); setPay(null); setBusy('')
           if (open) nav(`/r/${rid}?v=review`)

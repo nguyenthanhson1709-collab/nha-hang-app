@@ -151,15 +151,24 @@ export function detectQuad(cv: CV, src: HTMLCanvasElement | HTMLImageElement | H
   return pts ? order(pts.map((p) => ({ x: p.x / s, y: p.y / s }))) : null
 }
 
+/** Cỡ ảnh lưu: đủ đọc chữ, không nặng. Giới hạn theo số điểm ảnh (không theo cạnh dài) để bon dài vẫn đủ rộng. */
+export const MAX_PIXELS = 2.4e6
+export const MAX_SIDE = 3200
+export function fitScale(w: number, h: number, maxPx = MAX_PIXELS, maxSide = MAX_SIDE) {
+  return Math.min(1, Math.sqrt(maxPx / Math.max(1, w * h)), maxSide / Math.max(w, h))
+}
+/** Chất lượng JPEG: ảnh scan/xám nén mạnh hơn ảnh màu (khoảng 150-350 KB một trang) */
+export const jpegQuality = (mode: Mode) => (mode === 'color' ? 0.78 : 0.7)
+
 /** Cắt theo tứ giác, làm thẳng, tăng chất lượng. Trả về canvas. */
-export function warpAndEnhance(cv: CV, src: HTMLCanvasElement, quad: Quad | null, mode: Mode, maxSide = 2200): HTMLCanvasElement {
+export function warpAndEnhance(cv: CV, src: HTMLCanvasElement, quad: Quad | null, mode: Mode): HTMLCanvasElement {
   const img = cv.imread(src)
   let out = new cv.Mat()
   try {
     if (quad) {
       const w = Math.max(dist(quad[0], quad[1]), dist(quad[3], quad[2]))
       const h = Math.max(dist(quad[0], quad[3]), dist(quad[1], quad[2]))
-      const sc = Math.min(1, maxSide / Math.max(w, h))
+      const sc = fitScale(w, h)
       const ow = Math.round(w * sc), oh = Math.round(h * sc)
       const from = cv.matFromArray(4, 1, cv.CV_32FC2, quad.flatMap((p) => [p.x, p.y]))
       const to = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, ow, 0, ow, oh, 0, oh])
@@ -167,7 +176,7 @@ export function warpAndEnhance(cv: CV, src: HTMLCanvasElement, quad: Quad | null
       cv.warpPerspective(img, out, M, new cv.Size(ow, oh), cv.INTER_LINEAR, cv.BORDER_REPLICATE)
       from.delete(); to.delete(); M.delete()
     } else {
-      const sc = Math.min(1, maxSide / Math.max(img.cols, img.rows))
+      const sc = fitScale(img.cols, img.rows)
       cv.resize(img, out, new cv.Size(Math.round(img.cols * sc), Math.round(img.rows * sc)))
     }
     if (mode !== 'color') {
@@ -175,11 +184,15 @@ export function warpAndEnhance(cv: CV, src: HTMLCanvasElement, quad: Quad | null
       cv.cvtColor(out, g, cv.COLOR_RGBA2GRAY)
       if (mode === 'scan') {
         // chia cho nền (bóng, ánh sáng không đều) -> giấy trắng, chữ đậm
-        const bg = new cv.Mat()
-        const k = Math.max(31, (Math.round(Math.min(g.cols, g.rows) / 12) | 1))
-        const el = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(15, 15))
-        cv.morphologyEx(g, bg, cv.MORPH_CLOSE, el); el.delete()
-        cv.GaussianBlur(bg, bg, new cv.Size(k, k), 0)
+        // Nền tính trên ảnh nhỏ 1/4 rồi phóng lại: nhanh hơn ~15 lần trên điện thoại, kết quả gần như nhau
+        const small = new cv.Mat(), bg = new cv.Mat()
+        const f = 4
+        cv.resize(g, small, new cv.Size(Math.max(8, Math.round(g.cols / f)), Math.max(8, Math.round(g.rows / f))), 0, 0, cv.INTER_AREA)
+        const k = Math.max(9, (Math.round(Math.min(small.cols, small.rows) / 12) | 1))
+        const el = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(5, 5))
+        cv.morphologyEx(small, small, cv.MORPH_CLOSE, el); el.delete()
+        cv.GaussianBlur(small, small, new cv.Size(k, k), 0)
+        cv.resize(small, bg, new cv.Size(g.cols, g.rows), 0, 0, cv.INTER_LINEAR); small.delete()
         cv.divide(g, bg, g, 255)
         cv.normalize(g, g, 0, 255, cv.NORM_MINMAX)
         // làm đậm chữ nhạt của giấy in nhiệt
@@ -234,12 +247,13 @@ export async function autoScanImage(file: Blob, mode: Mode = 'scan'): Promise<Bl
   const url = URL.createObjectURL(file)
   try {
     const img = new Image(); img.src = url; await img.decode()
-    const max = 3000, s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight))
+    // ảnh điện thoại 12 MP: thu về ~6 MP trước khi xử lý (đủ nét, nhanh hơn nhiều)
+    const s = fitScale(img.naturalWidth, img.naturalHeight, 6e6, 4000)
     const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s)
     c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
     const quad = detectQuad(cv, c, c.width, c.height)
     const out = warpAndEnhance(cv, c, quad, mode)
     freeCanvas(c)
-    try { return await canvasToBlob(out) } finally { freeCanvas(out) }
+    try { return await canvasToBlob(out, jpegQuality(mode)) } finally { freeCanvas(out) }
   } finally { URL.revokeObjectURL(url) }
 }
