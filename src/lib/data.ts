@@ -2,16 +2,15 @@ import { supabase, BUCKET, type Doc, type KbRow, type Line, type Payment, type T
 import { monthRange, r2 } from './format'
 
 export async function uploadFiles(rid: string, date: string, files: Blob[], names: string[]): Promise<string[]> {
-  const out: string[] = []
   const [y, m] = date.split('-')
-  for (let i = 0; i < files.length; i++) {
+  // tải song song, giữ đúng thứ tự trang
+  return Promise.all(files.map(async (f, i) => {
     const ext = (names[i].split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
     const path = `${rid}/${y}/${m}/${crypto.randomUUID()}.${ext}`
-    const { error } = await supabase.storage.from(BUCKET).upload(path, files[i], { contentType: files[i].type || undefined })
+    const { error } = await supabase.storage.from(BUCKET).upload(path, f, { contentType: f.type || undefined })
     if (error) throw error
-    out.push(path)
-  }
-  return out
+    return path
+  }))
 }
 
 export const DOC_SELECT = '*, nh_document_payments(*), nh_document_taxes(*), nh_document_lines(*)'

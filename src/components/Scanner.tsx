@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLang } from '../lib/i18n'
-import { canvasToBlob, detectQuad, frameSharpness, freeCanvas, loadCv, quadMoved, warpAndEnhance, type Mode, type Quad } from '../lib/scanner'
+import { canvasToBlob, detectQuad, frameSharpness, freeCanvas, jpegQuality, loadCv, quadMoved, warpAndEnhance, type Mode, type Quad } from '../lib/scanner'
 
 export interface ScannedPage { blob: Blob; preview: string; raw?: boolean }
 
@@ -50,7 +50,6 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
         if (caps.torch) setTorch(false)
         setStatus('ready'); setHint(T.manual)
         // Bộ nhận mép giấy (OpenCV, ~10 MB) chỉ tải sau khi camera đã chạy; lỗi vẫn chụp tay được
-        await new Promise((r) => setTimeout(r, 600))
         if (stop) return
         const cv = await loadCv().catch((e) => { setErr(String(e?.message || e)); return null })
         if (!cv || stop) return
@@ -69,10 +68,10 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
             if (q && st.current.stable >= 2) {
               setHint(T.steady)
               if (st.current.shotQuad) setHint(T.next)
-              else if (st.current.auto && st.current.stable >= 4 && Date.now() - st.current.lastShot > 1500 && frameSharpness(cv, v, q) > 60) capture()
+              else if (st.current.auto && st.current.stable >= 3 && Date.now() - st.current.lastShot > 1200 && frameSharpness(cv, v, q) > 60) capture()
             } else setHint(st.current.shotQuad ? T.next : q ? T.steady : T.hold)
           } catch (e) { setErr(String((e as Error)?.message || e)) }
-          timer = window.setTimeout(loop, 220)
+          timer = window.setTimeout(loop, 160)
         }
         loop()
       } catch (e) {
@@ -103,26 +102,29 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
     const v = video.current; if (!v || st.current.busy) return
     if (!v.videoWidth) { setErr('camera: video chưa sẵn sàng'); return }
     st.current.busy = true; setShooting(true)
+    // phản hồi ngay khi bấm (chớp + rung), xử lý ảnh sau
+    setFlash(true); setTimeout(() => setFlash(false), 180)
+    try { navigator.vibrate?.(40) } catch { /* */ }
     const c = document.createElement('canvas')
     let out: HTMLCanvasElement | null = null
     try {
       // Giới hạn cỡ ảnh để iPhone không hết bộ nhớ canvas
       const sc = Math.min(1, 2400 / Math.max(v.videoWidth, v.videoHeight))
+      const mode = st.current.mode
       c.width = Math.round(v.videoWidth * sc); c.height = Math.round(v.videoHeight * sc)
       const ctx = c.getContext('2d')
       if (!ctx) throw new Error('canvas')
       ctx.drawImage(v, 0, 0, c.width, c.height)
       out = c
+      await new Promise((r) => requestAnimationFrame(() => r(null))) // cho màn hình kịp chớp trước khi xử lý
       let q: Quad | null = st.current.quad ? (st.current.quad.map((p) => ({ x: p.x * sc, y: p.y * sc })) as Quad) : null
       const cv = st.current.cv
       // Chỉ làm thẳng khi bộ nhận mép đã sẵn; nếu chưa thì giữ ảnh gốc, app sẽ tự cắt mép khi xử lý
-      if (cv) try { q = q || detectQuad(cv, c, c.width, c.height); out = warpAndEnhance(cv, c, q, st.current.mode) } catch (e) { out = c; setErr(String((e as Error)?.message || e)) }
-      const blob = await canvasToBlob(out)
+      if (cv) try { q = q || detectQuad(cv, c, c.width, c.height); out = warpAndEnhance(cv, c, q, mode) } catch (e) { out = c; setErr(String((e as Error)?.message || e)) }
+      const blob = await canvasToBlob(out, cv ? jpegQuality(mode) : 0.85)
       setPages((p) => [...p, { blob, preview: URL.createObjectURL(blob), raw: !cv } as ScannedPage])
-      setFlash(true); setTimeout(() => setFlash(false), 180)
       setHint(T.shot)
       st.current.lastShot = Date.now(); st.current.stable = 0; st.current.shotQuad = st.current.quad
-      try { navigator.vibrate?.(40) } catch { /* */ }
     } catch (e) {
       setErr('Chụp lỗi: ' + String((e as Error)?.message || e))
     } finally {

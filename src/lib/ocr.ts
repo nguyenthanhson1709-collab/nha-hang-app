@@ -14,12 +14,12 @@ export async function loadImage(file: Blob): Promise<HTMLImageElement> {
 /** Thu nhỏ ảnh để tải lên (tối đa 2200px, JPEG) */
 export async function compressImage(file: File): Promise<Blob> {
   const img = await loadImage(file)
-  const max = 2200
-  const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight))
+  const s = Math.min(1, Math.sqrt(2.4e6 / (img.naturalWidth * img.naturalHeight)), 3200 / Math.max(img.naturalWidth, img.naturalHeight))
+  URL.revokeObjectURL(img.src)
   const c = document.createElement('canvas')
   c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s)
   c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
-  return await new Promise((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.85))
+  return await new Promise((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.75))
 }
 
 /** Thu nhỏ ảnh chỉ để gửi cho AI (ảnh lưu trữ vẫn giữ bản gốc) */
