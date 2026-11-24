@@ -74,7 +74,7 @@ export default function DocReview() {
   const taxSum = r2(taxes.reduce((s, x) => s + x.gross, 0))
   const lineSum = r2(lines.reduce((s, x) => s + x.total, 0))
   const taxBad = taxes.some((x) => Math.abs(x.net + x.tax - x.gross) > 0.02) || (taxes.length > 0 && Math.abs(taxSum - f.gross) > 0.02)
-  const linesBad = lines.length > 0 && Math.abs(lineSum - f.gross) > 0.02
+  const linesBad = lines.length > 0 && Math.abs(lineSum - f.gross) > 0.05
   const over250 = f.kind === 'purchase' && f.gross > 250 && !f.seller_tax_id.trim()
   const payments = useMemo(() => {
     if (!payMode) return []
@@ -176,22 +176,26 @@ export default function DocReview() {
 
             <div className="card">
               <h3 style={{ marginTop: 0 }}>{t('taxRate')}</h3>
-              <div className="tbl-wrap" style={{ border: 0 }}>
-                <table>
-                  <thead><tr><th>%</th><th className="num">{t('net')}</th><th className="num">{t('tax')}</th><th className="num">{t('gross')}</th><th /></tr></thead>
-                  <tbody>
-                    {taxes.map((x, i) => (
-                      <tr key={i}>
-                        <td style={{ minWidth: 70 }}><select value={x.rate} onChange={(e) => setTax(i, 'rate', Number(e.target.value))}><option value={7}>7%</option><option value={19}>19%</option><option value={0}>0%</option></select></td>
-                        <td><Money value={x.net} onChange={(v) => setTax(i, 'net', v)} /></td>
-                        <td><Money value={x.tax} onChange={(v) => setTax(i, 'tax', v)} className={Math.abs(x.net + x.tax - x.gross) > 0.02 ? 'err-field' : ''} /></td>
-                        <td><Money value={x.gross} onChange={(v) => setTax(i, 'gross', v)} /></td>
-                        <td>{!readOnly && <button className="ghost" onClick={() => setTaxes(taxes.filter((_, j) => j !== i))}>✕</button>}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {taxes.map((x, i) => (
+                <div className="tax-row" key={i}>
+                  <div className="row between" style={{ marginBottom: 6 }}>
+                    <select className="tax-rate" value={x.rate} onChange={(e) => setTax(i, 'rate', Number(e.target.value))}><option value={7}>MwSt 7 %</option><option value={19}>MwSt 19 %</option><option value={0}>0 %</option></select>
+                    {!readOnly && <button className="ghost" onClick={() => setTaxes(taxes.filter((_, j) => j !== i))}>✕</button>}
+                  </div>
+                  <div className="grid3">
+                    <label className="f"><span>{t('net')}</span><Money value={x.net} onChange={(v) => setTax(i, 'net', v)} /></label>
+                    <label className="f"><span>{t('tax')}</span><Money value={x.tax} onChange={(v) => setTax(i, 'tax', v)} className={Math.abs(x.net + x.tax - x.gross) > 0.02 ? 'err-field' : ''} /></label>
+                    <label className="f"><span>{t('gross')}</span><Money value={x.gross} onChange={(v) => setTax(i, 'gross', v)} className="li-sum" /></label>
+                  </div>
+                </div>
+              ))}
+              {taxes.length > 1 && (
+                <div className="tax-sum grid3">
+                  <div><span className="small muted">Σ {t('net')}</span><b>{eur(r2(taxes.reduce((s2, x) => s2 + x.net, 0)))}</b></div>
+                  <div><span className="small muted">Σ {t('tax')}</span><b>{eur(r2(taxes.reduce((s2, x) => s2 + x.tax, 0)))}</b></div>
+                  <div><span className="small muted">Σ {t('gross')}</span><b>{eur(r2(taxes.reduce((s2, x) => s2 + x.gross, 0)))}</b></div>
+                </div>
+              )}
               {!readOnly && <button onClick={() => setTaxes([...taxes, { rate: taxes.some((x) => x.rate === 7) ? 19 : 7, net: 0, tax: 0, gross: 0 }])}>+ {t('addRate')}</button>}
               <label className="f" style={{ marginTop: 12 }}><span>{t('gross')} · {t('total')}</span>
                 <div className="row"><Money value={f.gross} onChange={(v) => setF({ ...f, gross: v })} className={taxBad ? 'err-field' : ''} />

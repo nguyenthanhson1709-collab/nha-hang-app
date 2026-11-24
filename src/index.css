@@ -160,3 +160,10 @@ button.danger, .btn.danger { border-color: var(--err); color: var(--err); backgr
 .mb-grid button.now { border-color: var(--brand); }
 .mb-grid button.sel { background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
 .mb-today { margin-top: 8px; color: var(--brand); font-weight: 700; }
+.tax-row { background: var(--top); border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: 12px; padding: 10px 10px 2px 12px; margin-bottom: 10px; }
+.tax-row .tax-rate { width: auto; font-weight: 800; color: var(--brand); }
+.tax-row .grid3 { gap: 8px; }
+.tax-row label.f span { font-size: .78rem; }
+.tax-sum { padding: 4px 4px 10px; }
+.tax-sum > div { display: flex; flex-direction: column; text-align: right; }
+.tax-row .grid3, .tax-sum.grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
