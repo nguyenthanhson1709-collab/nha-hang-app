@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase, errMsg, type Category } from '../lib/supabase'
+import { supabase, errMsg, showLogin, type Category } from '../lib/supabase'
 import { useApp } from '../lib/app'
 import { useLang, useT, type Lang } from '../lib/i18n'
 import { Sheet, Top, toast } from '../components/ui'
@@ -53,7 +53,7 @@ export default function Settings() {
   const tops = categories.filter((c) => !c.parent_id)
   return (
     <>
-      <Top title={t('settings')} sub={profile.email} back />
+      <Top title={t('settings')} sub={showLogin(profile.email)} back />
       <div className="page">
         <div className="card">
           <h3 style={{ marginTop: 0 }}>{t('language')}</h3>

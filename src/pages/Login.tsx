@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { sendResetEmail, supabase } from '../lib/supabase'
+import { sendResetEmail, supabase, toLoginEmail } from '../lib/supabase'
 import { useLang, useT } from '../lib/i18n'
 
 export default function Login() {
@@ -15,7 +15,7 @@ export default function Login() {
 
   async function forgot() {
     setErr(''); setInfo('')
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setErr(t('email') + '?'); return }
+    if (!email.includes('@')) { setErr(email.trim() ? t('noEmailReset') : t('email') + '?'); return }
     setBusy(true)
     const { error } = await sendResetEmail(email)
     setBusy(false)
@@ -37,7 +37,7 @@ export default function Login() {
     } else {
       // Đăng nhập xong luôn vào trang chủ, không quay lại trang cũ (vd. cài đặt)
       history.replaceState(null, '', location.pathname + location.search + '#/')
-      const { error } = await supabase.auth.signInWithPassword({ email, password: pw })
+      const { error } = await supabase.auth.signInWithPassword({ email: toLoginEmail(email), password: pw })
       if (error) setErr(t('loginFailed'))
     }
     setBusy(false)
@@ -53,7 +53,7 @@ export default function Login() {
           </select>
         </div>
         {setup && <div className="alert ok">{lang === 'de' ? 'Erstes Konto: wird Inhaber mit vollem Zugriff.' : 'Tài khoản đầu tiên: sẽ là Chủ, có toàn quyền.'}</div>}
-        <label className="f"><span>{t('email')}</span><input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+        <label className="f"><span>{setup ? t('email') : t('loginName')}</span><input type={setup ? 'email' : 'text'} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
         <label className="f"><span>{t('password')}</span><input type="password" autoComplete={setup ? 'new-password' : 'current-password'} minLength={setup ? 8 : undefined} value={pw} onChange={(e) => setPw(e.target.value)} required /></label>
         {err && <div className="alert err">{err}</div>}
         {info && <div className="alert ok">{info}</div>}

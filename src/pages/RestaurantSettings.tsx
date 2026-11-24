@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { supabase, errMsg, sendResetEmail, type PayMethod, type Restaurant } from '../lib/supabase'
+import { supabase, errMsg, sendResetEmail, toLoginEmail, showLogin, hasRealEmail, validLogin, type PayMethod, type Restaurant } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { Sheet, Top, toast, useRestaurant } from '../components/ui'
@@ -53,8 +53,8 @@ export default function RestaurantSettings() {
   async function createUser() {
     if (!add) return
     if (add.password.length < 8) { toast(t('password') + ': ≥ 8'); return }
-    if (!/^\S+@\S+\.\S+$/.test(add.email.trim())) { toast(t('email') + '?'); return }
-    try { await adminCall({ action: 'create_user', restaurant_id: rid, ...add, lang }); setAdd(null); loadMembers(); toast(t('added')) }
+    if (!validLogin(add.email)) { toast(t('loginHint')); return }
+    try { await adminCall({ action: 'create_user', restaurant_id: rid, ...add, email: toLoginEmail(add.email), lang }); setAdd(null); loadMembers(); toast(t('added')) }
     catch (e) { toast(errMsg(e)) }
   }
   async function sendMail() {
@@ -81,18 +81,18 @@ export default function RestaurantSettings() {
     for (const x of restaurants) roles[x.id] = ''
     for (const x of data || []) roles[x.restaurant_id] = x.role as 'manager' | 'staff'
     const email = m.nh_profiles?.email || ''
-    setEd({ user_id: m.user_id, full_name: m.nh_profiles?.full_name || '', email, origEmail: email, lang: m.nh_profiles?.lang || 'vi', password: '', roles, orig: { ...roles } })
+    setEd({ user_id: m.user_id, full_name: m.nh_profiles?.full_name || '', email: showLogin(email), origEmail: email, lang: m.nh_profiles?.lang || 'vi', password: '', roles, orig: { ...roles } })
   }
   async function saveEdit() {
     if (!ed) return
     if (ed.password && ed.password.length < 8) { toast(t('password') + ': ≥ 8'); return }
-    if (!/^\S+@\S+\.\S+$/.test(ed.email.trim())) { toast(t('email') + '?'); return }
-    if (ed.email.trim().toLowerCase() !== ed.origEmail.toLowerCase() && !confirm(lang === 'de'
-      ? 'E-Mail ändern? Die Person meldet sich danach mit der neuen E-Mail an (auch in der Rechnungs-App).'
-      : 'Đổi email? Người này sẽ đăng nhập bằng email mới (cả ở app viết hoá đơn).')) return
+    if (!validLogin(ed.email)) { toast(t('loginHint')); return }
+    if (toLoginEmail(ed.email) !== ed.origEmail.toLowerCase() && !confirm(lang === 'de'
+      ? 'Anmeldenamen ändern? Die Person meldet sich danach mit dem neuen Namen / der neuen E-Mail an.'
+      : 'Đổi tên đăng nhập? Người này sẽ đăng nhập bằng tên / email mới.')) return
     setBusy(true)
     try {
-      await adminCall({ action: 'update_user', user_id: ed.user_id, full_name: ed.full_name, email: ed.email, lang: ed.lang, password: ed.password || undefined })
+      await adminCall({ action: 'update_user', user_id: ed.user_id, full_name: ed.full_name, email: toLoginEmail(ed.email), lang: ed.lang, password: ed.password || undefined })
       for (const [rest, ro] of Object.entries(ed.roles)) {
         if (ro !== ed.orig[rest]) await adminCall({ action: 'set_member', restaurant_id: rest, user_id: ed.user_id, role: ro || null })
       }
@@ -110,7 +110,7 @@ export default function RestaurantSettings() {
           <div className="list">
             {members.map((m) => (
               <div className="it" key={m.user_id}>
-                <div className="grow" style={{ minWidth: 0 }}><div className="t">{m.nh_profiles?.full_name || m.nh_profiles?.email}</div><div className="small muted">{m.nh_profiles?.email}{!owner && ` · ${t(m.role)}`}</div>
+                <div className="grow" style={{ minWidth: 0 }}><div className="t">{m.nh_profiles?.full_name || showLogin(m.nh_profiles?.email)}</div><div className="small muted">{showLogin(m.nh_profiles?.email)}{!owner && ` · ${t(m.role)}`}</div>
                   {owner && <select value={m.role} onChange={(e) => setRole(m.user_id, e.target.value)} style={{ marginTop: 6, maxWidth: 220 }}>
                     <option value="manager">{t('manager')}</option><option value="staff">{t('staff')}</option>
                   </select>}
@@ -174,7 +174,7 @@ export default function RestaurantSettings() {
             <button className={add.role === 'staff' ? 'sel' : ''} onClick={() => setAdd({ ...add, role: 'staff' })}>{t('staff')}</button>
           </div>}
           <label className="f"><span>{t('fullName')}</span><input value={add.full_name} onChange={(e) => setAdd({ ...add, full_name: e.target.value })} /></label>
-          <label className="f"><span>{t('email')}</span><input type="email" value={add.email} onChange={(e) => setAdd({ ...add, email: e.target.value })} /></label>
+          <label className="f"><span>{t('loginName')}</span><input autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="lan / lan@gmail.com" value={add.email} onChange={(e) => setAdd({ ...add, email: e.target.value })} /></label>
           <label className="f"><span>{t('password')} (≥ 8)</span><input value={add.password} onChange={(e) => setAdd({ ...add, password: e.target.value })} /></label>
           {add.role === 'manager' && members.some((m) => m.role === 'manager') && <div className="alert warn">{lang === 'de' ? 'Die bisherige Filialleitung wird ersetzt.' : 'Người phụ trách hiện tại sẽ được thay.'}</div>}
           <button className="primary block" onClick={createUser}>{t('save')}</button>
@@ -183,7 +183,7 @@ export default function RestaurantSettings() {
       <Sheet open={!!ed} onClose={() => setEd(null)} title={lang === 'de' ? 'Benutzer bearbeiten' : 'Sửa thông tin'}>
         {ed && <>
           <label className="f"><span>{t('fullName')}</span><input value={ed.full_name} onChange={(e) => setEd({ ...ed, full_name: e.target.value })} /></label>
-          <label className="f"><span>{t('email')}</span><input type="email" value={ed.email} onChange={(e) => setEd({ ...ed, email: e.target.value })} /></label>
+          <label className="f"><span>{t('loginName')}</span><input autoCapitalize="none" autoCorrect="off" spellCheck={false} value={ed.email} onChange={(e) => setEd({ ...ed, email: e.target.value })} /></label>
           <div className="f"><span>{t('language')}</span>
             <div className="seg"><button className={ed.lang === 'vi' ? 'sel' : ''} onClick={() => setEd({ ...ed, lang: 'vi' })}>Tiếng Việt</button><button className={ed.lang === 'de' ? 'sel' : ''} onClick={() => setEd({ ...ed, lang: 'de' })}>Deutsch</button></div>
           </div>
@@ -207,7 +207,7 @@ export default function RestaurantSettings() {
         {pwFor && <>
           <label className="f"><span>{t('password')} (≥ 8)</span><input value={pwFor.password} onChange={(e) => setPwFor({ ...pwFor, password: e.target.value })} /></label>
           <button className="primary block" onClick={setPassword}>{t('save')}</button>
-          {pwFor.email && <>
+          {hasRealEmail(pwFor.email) && <>
             <div className="small muted" style={{ margin: '14px 0 6px' }}>{pwFor.email}</div>
             <button className="block" onClick={sendMail}>{t('sendResetMail')}</button>
           </>}

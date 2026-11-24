@@ -6,6 +6,14 @@ export const fromRecoveryLink = typeof location !== 'undefined' && /type=(recove
 // Địa chỉ quay lại sau khi bấm link trong email (trang app, không kèm #/...)
 export const appUrl = () => location.origin + location.pathname
 
+// Đăng nhập bằng tên tài khoản: lưu thành email nội bộ <tên>@tk.vietbowlmitte.de (không nhận thư)
+export const LOGIN_DOMAIN = 'tk.vietbowlmitte.de'
+export const isLoginName = (s: string) => /^[a-z0-9._-]{3,30}$/i.test(s.trim())
+export const toLoginEmail = (s: string) => { const v = s.trim().toLowerCase(); return v.includes('@') ? v : `${v}@${LOGIN_DOMAIN}` }
+export const showLogin = (email?: string | null) => (email || '').endsWith('@' + LOGIN_DOMAIN) ? (email || '').slice(0, -LOGIN_DOMAIN.length - 1) : (email || '')
+export const hasRealEmail = (email?: string | null) => !!email && !email.endsWith('@' + LOGIN_DOMAIN)
+export const validLogin = (s: string) => /^\S+@\S+\.\S+$/.test(s.trim()) || isLoginName(s)
+
 export async function sendResetEmail(email: string) {
   return supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: appUrl() })
 }
