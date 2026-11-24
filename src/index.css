@@ -251,3 +251,19 @@ tr.no-cat-row td:first-child { color: var(--err); box-shadow: inset 3px 0 0 var(
   background: var(--brand); color: var(--on-brand); border: 0; box-shadow: 0 4px 12px rgb(246 135 18 / .35); }
 .top .back-btn:hover { filter: brightness(1.08); }
 .top .back-btn:active { transform: scale(.94); }
+
+/* Biểu đồ cột có trục tiền */
+.schart { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; margin-top: 4px; }
+.sc-axis { position: relative; height: 210px; font-size: .7rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sc-axis span { position: absolute; right: 0; transform: translateY(50%); white-space: nowrap; line-height: 1; }
+.sc-axis span.sc-w { position: static; visibility: hidden; transform: none; }
+.sc-plot { position: relative; height: 210px; }
+.sc-grid { position: absolute; left: 0; right: 0; border-top: 1px dashed color-mix(in srgb, var(--muted) 40%, transparent); }
+.sc-grid.zero { border-top-style: solid; }
+.sc-bars { position: absolute; inset: 0; display: flex; align-items: flex-end; }
+.sc-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; min-width: 0; }
+.sc-col > div { width: 100%; max-width: 32px; }
+.sc-b { background: var(--cardc); border-radius: 4px 4px 0 0; }
+.sc-a { background: var(--brand); }
+.sc-x { display: flex; font-size: .65rem; color: var(--muted); margin-top: 4px; }
+.sc-x span { flex: 1; text-align: center; min-width: 0; min-height: 1em; }

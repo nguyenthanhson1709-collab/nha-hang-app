@@ -27,6 +27,44 @@ const TABS: { k: Tab; icon: string; vi: string; de: string }[] = [
   { k: 'nonfood', icon: 'box', vi: 'Nonfood', de: 'Non-Food' },
 ]
 
+// Mốc tiền tròn số cho trục dọc: 0, 2.000, 4.000 …
+function niceTicks(max: number, n = 5) {
+  if (max <= 0) return [0, 1]
+  const raw = max / n, p = 10 ** Math.floor(Math.log10(raw))
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * p).find((x) => x >= raw) || 10 * p
+  const out: number[] = []
+  for (let v = 0; v < max + step - 1e-9; v += step) out.push(Math.round(v * 100) / 100)
+  return out
+}
+const short = (v: number) => (v >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : v >= 1000 ? `${+(v / 1000).toFixed(1)}K` : String(v)).replace('.', ',')
+
+/** Cột chồng (tiền mặt dưới, thẻ trên) có trục tiền bên trái và các đường gạch đứt ngang */
+function StackChart({ rows }: { rows: { key: string; title: string; label: string; a: number; b: number }[] }) {
+  const ticks = niceTicks(Math.max(...rows.map((r) => r.a + r.b), 0))
+  const top = ticks[ticks.length - 1] || 1
+  return (
+    <div className="schart">
+      <div className="sc-axis">
+        <span className="sc-w">€{short(top)}</span>
+        {ticks.map((v) => <span key={v} style={{ bottom: `${(v / top) * 100}%` }}>€{short(v)}</span>)}
+      </div>
+      <div className="sc-plot">
+        {ticks.map((v) => <div key={v} className={`sc-grid${v === 0 ? ' zero' : ''}`} style={{ bottom: `${(v / top) * 100}%` }} />)}
+        <div className="sc-bars" style={{ gap: rows.length > 20 ? 2 : 4 }}>
+          {rows.map((r) => (
+            <div className="sc-col" key={r.key} title={r.title}>
+              <div className="sc-b" style={{ height: `${(r.b / top) * 100}%` }} />
+              <div className="sc-a" style={{ height: `${(r.a / top) * 100}%` }} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div />
+      <div className="sc-x" style={{ gap: rows.length > 20 ? 2 : 4 }}>{rows.map((r) => <span key={r.key}>{r.label}</span>)}</div>
+    </div>
+  )
+}
+
 function Bars({ data }: { data: { label: string; value: number }[] }) {
   const max = Math.max(...data.map((d) => d.value), 1)
   return (
@@ -258,20 +296,10 @@ export default function Reports() {
                 <div><div className="small muted">{t('cash')}</div><b>{eur(umsatz.cash)}</b></div>
                 <div><div className="small muted">{t('card')}</div><b>{eur(umsatz.card)}</b></div>
               </div>
-              <div className="chart" style={{ height: 200, gap: umsatz.rows.length > 20 ? 2 : 4 }}>
-                {umsatz.rows.map((x, i) => {
-                  const mx = Math.max(...umsatz.rows.map((y) => y.total), 1)
-                  return (
-                    <div className="c" key={x.k} title={`${umsatzLabel(x.k)}: ${eur(x.total)}`}>
-                      <div style={{ width: '100%', maxWidth: 32, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%' }}>
-                        <div style={{ height: `${(x.card / mx) * 100}%`, background: 'var(--cardc)', borderRadius: '4px 4px 0 0' }} />
-                        <div style={{ height: `${(x.cash / mx) * 100}%`, background: 'var(--brand)' }} />
-                      </div>
-                      <div className="x">{umsatz.byDay ? (umsatz.rows.length > 16 && i % 5 !== 0 && i !== umsatz.rows.length - 1 ? '' : x.k.slice(8)) : x.k.slice(5)}</div>
-                    </div>
-                  )
-                })}
-              </div>
+              <StackChart rows={umsatz.rows.map((x, i) => ({
+                key: x.k, title: `${umsatzLabel(x.k)}: ${eur(x.total)}`, a: x.cash, b: x.card,
+                label: umsatz.byDay ? (umsatz.rows.length > 16 && i % 5 !== 0 && i !== umsatz.rows.length - 1 ? '' : x.k.slice(8)) : x.k.slice(5),
+              }))} />
               <div className="row small" style={{ gap: 12, marginTop: 6 }}>
                 <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--brand)', borderRadius: 2 }} /> {t('cash')}</span>
                 <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--cardc)', borderRadius: 2 }} /> {t('card')}</span>
