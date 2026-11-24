@@ -106,7 +106,7 @@ export default function Scan() {
       // Chủ/quản lý tải lên, AI (hoặc e-Rechnung) đọc đủ và khớp, không trùng -> duyệt luôn
       const auto = m && kind === 'purchase' && !dup && !!(parsedE || aiInv) && autoProblems({ ...pi, gross }, payment).length === 0
       const { data: doc, error } = await supabase.from('nh_documents').insert({
-        restaurant_id: rid, kind, ...(kind === 'purchase' && pi.is_credit ? { is_credit: true } : {}), status: auto ? 'reviewed' : 'uploaded', doc_date: date, period: date.slice(0, 7),
+        restaurant_id: rid, kind, ...(kind === 'purchase' && pi.is_credit ? { is_credit: true, ref_invoice_no: pi.ref_invoice_no || null } : {}), status: auto ? 'reviewed' : 'uploaded', doc_date: date, period: date.slice(0, 7),
         supplier: pi.supplier, invoice_no: pi.invoice_no, seller_tax_id: pi.seller_tax_id, gross, files, ocr_text: text.slice(0, 50000),
       }).select().single()
       if (error) throw error

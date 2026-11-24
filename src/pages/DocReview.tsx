@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { DateField } from '../components/PeriodBar'
 import { goBack } from '../lib/nav'
 import { supabase, errMsg, signedUrl, BUCKET, type Doc, type Line, type PayMethod, type TaxRow } from '../lib/supabase'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { dmy, eur, monthLabel, normName, r2 } from '../lib/format'
-import { deleteDoc, findDuplicate, folderParts, getDoc, lockedPeriods, saveChildren } from '../lib/data'
+import { deleteDoc, findDuplicate, folderParts, getDoc, invKey, lockedPeriods, saveChildren } from '../lib/data'
 import { guessCategory, loadMemory, remember } from '../lib/categorize'
 import { flipNegative, linesBasis, linesToNet } from '../lib/lines'
 import { docPdf } from '../lib/pdf'
@@ -31,7 +31,7 @@ export default function DocReview() {
   const [doc, setDoc] = useState<Doc | null>(null)
   const [urls, setUrls] = useState<{ path: string; url: string; pdf: boolean }[]>([])
   const [locked, setLocked] = useState(false)
-  const [f, setF] = useState({ supplier: '', doc_date: '', invoice_no: '', seller_tax_id: '', note: '', gross: 0, kind: 'purchase' as 'purchase' | 'sales', is_credit: false })
+  const [f, setF] = useState({ supplier: '', doc_date: '', invoice_no: '', seller_tax_id: '', note: '', gross: 0, kind: 'purchase' as 'purchase' | 'sales', is_credit: false, ref_invoice_no: '' })
   const [taxes, setTaxes] = useState<TaxRow[]>([])
   const [lines, setLines] = useState<Line[]>([])
   const [openLines, setOpenLines] = useState(false)
@@ -42,13 +42,30 @@ export default function DocReview() {
   const [busy, setBusy] = useState(false)
   const [rereading, setRereading] = useState(false)
   const [remembered, setRemembered] = useState<Set<number>>(new Set())
+  // Gutschrift ↔ hoá đơn gốc (hàng trả lại): so theo số hoá đơn, số ngắn khớp phần cuối số dài ("7839607" = "26-008-7839607")
+  const [refDocs, setRefDocs] = useState<Doc[]>([])
+  useEffect(() => {
+    if (!doc) return
+    const rid0 = doc.restaurant_id
+    const credit = f.kind === 'purchase' && f.is_credit
+    const key = invKey(credit ? f.ref_invoice_no : f.invoice_no)
+    if (key.length < 4) { setRefDocs([]); return }
+    const match = (a: string | null | undefined, b: string) => { const x = invKey(a); return !!x && x.length >= 4 && (x.endsWith(b) || b.endsWith(x)) }
+    let off = false
+    const t0 = setTimeout(async () => {
+      const q = supabase.from('nh_documents').select('id, supplier, doc_date, gross, invoice_no, ref_invoice_no, is_credit').eq('restaurant_id', rid0).neq('id', doc.id)
+      const { data } = credit ? await q.eq('is_credit', false).ilike('invoice_no', `%${key.slice(-6)}%`).limit(20) : await q.eq('is_credit', true).not('ref_invoice_no', 'is', null).limit(500)
+      if (!off) setRefDocs(((data || []) as Doc[]).filter((x) => match(credit ? x.invoice_no : x.ref_invoice_no, key)))
+    }, 400)
+    return () => { off = true; clearTimeout(t0) }
+  }, [doc, f.kind, f.is_credit, f.ref_invoice_no, f.invoice_no])
   const [hist, setHist] = useState<{ at: string; action: string; user_id: string; name?: string }[] | null>(null)
 
   useEffect(() => {
     (async () => {
       const d = await getDoc(id!)
       setDoc(d)
-      setF({ supplier: d.supplier || '', doc_date: d.doc_date, invoice_no: d.invoice_no || '', seller_tax_id: d.seller_tax_id || '', note: d.note || '', gross: Math.abs(Number(d.gross)), kind: d.kind, is_credit: !!d.is_credit || (d.kind === 'purchase' && Number(d.gross) < 0) })
+      setF({ supplier: d.supplier || '', doc_date: d.doc_date, invoice_no: d.invoice_no || '', seller_tax_id: d.seller_tax_id || '', note: d.note || '', gross: Math.abs(Number(d.gross)), kind: d.kind, is_credit: !!d.is_credit || (d.kind === 'purchase' && Number(d.gross) < 0), ref_invoice_no: d.ref_invoice_no || '' })
       setTaxes((d.nh_document_taxes || []).map((x) => ({ rate: Number(x.rate), net: Number(x.net), tax: Number(x.tax), gross: Number(x.gross) })))
       const mem = await loadMemory()
       const rem = new Set<number>()
@@ -120,7 +137,7 @@ export default function DocReview() {
       const isCredit = f.kind === 'purchase' && (f.is_credit || !!fl)
       const { error } = await supabase.from('nh_documents').update({
         supplier: f.supplier || null, doc_date: f.doc_date, period: f.doc_date.slice(0, 7), invoice_no: f.invoice_no || null, seller_tax_id: f.seller_tax_id || null,
-        note: f.note || null, gross, kind: f.kind, is_credit: isCredit, status: 'reviewed', flags,
+        note: f.note || null, gross, kind: f.kind, is_credit: isCredit, ref_invoice_no: isCredit ? f.ref_invoice_no.trim() || null : null, status: 'reviewed', flags,
       }).eq('id', doc.id)
       if (error) throw error
       await saveChildren(doc.id, payments.map((p) => ({ ...p, amount: r2(Math.abs(p.amount)) })), fl ? fl.taxes : taxes, fl ? fl.lines : lines, true)
@@ -146,7 +163,7 @@ export default function DocReview() {
       const pi = await aiReadInvoice(rid, files)
       if (!pi || (!pi.lines?.length && !pi.taxes?.length)) { toast(lang === 'de' ? 'Keine Positionen erkannt' : 'AI không đọc được dòng hàng'); return }
       // Chưa có mức thuế (ví dụ Gutschrift số âm lúc trước bị lỗi): lấy luôn thuế và tổng tiền AI đọc được
-      if (!taxes.length && pi.taxes.length) { setTaxes(pi.taxes.map((x) => ({ ...x }))); setF((v) => ({ ...v, gross: pi.gross, is_credit: v.kind === 'purchase' && (v.is_credit || !!pi.is_credit) })) }
+      if (!taxes.length && pi.taxes.length) { setTaxes(pi.taxes.map((x) => ({ ...x }))); setF((v) => ({ ...v, gross: pi.gross, is_credit: v.kind === 'purchase' && (v.is_credit || !!pi.is_credit), ref_invoice_no: v.ref_invoice_no || pi.ref_invoice_no || '' })) }
       const mem = await loadMemory()
       const old = new Map(lines.filter((l) => l.category_id).map((l) => [normName(l.name), l.category_id]))
       setLines(pi.lines.map((l, i) => ({
@@ -207,6 +224,17 @@ export default function DocReview() {
               </div>
               <label className="f"><span>{t('sellerTaxId')}</span><input className={over250 ? 'err-field' : ''} value={f.seller_tax_id} onChange={(e) => setF({ ...f, seller_tax_id: e.target.value })} /></label>
               {over250 && <div className="alert warn">{t('over250')}</div>}
+              {f.kind === 'purchase' && f.is_credit && <>
+                <label className="f"><span>{lang === 'de' ? 'Zu Rechnung Nr. (Rückgabe)' : 'Số hoá đơn gốc (hàng trả lại)'}</span><input value={f.ref_invoice_no} onChange={(e) => setF({ ...f, ref_invoice_no: e.target.value })} /></label>
+                {refDocs.map((x) => <Link key={x.id} className="alert ok" style={{ display: 'block' }} to={`/r/${rid}/doc/${x.id}`}>↩ {x.supplier} · {dmy(x.doc_date)} · Nr. {x.invoice_no} · {eur(Number(x.gross))}</Link>)}
+                {invKey(f.ref_invoice_no).length >= 4 && !refDocs.length && <div className="small muted">{lang === 'de' ? 'Ursprüngliche Rechnung noch nicht im Archiv' : 'Chưa thấy hoá đơn gốc trong Chứng từ'}</div>}
+              </>}
+              {!(f.kind === 'purchase' && f.is_credit) && refDocs.length > 0 && (
+                <div className="alert ok">
+                  {refDocs.map((x) => <div key={x.id}><Link to={`/r/${rid}/doc/${x.id}`}>↩ Gutschrift {dmy(x.doc_date)} · −{eur(Number(x.gross))}</Link></div>)}
+                  <b>{lang === 'de' ? 'Nach Gutschrift' : 'Còn lại sau Gutschrift'}: {eur(r2(f.gross - refDocs.reduce((a, x) => a + Number(x.gross), 0)))}</b>
+                </div>
+              )}
             </div>
 
             <div className="card">

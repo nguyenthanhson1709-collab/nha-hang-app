@@ -20,6 +20,7 @@ const INVOICE = obj({
   doc_date: { ...nStr, description: "Rechnungs-/Belegdatum YYYY-MM-DD" },
   date_uncertain: { type: "boolean", description: "true, wenn das Datum handschriftlich, unleserlich oder mehrdeutig ist" },
   is_credit: { type: "boolean", description: "true bei Gutschrift / Rückvergütung / Erstattung / Rechnungskorrektur zugunsten des Restaurants (Lieferant zahlt Geld zurück)" },
+  ref_invoice_no: { ...nStr, description: "Nur bei Gutschrift: Nummer der ursprünglichen Rechnung, auf die sich die Gutschrift bezieht (z.B. 'Zu Rechnung: 7839607', 'Bezug Rechnung Nr.'), sonst null" },
   supplier: { ...nStr, description: "Name des Verkäufers/Marktes, kurz (z.B. Lidl, METRO, REWE)" },
   invoice_no: nStr,
   seller_tax_id: { ...nStr, description: "USt-IdNr (DE...) oder Steuernummer des Verkäufers" },

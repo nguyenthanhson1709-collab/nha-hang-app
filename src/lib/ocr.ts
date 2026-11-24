@@ -170,6 +170,7 @@ export interface ParsedInvoice {
   gross: number; taxes: TaxRow[]; payment: PayMethod | null
   date_uncertain?: boolean
   is_credit?: boolean
+  ref_invoice_no?: string | null
   lines: { name: string; qty: number | null; unit?: string | null; unit_price: number | null; total: number; rate: number | null }[]
 }
 
