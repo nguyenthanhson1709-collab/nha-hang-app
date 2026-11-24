@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, type Category, type Profile, type Restaurant, type Role } from './lib/supabase'
 import { LangCtx, type Lang, useT } from './lib/i18n'
 import { AppCtx, type AppState } from './lib/app'
-import { Spinner, Toaster } from './components/ui'
+import { BottomNav, Spinner, Toaster } from './components/ui'
 import Login from './pages/Login'
 import Restaurants from './pages/Restaurants'
 import Home from './pages/Home'
@@ -20,7 +20,8 @@ import Settings from './pages/Settings'
 import RestaurantSettings from './pages/RestaurantSettings'
 
 function RestLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>
+  const { rid } = useParams()
+  return <>{children}<BottomNav rid={rid!} /></>
 }
 
 function Shell({ session }: { session: Session }) {

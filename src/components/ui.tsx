@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useT } from '../lib/i18n'
-import { canManage, useApp, useRole } from '../lib/app'
+import { useApp } from '../lib/app'
 import { parseNum } from '../lib/format'
 
 export function Spinner() { return <div className="center"><div className="spinner" /></div> }
@@ -27,21 +27,16 @@ const I = {
   folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
   chart: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
 }
-const Icon = ({ k }: { k: keyof typeof I }) => (
+export const Icon = ({ k }: { k: keyof typeof I }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{I[k]}</svg>
 )
 
+/** Thanh dưới cùng: chỉ một nút về trang chủ của quán, hiển thị logo Vietbowl */
 export function BottomNav({ rid }: { rid: string }) {
   const t = useT()
-  const role = useRole(rid)
-  const m = canManage(role)
   return (
-    <nav className="nav"><div className="in">
-      <NavLink to={`/r/${rid}`} end><Icon k="home" />{t('home')}</NavLink>
-      <NavLink to={`/r/${rid}/scan`}><Icon k="scan" />{t('scan')}</NavLink>
-      {m && <NavLink to={`/r/${rid}/kb`}><Icon k="book" />{t('kassenbuch')}</NavLink>}
-      {m && <NavLink to={`/r/${rid}/archive`}><Icon k="folder" />{t('archive')}</NavLink>}
-      {m && <NavLink to={`/r/${rid}/reports`}><Icon k="chart" />{t('reports')}</NavLink>}
+    <nav className="nav nav-logo"><div className="in">
+      <NavLink to={`/r/${rid}`} end aria-label={t('home')}><img src={`${import.meta.env.BASE_URL}logo-vietbowl.webp`} alt="Vietbowl" /></NavLink>
     </div></nav>
   )
 }
