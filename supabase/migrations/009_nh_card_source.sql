@@ -1,6 +1,6 @@
 -- Mỗi quán chọn cách tính thẻ trong Kassenbuch (người dùng chốt 2026-11-24):
 --  'zbon' : Umsatz, Kartenzahlung, Trinkgeld đều theo Z-Bon; Trinkgeld (Karte) luôn trả nhân viên từ két.
---  'viva' : Umsatz theo Z-Bon; Kartenzahlung theo Viva Wallet; Trinkgeld = Viva - phần thẻ Z-Bon (đã nằm trong Kartenzahlung).
+--  'viva' : Umsatz theo Z-Bon; Kartenzahlung theo Viva Wallet; Trinkgeld = Viva - phần thẻ Z-Bon, chỉ ghi Ausgaben.
 alter table public.nh_restaurants add column if not exists card_source text not null default 'zbon';
 -- Überweisung trên Z-Bon: không vào két, ghi Ausgaben "Überweisung"
 alter table public.nh_zbons add column if not exists transfer_pos numeric(12,2) not null default 0;
@@ -44,7 +44,7 @@ with rows as (
   select v.restaurant_id, v.move_date, v.period, v.ts, 'move', v.id,
          'Kartenzahlung (Viva Wallet)',
          greatest(0, coalesce(v.card_z, 0) - v.amount) * (case when v.card_z is null then 0 else 1 end),
-         case when v.card_z is null then v.amount else greatest(0, v.amount - v.card_z) end, null
+         case when v.card_z is null then v.amount else greatest(0, 2 * (v.amount - v.card_z)) end, null
   from (select m.restaurant_id, m.move_date, min(m.period) as period, max(m.created_at) as ts, (array_agg(m.id order by m.created_at))[1] as id, sum(m.amount) as amount,
                (select sum(z.total - z.cash_revenue) from public.nh_zbons z where z.restaurant_id = m.restaurant_id and z.z_date = m.move_date) as card_z
         from public.nh_cash_moves m join public.nh_restaurants rr on rr.id = m.restaurant_id

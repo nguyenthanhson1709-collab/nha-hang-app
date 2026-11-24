@@ -83,7 +83,7 @@ await q(`update nh_restaurants set card_source = 'viva' where id = $1`, [A])
 await as(M, () => q(`insert into nh_zbons(restaurant_id, z_date, period, gross7, gross19, total, card_pos, cash_pos) values ($1,'2026-11-03','2026-11',1000,0,1000,600,400)`, [A]))
 await as(M, () => q(`insert into nh_cash_moves(restaurant_id, move_date, period, type, amount, channel) values ($1,'2026-11-03','2026-11','geldtransit',650,'viva')`, [A]))
 const vv = await as(M, () => q(`select text, einnahme, ausgabe from nh_kassenbuch where restaurant_id=$1 and entry_date='2026-11-03' order by nr`, [A]))
-ok(!(vv instanceof Error) && vv.some((r) => /Viva/.test(String(r.text)) && Number(r.ausgabe) === 50) && vv.some((r) => Number(r.einnahme) === 400), 'Viva Wallet: chỉ phần vượt thẻ Z-Bon (50) ra khỏi két')
+ok(!(vv instanceof Error) && vv.some((r) => /Viva/.test(String(r.text)) && Number(r.ausgabe) === 100) && vv.some((r) => Number(r.einnahme) === 400), 'Viva Wallet: Kartenzahlung 650 + Trinkgeld 50 (Ausgaben) → két giảm 100 so với tiền mặt Z-Bon')
 const aud = await q(`select count(*)::int n from nh_audit`)
 ok(Number(aud[0].n) > 3, 'Nhật ký sửa đổi được ghi')
 

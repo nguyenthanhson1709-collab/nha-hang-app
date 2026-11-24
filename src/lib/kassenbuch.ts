@@ -67,10 +67,10 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
     const transfer = Number(z.transfer_pos) || 0 // Überweisung lt. Z-Bon: không vào két
     const v = viva.get(z.z_date)
     if (vivaMode && v != null) {
-      // Kartenzahlung theo Viva Wallet; Trinkgeld = Viva − Kreditzahlung Z-Bon (đã nằm trong Kartenzahlung, trả nhân viên từ két)
+      // Kartenzahlung theo Viva Wallet; Trinkgeld = Viva − Kreditzahlung Z-Bon, chỉ ghi Ausgaben (người dùng chốt 2026-11-24)
       out.push({ ...base, date: z.z_date, aus: v, ausNetto: v, konto: '1210', text: `Kartenzahlung Viva Wallet - ${dm(z.z_date)}`, link, prio: 2.5, ts: z.created_at })
       const tip = r2(v - cardZ)
-      if (tip > 0) out.push({ ...base, date: z.z_date, ein: tip, einNetto: tip, aus: tip, ausNetto: tip, konto: '1592', text: `Trinkgeld (Viva − Z-Bon) an Personal ausgezahlt`, link, prio: 2.6, ts: z.created_at })
+      if (tip > 0) out.push({ ...base, date: z.z_date, aus: tip, ausNetto: tip, konto: '1592', text: `Trinkgeld (Viva − Z-Bon) an Personal ausgezahlt`, link, prio: 2.6, ts: z.created_at })
     } else {
       if (cardZ) out.push({ ...base, date: z.z_date, aus: cardZ, ausNetto: cardZ, konto: '1360', text: `Kartenzahlung - ${dm(z.z_date)}${vivaMode ? ' (lt. Z-Bon, Viva fehlt)' : ''}`, link, prio: 2.5, ts: z.created_at })
       const tipZ = zTip(z)
