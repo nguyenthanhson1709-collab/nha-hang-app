@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react'
 
 const vi = {
   appName: 'Sổ sách nhà hàng',
-  login: 'Đăng nhập', email: 'Email', password: 'Mật khẩu', logout: 'Đăng xuất', loginFailed: 'Sai email hoặc mật khẩu', forgotPw: 'Quên mật khẩu?', resetSent: 'Đã gửi email. Mở email và bấm vào link để đặt mật khẩu mới.', sendResetMail: 'Gửi email đặt mật khẩu', newPassword: 'Mật khẩu mới', setNewPw: 'Đặt mật khẩu mới', pwTooShort: 'Mật khẩu cần ít nhất 8 ký tự',
+  login: 'Đăng nhập', email: 'Email', password: 'Mật khẩu', logout: 'Đăng xuất', loginFailed: 'Sai email hoặc mật khẩu', forgotPw: 'Quên mật khẩu?', loginName: 'Tên đăng nhập hoặc email', loginHint: 'Tên đăng nhập: 3-30 ký tự a-z, 0-9, dấu . _ - (không dấu cách). Hoặc nhập email.', noEmailReset: 'Tài khoản này không có email. Nhờ chủ hoặc người phụ trách đặt lại mật khẩu bằng nút 🔑.', resetSent: 'Đã gửi email. Mở email và bấm vào link để đặt mật khẩu mới.', sendResetMail: 'Gửi email đặt mật khẩu', newPassword: 'Mật khẩu mới', setNewPw: 'Đặt mật khẩu mới', pwTooShort: 'Mật khẩu cần ít nhất 8 ký tự',
   noAccess: 'Tài khoản này chưa được gán vào nhà hàng nào. Hãy nhờ chủ hoặc người phụ trách thêm vào.',
   restaurants: 'Nhà hàng', addRestaurant: 'Thêm nhà hàng', name: 'Tên', address: 'Địa chỉ', taxNumber: 'Mã số thuế (Steuernummer)',
   thisMonth: 'Tháng này', spending: 'Chi', revenue: 'Doanh thu', cash: 'Tiền mặt', card: 'Thẻ', transfer: 'Chuyển khoản', mixed: 'Kết hợp',
@@ -48,7 +48,7 @@ const vi = {
 export type Dict = typeof vi
 const de: Dict = {
   appName: 'Restaurant-Buchhaltung',
-  login: 'Anmelden', email: 'E-Mail', password: 'Passwort', logout: 'Abmelden', loginFailed: 'E-Mail oder Passwort falsch', forgotPw: 'Passwort vergessen?', resetSent: 'E-Mail gesendet. Bitte den Link in der E-Mail öffnen und ein neues Passwort festlegen.', sendResetMail: 'E-Mail zum Zurücksetzen senden', newPassword: 'Neues Passwort', setNewPw: 'Neues Passwort festlegen', pwTooShort: 'Passwort braucht mindestens 8 Zeichen',
+  login: 'Anmelden', email: 'E-Mail', password: 'Passwort', logout: 'Abmelden', loginFailed: 'E-Mail oder Passwort falsch', forgotPw: 'Passwort vergessen?', loginName: 'Benutzername oder E-Mail', loginHint: 'Benutzername: 3-30 Zeichen a-z, 0-9, . _ - (ohne Leerzeichen). Oder E-Mail eingeben.', noEmailReset: 'Dieses Konto hat keine E-Mail. Bitte Inhaber oder Filialleitung bitten, das Passwort mit 🔑 zurückzusetzen.', resetSent: 'E-Mail gesendet. Bitte den Link in der E-Mail öffnen und ein neues Passwort festlegen.', sendResetMail: 'E-Mail zum Zurücksetzen senden', newPassword: 'Neues Passwort', setNewPw: 'Neues Passwort festlegen', pwTooShort: 'Passwort braucht mindestens 8 Zeichen',
   noAccess: 'Dieses Konto ist keinem Restaurant zugeordnet. Bitte Inhaber oder Filialleitung fragen.',
   restaurants: 'Restaurants', addRestaurant: 'Restaurant hinzufügen', name: 'Name', address: 'Adresse', taxNumber: 'Steuernummer',
   thisMonth: 'Diesen Monat', spending: 'Ausgaben', revenue: 'Umsatz', cash: 'Bar', card: 'Karte', transfer: 'Überweisung', mixed: 'Kombiniert',

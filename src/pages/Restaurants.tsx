@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase, type Restaurant } from '../lib/supabase'
+import { supabase, showLogin, type Restaurant } from '../lib/supabase'
 import { useApp } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { Sheet, Top, toast } from '../components/ui'
@@ -38,7 +38,7 @@ export default function Restaurants() {
 
   return (
     <>
-      <Top title={profile.home_title || t('restaurants')} sub={profile.full_name || profile.email}
+      <Top title={profile.home_title || t('restaurants')} sub={profile.full_name || showLogin(profile.email)}
         right={<div className="row">{profile.is_owner && <button className="btn" title={t('edit')} onClick={() => setTitle(profile.home_title || t('restaurants'))}>✎</button>}<Link className="btn" to="/settings">⚙︎</Link></div>} />
       <div className="page">
         <div className="list">
