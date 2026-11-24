@@ -13,6 +13,7 @@ export function autoProblems(pi: ParsedInvoice, payment: string | null, today = 
     const old = new Date(Date.parse(today) - 400 * 864e5).toISOString().slice(0, 10)
     if (d > today || d < old) p.push('date')
   }
+  if (pi.date_uncertain && !p.includes('date')) p.push('date')
   if (!pi.supplier?.trim()) p.push('supplier')
   if (!pi.invoice_no?.trim()) p.push('invoice_no')
   if (!(gross > 0)) p.push('gross')
