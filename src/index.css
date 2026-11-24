@@ -238,3 +238,10 @@ tr.no-cat-row td:first-child { color: var(--err); box-shadow: inset 3px 0 0 var(
 .pick-bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; margin-bottom: 8px; background: var(--card); }
 .pick-bar.on { padding: 8px 10px; border: 1px solid var(--brand); border-radius: 12px; }
 .pick-bar.on .cat-sel { flex: 1; min-width: 160px; margin-top: 0; min-height: 38px; }
+
+/* Thanh chọn ngày/tháng gọn hơn */
+.monthbar:not(.compact) { max-width: 380px; gap: 6px; }
+.monthbar:not(.compact) .mb-arrow { width: 38px; flex-basis: 38px; min-height: 38px; height: 38px; font-size: 1.1rem; }
+.monthbar:not(.compact) .mb-label { min-height: 38px; height: 38px; padding: 0 14px; font-size: 1rem; }
+.monthbar.compact .mb-label { min-height: 40px; font-size: .95rem; }
+@media (min-width: 820px) { .tile { justify-content: flex-start; padding-top: 18px; } }
