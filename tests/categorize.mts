@@ -1,6 +1,6 @@
 import assert from 'node:assert'
 import { guessCategory } from '../src/lib/categorize.ts'
-const names = ['Bier', 'Softdrinks und Säfte', 'Obst und Gemüse', 'Verpackung und Einwegartikel', 'Wein und Spirituosen', 'Fleisch und Meeresfrüchte', 'Gewürze und Saucen']
+const names = ['Bier', 'Softdrinks und Säfte', 'Obst und Gemüse', 'Verpackung und Einwegartikel', 'Wein und Spirituosen', 'Fleisch und Meeresfrüchte', 'Gewürze und Saucen', 'Pfand / Leergut / Mehrweg']
 const cats = names.map((n, i) => ({ id: n, parent_id: 'p', kind: 'food' as const, name_vi: n, name_de: n, skr_account: null, sort: i }))
 const g = (x: string) => guessCategory(x, cats, null).id
 assert.strictEqual(g('Tomaten,strauch hol.'), 'Obst und Gemüse')
@@ -11,6 +11,7 @@ assert.strictEqual(g('Apfelsaft'), 'Softdrinks und Säfte')
 assert.strictEqual(g('Becher 500ml'), 'Verpackung und Einwegartikel')
 assert.strictEqual(g("Beck's Pils"), 'Bier')
 assert.strictEqual(g('Ingwer'), 'Obst und Gemüse')
+assert.strictEqual(g('Pfand Bier 0,08'), 'Pfand / Leergut / Mehrweg')
 console.log('categorize ok')
 import { accountFor } from '../src/lib/categorize.ts'
 assert.strictEqual(accountFor(undefined, 19, 'Pfand 0,25'), '3830')

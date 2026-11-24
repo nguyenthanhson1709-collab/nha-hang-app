@@ -4,6 +4,7 @@ import { normName } from './format'
 
 // Từ khoá -> nhóm con (theo name_de của danh mục mặc định)
 const RULES: [RegExp, string][] = [
+  [/(pfand|leergut|mehrweg|vỏ chai)/i, 'Pfand / Leergut / Mehrweg'], // trước Bier/Wasser: "Pfand Bier" là vỏ chai
   [/(bier|pils|weizen|radler|heineken|\bbeck'?s?\b|krombacher|warsteiner|saigon|tiger|333|hanoi)/i, 'Bier'],
   [/(wein|sekt|prosecco|vodka|whisky|\brum\b|\bgin\b|likör|likor|schnaps|sake|soju|spirit)/i, 'Wein und Spirituosen'],
   [/(wasser|mineral|vittel|gerolsteiner|evian|volvic|selters|sprudel|still)/i, 'Wasser'],
