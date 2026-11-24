@@ -267,3 +267,6 @@ tr.no-cat-row td:first-child { color: var(--err); box-shadow: inset 3px 0 0 var(
 .sc-a { background: var(--brand); }
 .sc-x { display: flex; font-size: .65rem; color: var(--muted); margin-top: 4px; }
 .sc-x span { flex: 1; text-align: center; min-width: 0; min-height: 1em; }
+.sc-grid { z-index: 0; pointer-events: none; }
+.sc-bars { z-index: 1; }
+.sc-col > div { position: relative; z-index: 2; }
