@@ -3,10 +3,11 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase, errMsg, type Doc, type ZBon } from '../lib/supabase'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
-import { addMonths, dmy, eur, monthLabel, monthRange, thisMonth } from '../lib/format'
+import { dmy, eur, monthLabel, monthRange, thisMonth } from '../lib/format'
 import { DOC_SELECT, docsInRange, folderParts, lockedPeriods } from '../lib/data'
 import { download, folderFiles, folderPdf, scansPdf, type ExtraBeleg, type Folder } from '../lib/pdf'
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
+import { MonthBar } from '../components/MonthBar'
 import { bulkUpload, bulkZbon, MAX_MB, MAX_PAGES, type BulkResult, type ZBulkResult } from '../lib/bulk'
 
 const FOLDERS: Folder[] = ['Bargeld', 'Rechnungseingang', 'Rechnungsausgang']
@@ -129,11 +130,7 @@ export default function Archive() {
       <div className="page">
         {!found && (
           <>
-            <div className="row" style={{ marginBottom: 10 }}>
-              <button onClick={() => setPeriod(addMonths(period, -1))}>‹</button>
-              <input type="month" value={period} onChange={(e) => e.target.value && setPeriod(e.target.value)} />
-              <button onClick={() => setPeriod(addMonths(period, 1))}>›</button>
-            </div>
+            <MonthBar value={period} onChange={setPeriod} />
             {locked && <div className="alert warn">🔒 {t('locked')}</div>}
             {!folder && (
               <div className="tiles">

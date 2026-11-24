@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { supabase, errMsg, signedUrl, type CashCount, type CashMove, type ZBon } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
 import { useT } from '../lib/i18n'
-import { addMonths, daysOfMonth, eur, monthLabel, monthRange, r2, thisMonth, todayIso } from '../lib/format'
+import { daysOfMonth, eur, monthLabel, monthRange, r2, thisMonth, todayIso } from '../lib/format'
 import { balanceBefore, currentBalance, kassenbuch, lockedPeriods, uploadFiles } from '../lib/data'
 import Scanner, { type ScannedPage } from '../components/Scanner'
 import { autoScanImage } from '../lib/scanner'
@@ -12,6 +12,7 @@ import { download } from '../lib/pdf'
 import { kbLines, kbPdf, kbTotals, kbXlsx, type KbLine } from '../lib/kassenbuch'
 import { docsInRange } from '../lib/data'
 import { Money, Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
+import { MonthBar } from '../components/MonthBar'
 import { FitTable } from '../components/FitTable'
 
 type MoveType = 'einlage' | 'privatentnahme' | 'geldtransit' | 'sonstige_einnahme' | 'sonstige_ausgabe'
@@ -140,11 +141,7 @@ export default function Kassenbuch() {
     <>
       <Top title={t('kassenbuch')} sub={r.name} back={`/r/${rid}`} />
       <div className="page">
-        <div className="row" style={{ marginBottom: 10 }}>
-          <button onClick={() => setPeriod(addMonths(period, -1))}>‹</button>
-          <input type="month" value={period} onChange={(e) => e.target.value && setPeriod(e.target.value)} />
-          <button onClick={() => setPeriod(addMonths(period, 1))}>›</button>
-        </div>
+        <MonthBar value={period} onChange={setPeriod} />
         {locked && <div className="alert warn">🔒 {t('locked')} · {t('lockedHint')}</div>}
         {negative && <div className="alert err">{t('negativeBalance')}</div>}
         {missing.length > 0 && (

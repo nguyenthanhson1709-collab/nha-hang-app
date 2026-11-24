@@ -4,11 +4,12 @@ import { useParams } from 'react-router-dom'
 import { supabase, errMsg, signedUrl, BUCKET } from '../lib/supabase'
 import { canManage, useRole } from '../lib/app'
 import { useT } from '../lib/i18n'
-import { addMonths, dmy, monthLabel, thisMonth } from '../lib/format'
+import { dmy, monthLabel, thisMonth } from '../lib/format'
 import { uploadFiles } from '../lib/data'
 import { download } from '../lib/pdf'
 import { PDFDocument } from 'pdf-lib'
 import { Spinner, Top, toast, useRestaurant } from '../components/ui'
+import { MonthBar } from '../components/MonthBar'
 
 type St = { id: string; period: string; account: string | null; note: string | null; files: string[]; created_at: string }
 const ACCOUNTS = ['Bank', 'Viva Wallet', 'Kreditkarte', 'PayPal']
@@ -73,11 +74,7 @@ export default function Statements() {
     <>
       <Top title="Kontoauszug" sub={r.name} back={`/r/${rid}/archive`} />
       <div className="page">
-        <div className="row" style={{ marginBottom: 10 }}>
-          <button onClick={() => setPeriod(addMonths(period, -1))}>‹</button>
-          <input type="month" value={period} onChange={(e) => e.target.value && setPeriod(e.target.value)} />
-          <button onClick={() => setPeriod(addMonths(period, 1))}>›</button>
-        </div>
+        <MonthBar value={period} onChange={setPeriod} />
         <div className="card">
           <label className="f"><span>{t('stAccount')}</span>
             <input list="st-acc" value={account} onChange={(e) => setAccount(e.target.value)} />
