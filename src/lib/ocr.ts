@@ -22,6 +22,17 @@ export async function compressImage(file: File): Promise<Blob> {
   return await new Promise((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.85))
 }
 
+/** Thu nhỏ ảnh chỉ để gửi cho AI (ảnh lưu trữ vẫn giữ bản gốc) */
+export async function shrinkImage(b: Blob, max: number, q: number): Promise<Blob> {
+  const img = await loadImage(b)
+  URL.revokeObjectURL(img.src)
+  const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight))
+  const c = document.createElement('canvas')
+  c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s)
+  c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+  return await new Promise((res, rej) => c.toBlob((x) => (x ? res(x) : rej(new Error('toBlob'))), 'image/jpeg', q))
+}
+
 /** Độ nét: phương sai Laplacian trên ảnh xám thu nhỏ. Càng thấp càng mờ. */
 export async function sharpness(file: Blob): Promise<number> {
   const img = await loadImage(file)

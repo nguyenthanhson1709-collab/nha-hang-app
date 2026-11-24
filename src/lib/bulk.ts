@@ -4,6 +4,7 @@ import { PDFDocument } from 'pdf-lib'
 import { supabase, type Category, type PayMethod } from './supabase'
 import { r2 } from './format'
 import { aiReadInvoice, aiSegment, type Segment } from './ai'
+import { shrinkImage } from './ocr'
 import { dupKey, findDuplicate, saveChildren, uploadFiles } from './data'
 import { guessCategory, loadMemory } from './categorize'
 import { autoProblems } from './autocheck'
@@ -188,21 +189,37 @@ export async function splitScan(rid: string, pages: ScanPage[], onProgress: (s: 
   const isImg = (i: number) => pages[i].type.startsWith('image/')
   if (pages.some((p) => !p.type.startsWith('image/') && p.type !== 'application/pdf')) return one // có XML (e-Rechnung): giữ nguyên
   try {
+    // PDF chỉ để AI chia trang: ảnh thu nhỏ cho nhẹ (ảnh chụp điện thoại ~1 MB/ảnh làm yêu cầu quá lớn)
     const all = await PDFDocument.create()
     const units: Unit[] = []
+    const srcPdf: Record<number, PDFDocument> = {}
+    const addImage = async (doc: PDFDocument, b: Blob, type: string) => {
+      const bytes = new Uint8Array(await b.arrayBuffer())
+      const img = type === 'image/png' ? await doc.embedPng(bytes) : await doc.embedJpg(bytes)
+      doc.addPage([img.width, img.height]).drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
+    }
     for (let i = 0; i < pages.length; i++) {
       const p = pages[i]
       if (isImg(i)) {
-        const bytes = new Uint8Array(await p.blob.arrayBuffer())
-        const img = p.type === 'image/png' ? await all.embedPng(bytes) : await all.embedJpg(bytes)
-        all.addPage([img.width, img.height]).drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
+        let small: Blob = p.blob, type = p.type
+        try { small = await shrinkImage(p.blob, 1300, 0.6); type = 'image/jpeg' } catch { /* giữ ảnh gốc */ }
+        await addImage(all, small, type)
         units.push({ src: i, page: 0, srcPages: 1 })
       } else {
-        const src = await PDFDocument.load(await p.blob.arrayBuffer(), { ignoreEncryption: true })
+        const src = srcPdf[i] = await PDFDocument.load(await p.blob.arrayBuffer(), { ignoreEncryption: true })
         const n = src.getPageCount()
         for (const pg of await all.copyPages(src, src.getPageIndices())) all.addPage(pg)
         for (let k = 0; k < n; k++) units.push({ src: i, page: k, srcPages: n })
       }
+    }
+    // Cắt một hoá đơn từ các trang gốc (ảnh gốc, trang PDF gốc)
+    const cut = async (from: number, to: number) => {
+      const out = await PDFDocument.create()
+      for (const u of units.slice(from - 1, to)) {
+        if (isImg(u.src)) await addImage(out, pages[u.src].blob, pages[u.src].type)
+        else { const [pg] = await out.copyPages(srcPdf[u.src], [u.page]); out.addPage(pg) }
+      }
+      return new Blob([await out.save() as BlobPart], { type: 'application/pdf' })
     }
     const n = units.length
     if (n <= 1) return one
@@ -213,7 +230,7 @@ export async function splitScan(rid: string, pages: ScanPage[], onProgress: (s: 
     for (const g of groupUnits(units, segs, isImg)) {
       const label = g.from === g.to ? `S. ${g.from}` : `S. ${g.from}–${g.to}`
       if (g.whole) out.push({ blobs: g.whole.map((s) => pages[s].blob), types: g.whole.map((s) => pages[s].type), names: g.whole.map((s) => pages[s].name), pages: label })
-      else out.push({ blobs: [await subPdf(all, g.from, g.to)], types: ['application/pdf'], names: ['rechnung.pdf'], pages: label })
+      else out.push({ blobs: [await cut(g.from, g.to)], types: ['application/pdf'], names: ['rechnung.pdf'], pages: label })
     }
     return out
   } catch (e) {
