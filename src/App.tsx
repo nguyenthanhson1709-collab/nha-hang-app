@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { HashRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
-import { supabase, type Category, type Profile, type Restaurant, type Role } from './lib/supabase'
+import { fromRecoveryLink, supabase, type Category, type Profile, type Restaurant, type Role } from './lib/supabase'
 import { LangCtx, type Lang, useT } from './lib/i18n'
 import { AppCtx, type AppState } from './lib/app'
 import { BottomNav, Spinner, Toaster } from './components/ui'
 import Login from './pages/Login'
+import SetPassword from './pages/SetPassword'
 import Restaurants from './pages/Restaurants'
 import Home from './pages/Home'
 import Scan from './pages/Scan'
@@ -84,19 +85,20 @@ function useLangSetter() { return { setLang: setLangRef } }
 
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
+  const [recovery, setRecovery] = useState(fromRecoveryLink)
   const [lang, setLangS] = useState<Lang>(() => { try { return (localStorage.getItem('nh-lang') as Lang) || 'vi' } catch { return 'vi' } })
   const setLang = (l: Lang) => { setLangS(l); try { localStorage.setItem('nh-lang', l) } catch { /* */ } }
   setLangRef = setLang
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
+    supabase.auth.getSession().then(({ data }) => { if (!data.session) setRecovery(false); setSession(data.session) })
+    const { data } = supabase.auth.onAuthStateChange((e, s) => { if (e === 'PASSWORD_RECOVERY') setRecovery(true); setSession(s) })
     return () => data.subscription.unsubscribe()
   }, [])
 
   return (
     <LangCtx.Provider value={{ lang, setLang }}>
-      {session === undefined ? <Spinner /> : session ? <Shell key={session.user.id} session={session} /> : <Login />}
+      {session === undefined ? <Spinner /> : session && recovery ? <SetPassword onDone={() => setRecovery(false)} /> : session ? <Shell key={session.user.id} session={session} /> : <Login />}
       <Toaster />
     </LangCtx.Provider>
   )

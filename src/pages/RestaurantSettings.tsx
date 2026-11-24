@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { supabase, errMsg, type PayMethod, type Restaurant } from '../lib/supabase'
+import { supabase, errMsg, sendResetEmail, type PayMethod, type Restaurant } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { Sheet, Top, toast, useRestaurant } from '../components/ui'
@@ -35,7 +35,7 @@ export default function RestaurantSettings() {
   const [f, setF] = useState<Restaurant | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [add, setAdd] = useState<{ email: string; full_name: string; password: string; role: 'manager' | 'staff' } | null>(null)
-  const [pwFor, setPwFor] = useState<{ user_id: string; password: string } | null>(null)
+  const [pwFor, setPwFor] = useState<{ user_id: string; password: string; email: string } | null>(null)
   const [newLabel, setNewLabel] = useState('')
   const [ed, setEd] = useState<EditUser | null>(null)
   const [busy, setBusy] = useState(false)
@@ -57,9 +57,16 @@ export default function RestaurantSettings() {
     try { await adminCall({ action: 'create_user', restaurant_id: rid, ...add, lang }); setAdd(null); loadMembers(); toast(t('added')) }
     catch (e) { toast(errMsg(e)) }
   }
+  async function sendMail() {
+    if (!pwFor?.email) return
+    const { error } = await sendResetEmail(pwFor.email)
+    if (error) toast(error.message); else { setPwFor(null); toast(t('resetSent')) }
+  }
+
   async function setPassword() {
     if (!pwFor) return
-    try { await adminCall({ action: 'set_password', restaurant_id: rid, ...pwFor }); setPwFor(null); toast(t('saved')) } catch (e) { toast(errMsg(e)) }
+    if (pwFor.password.length < 8) { toast(t('pwTooShort')); return }
+    try { await adminCall({ action: 'set_password', restaurant_id: rid, user_id: pwFor.user_id, password: pwFor.password }); setPwFor(null); toast(t('saved')) } catch (e) { toast(errMsg(e)) }
   }
   async function remove(uid: string) {
     if (!confirm(t('remove') + '?')) return
@@ -110,7 +117,7 @@ export default function RestaurantSettings() {
                 </div>
                 {owner && <button className="ghost small" title={t('edit')} onClick={() => openEdit(m)}>✎</button>}
                 {(owner || m.role === 'staff') && <>
-                  <button className="ghost small" onClick={() => setPwFor({ user_id: m.user_id, password: '' })}>🔑</button>
+                  <button className="ghost small" onClick={() => setPwFor({ user_id: m.user_id, password: '', email: m.nh_profiles?.email || '' })}>🔑</button>
                   <button className="ghost small" onClick={() => remove(m.user_id)}>✕</button>
                 </>}
               </div>
@@ -200,6 +207,10 @@ export default function RestaurantSettings() {
         {pwFor && <>
           <label className="f"><span>{t('password')} (≥ 8)</span><input value={pwFor.password} onChange={(e) => setPwFor({ ...pwFor, password: e.target.value })} /></label>
           <button className="primary block" onClick={setPassword}>{t('save')}</button>
+          {pwFor.email && <>
+            <div className="small muted" style={{ margin: '14px 0 6px' }}>{pwFor.email}</div>
+            <button className="block" onClick={sendMail}>{t('sendResetMail')}</button>
+          </>}
         </>}
       </Sheet>
     </>

@@ -1,5 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 
+// Mở từ link email đặt lại mật khẩu? Đọc trước khi supabase-js xoá token khỏi địa chỉ.
+export const fromRecoveryLink = typeof location !== 'undefined' && /type=(recovery|invite)/.test(location.hash + location.search)
+
+// Địa chỉ quay lại sau khi bấm link trong email (trang app, không kèm #/...)
+export const appUrl = () => location.origin + location.pathname
+
+export async function sendResetEmail(email: string) {
+  return supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: appUrl() })
+}
+
 export const supabase = createClient(
   // ?. để chạy được trong bài kiểm tra bằng Node (không có import.meta.env)
   (import.meta.env?.VITE_SUPABASE_URL as string) || 'http://localhost',
