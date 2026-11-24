@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { goBack } from '../lib/nav'
 import { supabase, errMsg, signedUrl, BUCKET, type ZBon } from '../lib/supabase'
 import { canManage, useRole } from '../lib/app'
 import { useT } from '../lib/i18n'
@@ -73,7 +74,7 @@ export default function ZbonReview() {
         if (error.code === '23505') throw new Error(t('zExists'))
         throw error
       }
-      toast(t('saved')); nav(`/r/${rid}/kb`)
+      toast(t('saved')); goBack(nav, `/r/${rid}/kb`)
     } catch (e) { toast(errMsg(e)) }
     setBusy(false)
   }
@@ -81,7 +82,7 @@ export default function ZbonReview() {
     if (!confirm(t('confirmDelete'))) return
     if (id !== 'new') { const { error } = await supabase.from('nh_zbons').delete().eq('id', id!); if (error) { toast(errMsg(error)); return } }
     if (z?.files.length) await supabase.storage.from(BUCKET).remove(z.files)
-    nav(`/r/${rid}`)
+    goBack(nav, `/r/${rid}`)
   }
 
   const Row = ({ label, k, bad }: { label: string; k: keyof Z; bad?: boolean }) => (

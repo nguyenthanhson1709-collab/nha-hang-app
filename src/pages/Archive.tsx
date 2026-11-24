@@ -24,11 +24,14 @@ export default function Archive() {
   const role = useRole(rid)
   const m = canManage(role)
   const { categories, profile, reload } = useApp()
-  const [period, setPeriod] = useState(thisMonth())
   const [sp] = useSearchParams()
   const nav = useNavigate()
+  // Tháng và thư mục nằm trên đường dẫn, để quay lại từ hoá đơn vẫn đúng tháng / thư mục đang xem
+  const period = /^\d{4}-\d{2}$/.test(sp.get('m') || '') ? sp.get('m')! : thisMonth()
   const folder = sp.get('f') as Folder | null
-  const setFolder = (f: Folder | null) => nav(f ? `/r/${rid}/archive?f=${f}` : `/r/${rid}/archive`)
+  const url = (f: Folder | null, p: string) => `/r/${rid}/archive?${f ? `f=${f}&` : ''}m=${p}`
+  const setFolder = (f: Folder | null) => nav(url(f, period))
+  const setPeriod = (p: string) => nav(url(folder, p), { replace: true })
   const [docs, setDocs] = useState<Doc[]>([])
   const [zbons, setZbons] = useState<ZBon[]>([])
   const [extra, setExtra] = useState<ExtraBeleg[]>([])
@@ -129,7 +132,7 @@ export default function Archive() {
 
   return (
     <>
-      <Top title={folder ? LABEL[folder] : t('archive')} sub={r.name} back={folder ? `/r/${rid}/archive` : `/r/${rid}`} />
+      <Top title={folder ? LABEL[folder] : t('archive')} sub={r.name} back={folder ? `/r/${rid}/archive?m=${period}` : `/r/${rid}`} />
       <div className="page">
         {!found && (
           <>

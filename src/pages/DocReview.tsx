@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { goBack } from '../lib/nav'
 import { supabase, errMsg, signedUrl, BUCKET, type Doc, type Line, type PayMethod, type TaxRow } from '../lib/supabase'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
@@ -121,7 +122,7 @@ export default function DocReview() {
       for (const l of lines) if (l.category_id && l.name) await remember(l.name, l.category_id)
       if (f.supplier.trim() && !suppliers.some((x) => x.toLowerCase() === f.supplier.trim().toLowerCase())) await supabase.from('nh_suppliers').insert({ name: f.supplier.trim(), tax_id: f.seller_tax_id || null })
       toast(t('saved'))
-      nav(`/r/${rid}`)
+      goBack(nav, `/r/${rid}`)
     } catch (e) { toast(errMsg(e)) }
     setBusy(false)
   }
@@ -153,7 +154,7 @@ export default function DocReview() {
   async function del() {
     if (!doc || !confirm(t('confirmDelete'))) return
     try { await deleteDoc(doc) } catch (e) { toast(errMsg(e)); return }
-    toast(t('deleted')); nav(-1)
+    toast(t('deleted')); goBack(nav, `/r/${rid}`)
   }
 
   async function showHistory() {
