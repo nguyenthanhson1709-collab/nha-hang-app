@@ -4,7 +4,7 @@ import { PDFDocument } from 'pdf-lib'
 import { supabase, type Category, type PayMethod } from './supabase'
 import { r2 } from './format'
 import { aiReadInvoice, aiSegment, type Segment } from './ai'
-import { findDuplicate, saveChildren, supplierKey, uploadFiles } from './data'
+import { dupKey, findDuplicate, saveChildren, uploadFiles } from './data'
 import { guessCategory, loadMemory } from './categorize'
 import { autoProblems } from './autocheck'
 
@@ -78,11 +78,11 @@ export async function bulkUpload(opts: {
     const date = pi?.doc_date || `${period}-01`
     if (!pi) { res.skipped.push({ supplier: sg.supplier, date, gross: 0, pages, why: 'AI' }); return }
     const gross = r2(pi.gross || pi.taxes.reduce((s, x) => s + x.gross, 0))
-    const key = `${supplierKey(pi.supplier)}|${date}|${gross}`
-    if (known.has(key) || await findDuplicate(rid, pi.supplier, date, gross, undefined, pi.invoice_no)) {
+    const key = dupKey({ supplier: pi.supplier, invoice_no: pi.invoice_no, doc_date: date, gross })
+    if ((key && known.has(key)) || await findDuplicate(rid, pi.supplier, date, gross, undefined, pi.invoice_no)) {
       res.skipped.push({ supplier: pi.supplier, date, gross, pages, why: 'dup' }); return
     }
-    known.add(key)
+    if (key) known.add(key)
     // Bargeld = trả tiền mặt; Rechnung = thẻ nếu hoá đơn ghi thẻ, còn lại chuyển khoản
     const payment: PayMethod = folder === 'Bargeld' ? 'cash' : pi.payment === 'card' ? 'card' : 'transfer'
     const files = await uploadFiles(rid, date, [part], ['rechnung.pdf'])

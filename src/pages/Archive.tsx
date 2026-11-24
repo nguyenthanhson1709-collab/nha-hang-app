@@ -5,7 +5,7 @@ import { supabase, errMsg, type Doc, type ZBon } from '../lib/supabase'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { dmy, eur, monthLabel, monthRange, thisMonth } from '../lib/format'
-import { DOC_SELECT, deleteDoc, docsInRange, folderParts, invKey, lockedPeriods, supplierKey } from '../lib/data'
+import { DOC_SELECT, deleteDoc, docsInRange, folderParts, dupKey, lockedPeriods } from '../lib/data'
 import { download, folderFiles, folderPdf, scansPdf, type ExtraBeleg, type Folder } from '../lib/pdf'
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
 import { MonthBar } from '../components/MonthBar'
@@ -74,16 +74,12 @@ export default function Archive() {
   const subs = categories.filter((c) => c.parent_id)
   const suppliers = useMemo(() => [...new Set(docs.map((d) => d.supplier).filter(Boolean))].sort() as string[], [docs])
 
-  // Chứng từ trùng trong tháng: cùng NCC (tên rút gọn) + cùng số HĐ, hoặc cùng NCC + ngày + số tiền
+  // Chứng từ trùng trong tháng: cùng số HĐ + ngày + số tiền (xem dupKey)
   const dupIds = useMemo(() => {
     const seen = new Map<string, string>(), out = new Set<string>()
     for (const d of docs) {
-      const sk = supplierKey(d.supplier), ik = invKey(d.invoice_no)
-      const keys: string[] = []
-      if (ik) keys.push(`#${ik}|${d.doc_date}|${Number(d.gross)}`) // số HĐ + ngày + số tiền trùng nhau
-      if (sk) keys.push(`${sk}|${d.doc_date}|${Number(d.gross)}`)
-      if (sk && ik.length >= 3) keys.push(`${sk}|#${ik}`)
-      for (const k of keys) { const o = seen.get(k); if (o && o !== d.id) { out.add(o); out.add(d.id) } else seen.set(k, d.id) }
+      const k = dupKey(d); if (!k) continue
+      const o = seen.get(k); if (o && o !== d.id) { out.add(o); out.add(d.id) } else seen.set(k, d.id)
     }
     return out
   }, [docs])
