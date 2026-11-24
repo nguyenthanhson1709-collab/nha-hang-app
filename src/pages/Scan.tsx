@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { dropProps } from '../lib/drop'
 import { supabase, errMsg, type PayMethod } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
 import { useT } from '../lib/i18n'
@@ -134,7 +135,7 @@ export default function Scan() {
   return (
     <>
       <Top title={t('scan')} sub={r.name} back={`/r/${rid}`} />
-      <div className="page">
+      <div className="page drop-page" {...dropProps((fl) => { setStaffDone(false); addFiles(fl) })}>
         {m && (
           <div className="seg" style={{ marginBottom: 12 }}>
             {(['purchase', 'zbon', 'sales'] as Kind[]).map((k) => (
@@ -152,7 +153,7 @@ export default function Scan() {
         <button className="primary huge" onClick={() => { setStaffDone(false); setScanner(true) }}>📄 {pages.length ? t('addPage') : t('scan')}</button>
         <div className="grid2" style={{ marginTop: 8 }}>
           <button onClick={() => { setStaffDone(false); cam.current?.click() }}>📷 {t('takePhoto')}</button>
-          <button onClick={() => { setStaffDone(false); pick.current?.click() }}>📁 {t('chooseFile')}</button>
+          <button onClick={() => { setStaffDone(false); pick.current?.click() }}>📁 {t('chooseFile')}<span className="drop-hint">{t('dropHint')}</span></button>
         </div>
         {scanner && <Scanner onDone={fromScanner} onCancel={() => setScanner(false)} />}
 

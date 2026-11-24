@@ -1,6 +1,7 @@
 // Kontoauszug: tải sao kê ngân hàng lên theo tháng (Berliner Voba, Viva Wallet…)
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { dropProps } from '../lib/drop'
 import { supabase, errMsg, signedUrl, BUCKET } from '../lib/supabase'
 import { canManage, useRole } from '../lib/app'
 import { useT } from '../lib/i18n'
@@ -80,8 +81,8 @@ export default function Statements() {
             <input list="st-acc" value={account} onChange={(e) => setAccount(e.target.value)} />
             <datalist id="st-acc">{ACCOUNTS.map((a) => <option key={a} value={a} />)}</datalist>
           </label>
-          <label className={`btn primary block${busy ? ' disabled' : ''}`} style={{ textAlign: 'center' }}>
-            ⬆ {t('stUpload')} ({monthLabel(period)})
+          <label className={`btn primary block drop${busy ? ' disabled' : ''}`} style={{ textAlign: 'center' }} {...dropProps((fl) => upload(fl), !!busy)}>
+            ⬆ {t('stUpload')} ({monthLabel(period)})<span className="drop-hint">{t('dropHint')}</span>
             <input type="file" accept="application/pdf,.pdf,image/*" multiple hidden onChange={(e) => { upload(e.target.files); e.target.value = '' }} />
           </label>
           {busy && <div className="small muted" style={{ marginTop: 6 }}>{busy}</div>}

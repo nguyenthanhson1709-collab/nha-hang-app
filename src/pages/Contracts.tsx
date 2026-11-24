@@ -1,6 +1,7 @@
 // Hợp đồng ghi nợ tự động (Lastschrift): công ty tự rút tiền hàng tháng từ tài khoản
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { dropProps } from '../lib/drop'
 import { supabase, errMsg, signedUrl, BUCKET } from '../lib/supabase'
 import { canManage, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
@@ -100,7 +101,7 @@ export default function Contracts() {
               </div>
             ))}
             {newFiles.map((f, i) => <div key={i} className="small">➕ {f.name} <button className="ghost" onClick={() => setNewFiles(newFiles.filter((_, j) => j !== i))}>✕</button></div>)}
-            <label className="btn block" style={{ marginTop: 4 }}>📄 {t('ctUpload')}
+            <label className="btn block drop" style={{ marginTop: 4 }} {...dropProps((fl) => setNewFiles([...newFiles, ...Array.from(fl)]))}>📄 {t('ctUpload')}<span className="drop-hint">{t('dropHint')}</span>
               <input type="file" accept="application/pdf,.pdf,image/*" multiple hidden onChange={(e) => { setNewFiles([...newFiles, ...Array.from(e.target.files || [])]); e.target.value = '' }} />
             </label>
           </div>

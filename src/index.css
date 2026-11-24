@@ -173,3 +173,14 @@ button.danger, .btn.danger { border-color: var(--err); color: var(--err); backgr
 .line-item.no-cat .li-no { color: var(--err); background: #5A2420; }
 select.cat-missing { border-color: var(--err) !important; color: var(--err); background: var(--err-bg); font-weight: 700; }
 tr.no-cat-row td:first-child { color: var(--err); box-shadow: inset 3px 0 0 var(--err); }
+
+/* Kéo thả file (chỉ máy tính có chuột) */
+.drop-hint { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  label.drop, .drop-page button { flex-direction: column; }
+  .drop-hint { display: block; font-size: .78rem; font-weight: 500; opacity: .8; margin-top: 2px; }
+  label.drop { border: 2px dashed transparent; min-height: 64px; }
+  label.btn.drop:not(.primary) { border-color: var(--line); }
+}
+.drag-over { outline: 3px dashed var(--brand) !important; outline-offset: 3px; background: var(--brand-2) !important; color: var(--brand) !important; }
+.drop-page.drag-over { outline-offset: -6px; border-radius: 16px; }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { dropProps } from '../lib/drop'
 import { supabase, errMsg, type Doc, type ZBon } from '../lib/supabase'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
@@ -216,14 +217,14 @@ export default function Archive() {
               </> : null}
             </div>}
             {folder && folder !== 'Rechnungsausgang' && !locked && (
-              <label className={`btn primary block${busy ? ' disabled' : ''}`} style={{ marginTop: 8, textAlign: 'center' }}>
-                ⬆ {t('uploadData')}
+              <label className={`btn primary block drop${busy ? ' disabled' : ''}`} style={{ marginTop: 8, textAlign: 'center' }} {...dropProps(async (fl) => { for (const f of Array.from(fl)) await upload(folder, f) }, !!busy)}>
+                ⬆ {t('uploadData')}<span className="drop-hint">{t('dropHint')}</span>
                 <input type="file" accept="application/pdf,.pdf" hidden disabled={!!busy} onChange={(e) => { upload(folder, e.target.files?.[0]); e.target.value = '' }} />
               </label>
             )}
             {folder === 'Rechnungsausgang' && !locked && (
-              <label className={`btn primary block${busy ? ' disabled' : ''}`} style={{ marginTop: 8, textAlign: 'center' }}>
-                ⬆ {t('uploadZ')}
+              <label className={`btn primary block drop${busy ? ' disabled' : ''}`} style={{ marginTop: 8, textAlign: 'center' }} {...dropProps((fl) => uploadZ(fl), !!busy)}>
+                ⬆ {t('uploadZ')}<span className="drop-hint">{t('dropHint')}</span>
                 <input type="file" accept="application/pdf,.pdf,image/*" multiple hidden disabled={!!busy} onChange={(e) => { uploadZ(e.target.files); e.target.value = '' }} />
               </label>
             )}
