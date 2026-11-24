@@ -11,7 +11,7 @@ import { docsInRange, zbonsInRange } from '../lib/data'
 import { download, reportPdf } from '../lib/pdf'
 import { Spinner, Top, toast, useRestaurant } from '../components/ui'
 
-type Mode = 'month' | 'quarter' | 'year' | 'custom'
+type Mode = 'day' | 'month' | 'quarter' | 'year' | 'custom'
 type Tab = 'umsatz' | 'supplier' | 'food' | 'drink' | 'nonfood'
 type Item = { name: string; qty: number; sum: number; n: number; last: string; suppliers: Set<string>; ids: string[]; cid: string | null; unit: string }
 type DL = NonNullable<Doc['nh_document_lines']>[number]
@@ -38,9 +38,15 @@ function Bars({ data }: { data: { label: string; value: number }[] }) {
   )
 }
 
+/** Khoá gộp mặt hàng trùng: bỏ hoa/thường, dấu, ký tự thừa và đơn vị đứng cuối ("Kaiserschoten Kg" = "Kaiserschoten") */
+function itemKey(name: string) {
+  let k = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9äöüß]+/g, ' ').trim()
+  for (let i = 0; i < 2; i++) k = k.replace(/\s+(kg|g|stk|st|stuck|kiste|ki|bund|pck|pack|pak|karton|krt|ka|fl|flasche|dose|ds|sack|schale|l|liter|netz|beutel|btl)$/, '').trim()
+  return k
+}
 /** Gộp dòng hàng theo tên */
 function addItem(map: Map<string, Item>, l: DL, date: string, supplier: string) {
-  const k = l.name.trim().toLowerCase().replace(/\s+/g, ' ')
+  const k = itemKey(l.name)
   if (!k) return
   const it = map.get(k) || { name: l.name.trim(), qty: 0, sum: 0, n: 0, last: '', suppliers: new Set<string>(), ids: [], cid: null, unit: '' }
   it.qty += Number(l.qty || 1); it.sum += Number(l.total); it.n++
@@ -62,6 +68,7 @@ export default function Reports() {
   const [tab, setTab] = useState<Tab | null>(null)
   const [mode, setMode] = useState<Mode>('month')
   const [anchor, setAnchor] = useState(thisMonth())
+  const [day, setDay] = useState(() => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }))
   const [custom, setCustom] = useState(monthRange(thisMonth()))
   const [docs, setDocs] = useState<Doc[] | null>(null)
   const [zs, setZs] = useState<ZBon[]>([])
@@ -69,11 +76,12 @@ export default function Reports() {
 
   const range = useMemo(() => {
     if (mode === 'custom') return custom
+    if (mode === 'day') return { from: day, to: day }
     const [y, m] = anchor.split('-').map(Number)
     if (mode === 'month') return monthRange(anchor)
     if (mode === 'quarter') { const q0 = Math.floor((m - 1) / 3) * 3 + 1; const a = `${y}-${String(q0).padStart(2, '0')}`; return { from: monthRange(a).from, to: monthRange(addMonths(a, 2)).to } }
     return { from: `${y}-01-01`, to: `${y}-12-31` }
-  }, [mode, anchor, custom])
+  }, [mode, anchor, custom, day])
 
   useEffect(() => {
     setDocs(null)
@@ -94,12 +102,12 @@ export default function Reports() {
     }
   }, [categories])
 
-  const label = mode === 'month' ? monthLabel(anchor) : mode === 'quarter' ? `Q${Math.floor((Number(anchor.slice(5)) - 1) / 3) + 1}/${anchor.slice(0, 4)}` : mode === 'year' ? anchor.slice(0, 4) : `${dmy(range.from)}–${dmy(range.to)}`
+  const label = mode === 'day' ? dmy(day) : mode === 'month' ? monthLabel(anchor) : mode === 'quarter' ? `Q${Math.floor((Number(anchor.slice(5)) - 1) / 3) + 1}/${anchor.slice(0, 4)}` : mode === 'year' ? anchor.slice(0, 4) : `${dmy(range.from)}–${dmy(range.to)}`
 
   // Umsatz theo ngày (tháng / tự chọn ≤ 62 ngày) hoặc theo tháng
   const umsatz = useMemo(() => {
     const days = Math.round((Date.parse(range.to) - Date.parse(range.from)) / 864e5) + 1
-    const byDay = mode === 'month' || (mode === 'custom' && days <= 62)
+    const byDay = mode === 'month' || mode === 'day' || (mode === 'custom' && days <= 62)
     const keys: string[] = []
     if (byDay) { if (mode === 'month') keys.push(...daysOfMonth(anchor)); else for (let i = 0; i < days; i++) keys.push(new Date(Date.parse(range.from) + i * 864e5).toISOString().slice(0, 10)) }
     else { let p = range.from.slice(0, 7); while (p <= range.to.slice(0, 7)) { keys.push(p); p = addMonths(p, 1) } }
@@ -222,9 +230,15 @@ export default function Reports() {
         onBack={() => (sup ? setSup(null) : setTab(null))} />
       <div className="page">
         <div className="seg" style={{ marginBottom: 8 }}>
-          {(['month', 'quarter', 'year', 'custom'] as Mode[]).map((x) => <button key={x} className={mode === x ? 'sel' : ''} onClick={() => setMode(x)}>{t(x)}</button>)}
+          {(['day', 'month', 'quarter', 'year', 'custom'] as Mode[]).map((x) => <button key={x} className={mode === x ? 'sel' : ''} onClick={() => setMode(x)}>{t(x)}</button>)}
         </div>
-        {mode !== 'custom' ? (
+        {mode === 'day' ? (
+          <div className="row" style={{ marginBottom: 10 }}>
+            <button onClick={() => setDay(new Date(Date.parse(day) - 864e5).toISOString().slice(0, 10))}>‹</button>
+            <input className="grow" type="date" style={{ textAlign: 'center', fontWeight: 600 }} value={day} onChange={(e) => e.target.value && setDay(e.target.value)} />
+            <button onClick={() => setDay(new Date(Date.parse(day) + 864e5).toISOString().slice(0, 10))}>›</button>
+          </div>
+        ) : mode !== 'custom' ? (
           <div className="row" style={{ marginBottom: 10 }}>
             <button onClick={() => setAnchor(addMonths(anchor, mode === 'month' ? -1 : mode === 'quarter' ? -3 : -12))}>‹</button>
             <div className="grow" style={{ textAlign: 'center', fontWeight: 600 }}>{label}</div>
