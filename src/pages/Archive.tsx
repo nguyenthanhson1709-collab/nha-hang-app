@@ -5,7 +5,7 @@ import { supabase, errMsg, type Doc, type ZBon } from '../lib/supabase'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { dmy, eur, monthLabel, monthRange, thisMonth } from '../lib/format'
-import { DOC_SELECT, deleteDoc, docsInRange, folderParts, lockedPeriods } from '../lib/data'
+import { DOC_SELECT, deleteDoc, docsInRange, folderParts, invKey, lockedPeriods, supplierKey } from '../lib/data'
 import { download, folderFiles, folderPdf, scansPdf, type ExtraBeleg, type Folder } from '../lib/pdf'
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
 import { MonthBar } from '../components/MonthBar'
@@ -73,6 +73,17 @@ export default function Archive() {
   const subs = categories.filter((c) => c.parent_id)
   const suppliers = useMemo(() => [...new Set(docs.map((d) => d.supplier).filter(Boolean))].sort() as string[], [docs])
 
+  // Chứng từ trùng trong tháng: cùng NCC (tên rút gọn) + cùng số HĐ, hoặc cùng NCC + ngày + số tiền
+  const dupIds = useMemo(() => {
+    const seen = new Map<string, string>(), out = new Set<string>()
+    for (const d of docs) {
+      const sk = supplierKey(d.supplier); if (!sk) continue
+      const keys = [`${sk}|${d.doc_date}|${Number(d.gross)}`]
+      if (invKey(d.invoice_no).length >= 3) keys.push(`${sk}|#${invKey(d.invoice_no)}`)
+      for (const k of keys) { const o = seen.get(k); if (o && o !== d.id) { out.add(o); out.add(d.id) } else seen.set(k, d.id) }
+    }
+    return out
+  }, [docs])
   const items = useMemo(() => {
     const src = found || docs
     const out: { d: Doc; amount: number; method: string; folder: Folder }[] = []
@@ -186,7 +197,7 @@ export default function Archive() {
             <Link className="it" key={d.id + i} to={`/r/${rid}/doc/${d.id}`}>
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="t">{d.supplier || '—'}{folderParts(d).length > 1 && <span className="tag" style={{ marginLeft: 6 }}>⇄</span>}</div>
-                <div className="small muted">{dmy(d.doc_date)}{found && ` · ${LABEL[fo]}`}{d.status === 'uploaded' && <> · <span className="tag warn">{t('uploaded')}</span></>}{liveFlags(d).length > 0 && <> · <span className="tag err">!</span></>}</div>
+                <div className="small muted">{dmy(d.doc_date)}{found && ` · ${LABEL[fo]}`}{d.status === 'uploaded' && <> · <span className="tag warn">{t('uploaded')}</span></>}{liveFlags(d).length > 0 && <> · <span className="tag err">!</span></>}{dupIds.has(d.id) && <> · <span className="tag err">⧉ {t('dupShort')}</span></>}</div>
               </div>
               <div className="right"><div className="num">{eur(amount)}</div>{method && <PayTag m={method.split('+')[0]} />}</div>
               {m && !locked && <button className="ghost small" title={t('delete')} style={{ marginLeft: 4 }} onClick={async (e) => {

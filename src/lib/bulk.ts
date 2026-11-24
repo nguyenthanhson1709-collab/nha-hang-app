@@ -4,7 +4,7 @@ import { PDFDocument } from 'pdf-lib'
 import { supabase, type Category, type PayMethod } from './supabase'
 import { r2 } from './format'
 import { aiReadInvoice, aiSegment, type Segment } from './ai'
-import { findDuplicate, saveChildren, uploadFiles } from './data'
+import { findDuplicate, saveChildren, supplierKey, uploadFiles } from './data'
 import { guessCategory, loadMemory } from './categorize'
 import { autoProblems } from './autocheck'
 
@@ -78,8 +78,8 @@ export async function bulkUpload(opts: {
     const date = pi?.doc_date || `${period}-01`
     if (!pi) { res.skipped.push({ supplier: sg.supplier, date, gross: 0, pages, why: 'AI' }); return }
     const gross = r2(pi.gross || pi.taxes.reduce((s, x) => s + x.gross, 0))
-    const key = `${(pi.supplier || '').toLowerCase()}|${date}|${gross}|${pi.invoice_no || ''}`
-    if (known.has(key) || await findDuplicate(rid, pi.supplier, date, gross)) {
+    const key = `${supplierKey(pi.supplier)}|${date}|${gross}`
+    if (known.has(key) || await findDuplicate(rid, pi.supplier, date, gross, undefined, pi.invoice_no)) {
       res.skipped.push({ supplier: pi.supplier, date, gross, pages, why: 'dup' }); return
     }
     known.add(key)

@@ -38,12 +38,33 @@ export async function saveChildren(docId: string, payments: Payment[], taxes: Ta
   if (lines.length) { const { error } = await supabase.from('nh_document_lines').insert(strip(lines.map((l, i) => ({ ...l, pos: i })))); if (error) throw error }
 }
 
-export async function findDuplicate(rid: string, supplier: string | null, date: string, gross: number, excludeId?: string) {
-  if (!supplier || !gross) return null
-  let q = supabase.from('nh_documents').select('id').eq('restaurant_id', rid).eq('doc_date', date).ilike('supplier', supplier).eq('gross', gross)
-  if (excludeId) q = q.neq('id', excludeId)
-  const { data } = await q.limit(1)
-  return data?.[0]?.id || null
+/** Tên nhà cung cấp rút gọn để so trùng: bỏ GmbH, UG, KG, e.K., & Co…, dấu và khoảng trắng ("Hung Phat GmbH" = "Hùng Phát") */
+export function supplierKey(s: string | null | undefined) {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase()
+    .replace(/\b(gmbh|ug|kg|ohg|ag|ek|e\.k\.|co|haftungsbeschrankt|mbh|inh|inhaber)\b/g, '').replace(/[^a-z0-9]/g, '')
+}
+export const invKey = (s: string | null | undefined) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
+/** Tìm chứng từ trùng: cùng số hoá đơn + cùng nhà cung cấp, hoặc cùng ngày + cùng số tiền + cùng nhà cung cấp (tên rút gọn) */
+export async function findDuplicate(rid: string, supplier: string | null, date: string, gross: number, excludeId?: string, invoiceNo?: string | null) {
+  const sk = supplierKey(supplier)
+  const ik = invKey(invoiceNo)
+  const same = (x: { supplier: string | null }) => { const k = supplierKey(x.supplier); return !sk || !k || k === sk || k.startsWith(sk) || sk.startsWith(k) }
+  if (gross) {
+    let q = supabase.from('nh_documents').select('id, supplier').eq('restaurant_id', rid).eq('doc_date', date).eq('gross', gross)
+    if (excludeId) q = q.neq('id', excludeId)
+    const { data } = await q.limit(20)
+    const hit = (data || []).find((x) => sk && same(x))
+    if (hit) return hit.id as string
+  }
+  if (ik.length >= 3) {
+    let q = supabase.from('nh_documents').select('id, supplier, invoice_no').eq('restaurant_id', rid).ilike('invoice_no', `%${(invoiceNo || '').trim().replace(/[%_]/g, '')}%`)
+    if (excludeId) q = q.neq('id', excludeId)
+    const { data } = await q.limit(20)
+    const hit = (data || []).find((x) => invKey(x.invoice_no) === ik && same(x))
+    if (hit) return hit.id as string
+  }
+  return null
 }
 
 export async function docsInRange(rid: string | null, from: string, to: string, byPeriod = false) {

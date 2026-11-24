@@ -96,7 +96,7 @@ export default function Scan() {
       const date = pi.doc_date || todayIso()
       const gross0 = r2(pi.gross || pi.taxes.reduce((s, x) => s + x.gross, 0))
       // Báo trùng ngay khi scan: cùng nhà cung cấp, ngày, tổng tiền
-      const dup = await findDuplicate(rid!, pi.supplier, date, gross0)
+      const dup = await findDuplicate(rid!, pi.supplier, date, gross0, undefined, pi.invoice_no)
       if (dup && !window.confirm(`${t('duplicate')}\n\n${pi.supplier} · ${date.split('-').reverse().join('.')} · ${gross0.toFixed(2).replace('.', ',')} €\n\n${t('saveAnyway')}?`)) {
         setBusy(''); toast(t('duplicate')); return
       }

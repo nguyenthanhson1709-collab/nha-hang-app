@@ -107,7 +107,7 @@ export default function DocReview() {
     if (!payMode) { toast(t('mustChoosePayment')); return }
     if (payBad) { toast(t('paymentSumMismatch')); return }
     if (!force) {
-      const dup = await findDuplicate(doc.restaurant_id, f.supplier, f.doc_date, f.gross, doc.id)
+      const dup = await findDuplicate(doc.restaurant_id, f.supplier, f.doc_date, f.gross, doc.id, f.invoice_no)
       if (dup) { setDupId(dup); return }
     }
     setBusy(true)
