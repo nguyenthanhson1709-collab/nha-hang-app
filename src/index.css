@@ -167,3 +167,9 @@ button.danger, .btn.danger { border-color: var(--err); color: var(--err); backgr
 .tax-sum { padding: 4px 4px 10px; }
 .tax-sum > div { display: flex; flex-direction: column; text-align: right; }
 .tax-row .grid3, .tax-sum.grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+
+/* Mặt hàng chưa ghép vào nhóm: tô đỏ */
+.line-item.no-cat, .line-item.no-cat:nth-of-type(even) { border-color: var(--err); border-left-color: var(--err); background: var(--err-bg); }
+.line-item.no-cat .li-no { color: var(--err); background: #5A2420; }
+select.cat-missing { border-color: var(--err) !important; color: var(--err); background: var(--err-bg); font-weight: 700; }
+tr.no-cat-row td:first-child { color: var(--err); box-shadow: inset 3px 0 0 var(--err); }

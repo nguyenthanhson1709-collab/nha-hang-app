@@ -75,6 +75,7 @@ export default function DocReview() {
   const taxBad = taxes.some((x) => Math.abs(x.net + x.tax - x.gross) > 0.02) || (taxes.length > 0 && Math.abs(taxSum - f.gross) > 0.02)
   const basis = lines.length ? linesBasis(lines, taxes, f.gross) : 'gross'
   const linesBad = !basis
+  const noCat = lines.filter((l) => !l.category_id).length
   const netSum = r2(taxes.reduce((s, x) => s + x.net, 0)), vatSum = r2(taxes.reduce((s, x) => s + x.tax, 0))
   const over250 = f.kind === 'purchase' && f.gross > 250 && !f.seller_tax_id.trim()
   const payments = useMemo(() => {
@@ -230,13 +231,14 @@ export default function DocReview() {
             <div className="card">
               <button type="button" className="ghost block" style={{ justifyContent: 'space-between', padding: 0, minHeight: 32 }} onClick={() => setOpenLines(!openLines)}>
                 <h3 style={{ margin: 0 }}>{openLines ? '▾' : '▸'} {t('lines')} ({lines.length})</h3>
+                {noCat > 0 && <span className="tag err" style={{ marginLeft: 'auto', marginRight: 8 }}>{noCat} {t('noCat')}</span>}
                 <span className={`small ${linesBad ? 'kb-out' : 'muted'}`}>Σ {eur(lineSum)}{basis === 'net' && ' Netto'}</span></button>
               {basis === 'net' && <div className="small muted" style={{ marginTop: 4 }}>{t('linesNet')}: {eur(lineSum)} + MwSt {eur(vatSum)} = <b>{eur(r2(lineSum + vatSum))}</b> Brutto</div>}
               {basis === 'gross' && !readOnly && taxes.some((x) => x.rate > 0) && lines.length > 0 && <div className="small muted" style={{ marginTop: 4 }}>
                 {t('linesGross')} <button className="ghost small" style={{ minHeight: 30 }} onClick={() => setLines(linesToNet(lines, taxes))}>{t('toNet')}</button></div>}
               {linesBad && <div className="alert warn">{t('linesMismatch')}<br /><span className="small">Σ {eur(lineSum)} ≠ Netto {eur(netSum)} / Brutto {eur(f.gross)}</span></div>}
               {openLines && lines.map((l, i) => (
-                <div className="line-item" key={i}>
+                <div className={`line-item${l.category_id ? '' : ' no-cat'}`} key={i}>
                   <div className="row"><span className="li-no">{i + 1}</span><input className="li-name" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder={t('item')} />
                     {!readOnly && <button className="ghost" onClick={() => setLines(lines.filter((_, j) => j !== i))}>✕</button>}</div>
                   <div className="row" style={{ marginTop: 6 }}>
@@ -253,7 +255,7 @@ export default function DocReview() {
                       <option value="">–</option><option value={7}>7%</option><option value={19}>19%</option><option value={0}>0%</option></select>
                   </div>
                   <div className="row" style={{ marginTop: 6 }}>
-                    <select value={l.category_id || ''} onChange={(e) => { setLine(i, { category_id: e.target.value || null }); setRemembered((s) => { const n = new Set(s); n.delete(i); return n }) }}>
+                    <select className={l.category_id ? '' : 'cat-missing'} value={l.category_id || ''} onChange={(e) => { setLine(i, { category_id: e.target.value || null }); setRemembered((s) => { const n = new Set(s); n.delete(i); return n }) }}>
                       <option value="">— {t('category')} —</option>
                       {tops.map((tp) => (
                         <optgroup key={tp.id} label={catName(tp, lang)}>

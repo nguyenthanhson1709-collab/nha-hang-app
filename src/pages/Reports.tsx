@@ -320,10 +320,10 @@ function ItemTable({ items, t, showSupplier, cat }: { items: Item[]; t: ReturnTy
         <thead><tr><th>{t('item')}</th><th className="num">{t('qty')}</th><th className="num">Ø</th><th className="num">{t('total')}</th></tr></thead>
         <tbody>
           {items.map((i) => (
-            <tr key={i.name + i.last}>
+            <tr key={i.name + i.last} className={cat && !i.cid ? 'no-cat-row' : ''}>
               <td>{i.name}<div className="small muted">{dmy(i.last)}{showSupplier && ` · ${[...i.suppliers].join(', ')}`}</div>
                 {cat && (
-                  <select className="cat-sel" value={i.cid || ''} onChange={(e) => cat.onChange(i, e.target.value || null)}>
+                  <select className={`cat-sel${i.cid ? '' : ' cat-missing'}`} value={i.cid || ''} onChange={(e) => cat.onChange(i, e.target.value || null)}>
                     <option value="">— {t('category')} —</option>
                     {tops.map((tp) => (
                       <optgroup key={tp.id} label={catName(tp, cat.lang as 'vi' | 'de')}>

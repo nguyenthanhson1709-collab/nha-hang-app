@@ -64,6 +64,7 @@ export function QuickReview({ docs, rid, onDone }: { docs: Doc[]; rid: string; o
               <div className="small" style={{ marginTop: 2 }}>
                 {(x.d.nh_document_taxes || []).map((tx) => <span key={tx.rate} className="muted" style={{ marginRight: 8 }}>{Number(tx.rate)}%: {eur(Number(tx.gross))}</span>)}
               </div>
+              {(() => { const n = (x.d.nh_document_lines || []).filter((l) => !l.category_id).length; return n > 0 && <div style={{ marginTop: 4 }}><span className="tag err">{n} {t('noCat')}</span></div> })()}
               {x.problems.length > 0
                 ? <div style={{ marginTop: 4 }}>{x.problems.map((p) => <span key={p} className="tag warn" style={{ marginRight: 4 }}>{P[p]?.[lang === 'de' ? 1 : 0] || p}</span>)}</div>
                 : <div style={{ marginTop: 4 }}><span className="tag">✓ OK</span></div>}
