@@ -228,7 +228,11 @@ export default function DocReview() {
               <button type="button" className="ghost block" style={{ justifyContent: 'space-between', padding: 0, minHeight: 32 }} onClick={() => setOpenLines(!openLines)}>
                 <h3 style={{ margin: 0 }}>{openLines ? '▾' : '▸'} {t('lines')} ({lines.length})</h3>
                 <span className={`small ${linesBad ? 'kb-out' : 'muted'}`}>Σ {eur(lineSum)}</span></button>
-              {linesBad && <div className="alert warn">{t('linesMismatch')}</div>}
+              {linesBad && (() => {
+                const g = linesToGross(lines, taxes, f.gross)
+                const fix = !readOnly && g !== lines
+                return <div className="alert warn">{t('linesMismatch')}{fix && <><br />{t('linesNet')} <button className="primary" style={{ marginTop: 6, minHeight: 36 }} onClick={() => setLines(g)}>{t('toGross')}</button></>}</div>
+              })()}
               {openLines && lines.map((l, i) => (
                 <div className="line-item" key={i}>
                   <div className="row"><span className="li-no">{i + 1}</span><input className="li-name" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder={t('item')} />
