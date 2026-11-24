@@ -1,5 +1,6 @@
 // Thanh chọn ngày / quý / năm cùng kiểu với MonthBar: ‹ [nhãn ▾] ›, bấm vào giữa mở bảng chọn.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useLang } from '../lib/i18n'
 import { addMonths } from '../lib/format'
 
@@ -12,13 +13,18 @@ const MON_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'A
 function usePop() {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
-    const h = (e: MouseEvent | TouchEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false) }
+    const h = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node
+      if (box.current?.contains(t) || panel.current?.contains(t)) return
+      setOpen(false)
+    }
     document.addEventListener('mousedown', h); document.addEventListener('touchstart', h)
     return () => { document.removeEventListener('mousedown', h); document.removeEventListener('touchstart', h) }
   }, [open])
-  return { open, setOpen, box }
+  return { open, setOpen, box, panel }
 }
 
 function Bar({ label, onPrev, onNext, pop, children, compact }: { label: ReactNode; onPrev?: () => void; onNext?: () => void; pop: ReturnType<typeof usePop>; children: ReactNode; compact?: boolean }) {
@@ -27,9 +33,22 @@ function Bar({ label, onPrev, onNext, pop, children, compact }: { label: ReactNo
       {onPrev && <button className="mb-arrow" aria-label="prev" onClick={onPrev}>‹</button>}
       <button className="mb-label" onClick={() => pop.setOpen(!pop.open)}>{label}<span className="mb-caret">{pop.open ? '▴' : '▾'}</span></button>
       {onNext && <button className="mb-arrow" aria-label="next" onClick={onNext}>›</button>}
-      {pop.open && <div className="mb-pop">{children}</div>}
+      {pop.open && <Pop pop={pop}>{children}</Pop>}
     </div>
   )
+}
+
+// Không đủ chỗ phía dưới (ví dụ trong khung nhập ở đáy màn hình điện thoại): hiện bảng chọn ở giữa màn hình
+function Pop({ pop, children }: { pop: ReturnType<typeof usePop>; children: ReactNode }) {
+  const [float] = useState(() => {
+    const r = pop.box.current?.getBoundingClientRect()
+    return !!r && (window.innerHeight - r.bottom < 430 || !!pop.box.current?.closest('.sheet'))
+  })
+  if (!float) return <div className="mb-pop" ref={pop.panel}>{children}</div>
+  return createPortal(
+    <div className="mb-float-bg" onClick={() => pop.setOpen(false)}>
+      <div className="mb-pop mb-float" ref={pop.panel} onClick={(e) => e.stopPropagation()}>{children}</div>
+    </div>, document.body)
 }
 
 /** Lịch một tháng để chọn ngày */
