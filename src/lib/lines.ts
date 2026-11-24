@@ -55,3 +55,14 @@ export function liveFlags(d: Doc): string[] {
   const taxes = (d.nh_document_taxes || []).map((t) => ({ net: Number(t.net) }))
   return ls.length && linesBasis(ls, taxes, Number(d.gross)) ? f.filter((x) => x !== 'lines_mismatch') : f
 }
+
+/** Ngược lại linesToGross: dòng đang là Brutto -> về giá Netto như in trên hoá đơn sỉ */
+export function linesToNet<T extends L>(lines: T[], taxes: { rate: number }[]): T[] {
+  const one = taxes.length === 1 ? Number(taxes[0].rate) : null
+  return lines.map((l) => {
+    const rate = l.rate ?? one
+    if (!rate) return l
+    const f = 1 + rate / 100
+    return { ...l, total: r2(Number(l.total) / f), unit_price: l.unit_price == null ? null : r2(Number(l.unit_price) / f) }
+  })
+}

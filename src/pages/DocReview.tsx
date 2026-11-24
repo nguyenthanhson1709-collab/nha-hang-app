@@ -6,7 +6,7 @@ import { useLang, useT } from '../lib/i18n'
 import { dmy, eur, monthLabel, normName, r2 } from '../lib/format'
 import { findDuplicate, folderParts, getDoc, lockedPeriods, saveChildren } from '../lib/data'
 import { guessCategory, loadMemory, remember } from '../lib/categorize'
-import { linesBasis } from '../lib/lines'
+import { linesBasis, linesToNet } from '../lib/lines'
 import { docPdf } from '../lib/pdf'
 import { Money, PayTag, Sheet, Spinner, Top, toast, useRestaurant, ComboInput } from '../components/ui'
 import { PdfPreview } from '../components/PdfPreview'
@@ -234,6 +234,8 @@ export default function DocReview() {
                 <h3 style={{ margin: 0 }}>{openLines ? '▾' : '▸'} {t('lines')} ({lines.length})</h3>
                 <span className={`small ${linesBad ? 'kb-out' : 'muted'}`}>Σ {eur(lineSum)}{basis === 'net' && ' Netto'}</span></button>
               {basis === 'net' && <div className="small muted" style={{ marginTop: 4 }}>{t('linesNet')}: {eur(lineSum)} + MwSt {eur(vatSum)} = <b>{eur(r2(lineSum + vatSum))}</b> Brutto</div>}
+              {basis === 'gross' && !readOnly && taxes.some((x) => x.rate > 0) && lines.length > 0 && <div className="small muted" style={{ marginTop: 4 }}>
+                {t('linesGross')} <button className="ghost small" style={{ minHeight: 30 }} onClick={() => setLines(linesToNet(lines, taxes))}>{t('toNet')}</button></div>}
               {linesBad && <div className="alert warn">{t('linesMismatch')}<br /><span className="small">Σ {eur(lineSum)} ≠ Netto {eur(netSum)} / Brutto {eur(f.gross)}</span></div>}
               {openLines && lines.map((l, i) => (
                 <div className="line-item" key={i}>
