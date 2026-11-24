@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { sendResetEmail, supabase } from '../lib/supabase'
 import { useLang, useT } from '../lib/i18n'
 
 export default function Login() {
@@ -11,6 +11,16 @@ export default function Login() {
   const [busy, setBusy] = useState(false)
   const [noOwner, setNoOwner] = useState(false)
   const [setup, setSetup] = useState(false)
+  const [info, setInfo] = useState('')
+
+  async function forgot() {
+    setErr(''); setInfo('')
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setErr(t('email') + '?'); return }
+    setBusy(true)
+    const { error } = await sendResetEmail(email)
+    setBusy(false)
+    if (error) setErr(error.message); else setInfo(t('resetSent'))
+  }
 
   useEffect(() => { supabase.rpc('nh_has_owner').then(({ data }) => setNoOwner(data === false)) }, [])
 
@@ -46,7 +56,9 @@ export default function Login() {
         <label className="f"><span>{t('email')}</span><input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
         <label className="f"><span>{t('password')}</span><input type="password" autoComplete={setup ? 'new-password' : 'current-password'} minLength={setup ? 8 : undefined} value={pw} onChange={(e) => setPw(e.target.value)} required /></label>
         {err && <div className="alert err">{err}</div>}
+        {info && <div className="alert ok">{info}</div>}
         <button className="primary block" disabled={busy}>{setup ? (lang === 'de' ? 'Inhaber-Konto anlegen' : 'Tạo tài khoản chủ') : t('login')}</button>
+        {!setup && <button type="button" className="ghost block" style={{ marginTop: 8 }} disabled={busy} onClick={forgot}>{t('forgotPw')}</button>}
         {noOwner && !setup && <button type="button" className="ghost block" style={{ marginTop: 8 }} onClick={() => setSetup(true)}>{lang === 'de' ? 'Ersteinrichtung' : 'Cài đặt lần đầu'}</button>}
       </form>
     </div>
