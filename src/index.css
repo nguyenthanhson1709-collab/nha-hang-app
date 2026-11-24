@@ -60,6 +60,7 @@ label.f > span, div.f > span { display: block; font-size: .8rem; color: var(--mu
 .tag.transfer { background: color-mix(in srgb, var(--transfer) 16%, transparent); color: var(--transfer); }
 .tag.warn { background: var(--warn-bg); color: var(--warn); }
 .tag.err { background: var(--err-bg); color: var(--err); }
+.tag.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
 .alert { border-radius: 12px; padding: 10px 12px; margin: 8px 0; font-size: .9rem; }
 .alert.warn { background: var(--warn-bg); color: var(--warn); }
 .alert.err { background: var(--err-bg); color: var(--err); }
