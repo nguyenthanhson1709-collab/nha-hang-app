@@ -231,7 +231,7 @@ export default function DocReview() {
               {linesBad && <div className="alert warn">{t('linesMismatch')}</div>}
               {openLines && lines.map((l, i) => (
                 <div className="line-item" key={i}>
-                  <div className="row"><input value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder={t('item')} />
+                  <div className="row"><span className="li-no">{i + 1}</span><input className="li-name" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder={t('item')} />
                     {!readOnly && <button className="ghost" onClick={() => setLines(lines.filter((_, j) => j !== i))}>✕</button>}</div>
                   <div className="row" style={{ marginTop: 6 }}>
                     <input style={{ width: 64 }} inputMode="decimal" placeholder={t('qty')} value={l.qty ?? ''} onChange={(e) => setLine(i, { qty: e.target.value ? Number(e.target.value.replace(',', '.')) : null })} />
@@ -242,7 +242,7 @@ export default function DocReview() {
                   </div>
                   <div className="row" style={{ marginTop: 6 }}>
                     <span className="small muted">=</span>
-                    <Money value={l.total} onChange={(v) => setLine(i, { total: v })} />
+                    <Money className="li-sum" value={l.total} onChange={(v) => setLine(i, { total: v })} />
                     <select style={{ width: 80 }} value={l.rate ?? ''} onChange={(e) => setLine(i, { rate: e.target.value === '' ? null : Number(e.target.value) })}>
                       <option value="">–</option><option value={7}>7%</option><option value={19}>19%</option><option value={0}>0%</option></select>
                   </div>

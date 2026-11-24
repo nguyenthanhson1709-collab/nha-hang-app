@@ -47,7 +47,7 @@ button:disabled { opacity: .5; cursor: default; }
 button.block, .btn.block { width: 100%; }
 .btn.disabled { opacity: .5; pointer-events: none; }
 button.huge { width: 100%; min-height: 64px; font-size: 1.15rem; }
-input, select, textarea { font: inherit; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); min-height: 44px; }
+input, select, textarea { font: inherit; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); min-height: 44px; }
 input[type=checkbox] { width: 22px; min-height: 22px; height: 22px; }
 textarea { min-height: 70px; }
 label.f, div.f { display: block; margin-bottom: 10px; }
@@ -92,7 +92,12 @@ tfoot td { font-weight: 700; border-top: 2px solid var(--line); }
 .chart .c { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
 .chart .c .b { width: 100%; max-width: 32px; border-radius: 4px 4px 0 0; background: var(--brand); min-height: 1px; }
 .chart .c .x { font-size: .65rem; color: var(--muted); margin-top: 3px; }
-.line-item { border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin-bottom: 8px; }
+.line-item { position: relative; background: var(--top); border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: 12px; padding: 10px 10px 10px 12px; margin-bottom: 12px; }
+.line-item:nth-of-type(even) { border-left-color: var(--sun); }
+.line-item .li-no { flex: 0 0 auto; min-width: 28px; height: 28px; border-radius: 14px; background: var(--brand-2); color: var(--brand); font-weight: 800; font-size: .85rem; display: flex; align-items: center; justify-content: center; }
+.line-item:nth-of-type(even) .li-no { color: var(--sun); background: #3A3016; }
+.line-item .li-name { font-weight: 700; font-size: 1.02rem; }
+.line-item .li-sum { font-weight: 800; white-space: nowrap; }
 .line-item .row input { min-height: 38px; padding: 6px 8px; }
 .line-item select { min-height: 38px; padding: 6px 8px; }
 .err-field { border-color: var(--err) !important; }
