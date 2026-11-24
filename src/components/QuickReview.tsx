@@ -5,7 +5,6 @@ import { supabase, errMsg, type Doc } from '../lib/supabase'
 import { useLang, useT } from '../lib/i18n'
 import { dmy, eur } from '../lib/format'
 import { autoProblems } from '../lib/autocheck'
-import { linesToGross } from '../lib/lines'
 import { PayTag, toast } from './ui'
 
 const P: Record<string, [string, string]> = {
@@ -18,11 +17,11 @@ const FLAG: Record<string, string> = { tax_row: 'sum_mismatch', tax_sum: 'sum_mi
 function check(d: Doc) {
   const taxes = (d.nh_document_taxes || []).map((x) => ({ rate: Number(x.rate), net: Number(x.net), tax: Number(x.tax), gross: Number(x.gross) }))
   const raw = (d.nh_document_lines || []).map((l) => ({ ...l, total: Number(l.total), unit_price: l.unit_price == null ? null : Number(l.unit_price), rate: l.rate == null ? null : Number(l.rate) }))
-  const lines = linesToGross(raw, taxes, Number(d.gross))
+  const lines = raw
   const pay = d.nh_document_payments || []
   const problems = autoProblems({ doc_date: d.doc_date, supplier: d.supplier, invoice_no: d.invoice_no, seller_tax_id: d.seller_tax_id, gross: Number(d.gross), taxes, payment: null, lines },
     pay.length ? pay[0].method : null)
-  return { lines, changed: lines !== raw, problems, canApprove: pay.length > 0 && !!d.doc_date && Number(d.gross) > 0 }
+  return { lines, problems, canApprove: pay.length > 0 && !!d.doc_date && Number(d.gross) > 0 }
 }
 
 export function QuickReview({ docs, rid, onDone }: { docs: Doc[]; rid: string; onDone: () => void }) {
@@ -34,10 +33,6 @@ export function QuickReview({ docs, rid, onDone }: { docs: Doc[]; rid: string; o
   const clean = rows.filter((x) => x.canApprove && !x.problems.length)
 
   async function approve(x: (typeof rows)[number]) {
-    if (x.changed) for (const l of x.lines) if (l.id) {
-      const { error } = await supabase.from('nh_document_lines').update({ total: l.total, unit_price: l.unit_price }).eq('id', l.id)
-      if (error) throw error
-    }
     const flags = [...new Set(x.problems.map((p) => FLAG[p]).filter(Boolean))]
     const { error } = await supabase.from('nh_documents').update({ status: 'reviewed', flags }).eq('id', x.d.id)
     if (error) throw error

@@ -2,6 +2,7 @@
 import type { CashMove, Category, Doc, Restaurant, ZBon } from './supabase'
 import { accountFor } from './categorize'
 import { pdfText, r2 } from './format'
+import { grossDoc } from './lines'
 
 export interface Booking { date: string; amount: number; soll: string; haben: string; bu: string; text: string; beleg: string; source: string }
 
@@ -28,7 +29,7 @@ export function docGroups(d: Doc, catMap: Map<string, Category>): { acc: string;
     g.amount += amount; groups.set(k, g)
   }
   const gross = Number(d.gross)
-  const lines = d.nh_document_lines || [], taxes = d.nh_document_taxes || []
+  const lines = grossDoc(d).nh_document_lines || [], taxes = d.nh_document_taxes || []
   if (d.kind === 'sales') {
     if (taxes.length) taxes.forEach((t) => add(revAcc(Number(t.rate)), Number(t.rate), Number(t.gross)))
     else add('8400', 19, gross)

@@ -6,7 +6,7 @@ import { useLang, useT } from '../lib/i18n'
 import { dmy, eur, monthLabel, normName, r2 } from '../lib/format'
 import { findDuplicate, folderParts, getDoc, lockedPeriods, saveChildren } from '../lib/data'
 import { guessCategory, loadMemory, remember } from '../lib/categorize'
-import { linesToGross } from '../lib/lines'
+import { linesBasis } from '../lib/lines'
 import { docPdf } from '../lib/pdf'
 import { Money, PayTag, Sheet, Spinner, Top, toast, useRestaurant, ComboInput } from '../components/ui'
 import { PdfPreview } from '../components/PdfPreview'
@@ -54,8 +54,7 @@ export default function DocReview() {
         else if (mem.get(normName(l.name)) === cid) rem.add(i)
         return { ...l, qty: l.qty == null ? null : Number(l.qty), total: Number(l.total), rate: l.rate == null ? null : Number(l.rate), unit_price: l.unit_price == null ? null : Number(l.unit_price), category_id: cid }
       })
-      // Hoá đơn in giá Netto -> đổi sang Brutto (chỉ khi còn chờ duyệt)
-      setLines(d.status === 'uploaded' ? linesToGross(raw, (d.nh_document_taxes || []).map((x) => ({ rate: Number(x.rate), net: Number(x.net) })), Number(d.gross)) : raw)
+      setLines(raw) // giữ giá dòng như in trên hoá đơn (Netto hoặc Brutto)
       setRemembered(rem)
       const pays = d.nh_document_payments || []
       if (pays.length === 1) setPayMode(pays[0].method)
@@ -74,7 +73,9 @@ export default function DocReview() {
   const taxSum = r2(taxes.reduce((s, x) => s + x.gross, 0))
   const lineSum = r2(lines.reduce((s, x) => s + x.total, 0))
   const taxBad = taxes.some((x) => Math.abs(x.net + x.tax - x.gross) > 0.02) || (taxes.length > 0 && Math.abs(taxSum - f.gross) > 0.02)
-  const linesBad = lines.length > 0 && Math.abs(lineSum - f.gross) > 0.05
+  const basis = lines.length ? linesBasis(lines, taxes, f.gross) : 'gross'
+  const linesBad = !basis
+  const netSum = r2(taxes.reduce((s, x) => s + x.net, 0)), vatSum = r2(taxes.reduce((s, x) => s + x.tax, 0))
   const over250 = f.kind === 'purchase' && f.gross > 250 && !f.seller_tax_id.trim()
   const payments = useMemo(() => {
     if (!payMode) return []
@@ -231,12 +232,9 @@ export default function DocReview() {
             <div className="card">
               <button type="button" className="ghost block" style={{ justifyContent: 'space-between', padding: 0, minHeight: 32 }} onClick={() => setOpenLines(!openLines)}>
                 <h3 style={{ margin: 0 }}>{openLines ? '▾' : '▸'} {t('lines')} ({lines.length})</h3>
-                <span className={`small ${linesBad ? 'kb-out' : 'muted'}`}>Σ {eur(lineSum)}</span></button>
-              {linesBad && (() => {
-                const g = linesToGross(lines, taxes, f.gross)
-                const fix = !readOnly && g !== lines
-                return <div className="alert warn">{t('linesMismatch')}{fix && <><br />{t('linesNet')} <button className="primary" style={{ marginTop: 6, minHeight: 36 }} onClick={() => setLines(g)}>{t('toGross')}</button></>}</div>
-              })()}
+                <span className={`small ${linesBad ? 'kb-out' : 'muted'}`}>Σ {eur(lineSum)}{basis === 'net' && ' Netto'}</span></button>
+              {basis === 'net' && <div className="small muted" style={{ marginTop: 4 }}>{t('linesNet')}: {eur(lineSum)} + MwSt {eur(vatSum)} = <b>{eur(r2(lineSum + vatSum))}</b> Brutto</div>}
+              {linesBad && <div className="alert warn">{t('linesMismatch')}<br /><span className="small">Σ {eur(lineSum)} ≠ Netto {eur(netSum)} / Brutto {eur(f.gross)}</span></div>}
               {openLines && lines.map((l, i) => (
                 <div className="line-item" key={i}>
                   <div className="row"><span className="li-no">{i + 1}</span><input className="li-name" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder={t('item')} />

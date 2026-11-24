@@ -11,6 +11,8 @@ assert.deepStrictEqual(autoProblems(ok, null, T), ['payment'])
 assert.deepStrictEqual(autoProblems({ ...ok, gross: 17.9 }, 'cash', T), ['tax_sum', 'lines_sum'])
 assert.deepStrictEqual(autoProblems({ ...ok, doc_date: '2026-12-01' }, 'cash', T), ['date'])
 assert.ok(autoProblems({ ...ok, gross: 300, seller_tax_id: null }, 'cash', T).includes('tax_id'))
+// Dòng hàng giá Netto (như in trên hoá đơn sỉ) cũng hợp lệ: tổng dòng = tổng Netto
+assert.deepStrictEqual(autoProblems({ ...ok, lines: [{ name: 'A', qty: 1, unit_price: 14.79, total: 14.79, rate: 7 }, { name: 'B', qty: 1, unit_price: 1.29, total: 1.29, rate: 19 }] }, 'cash', T), [])
 console.log('autocheck ok')
 import { linesToGross } from '../src/lib/lines.ts'
 const net = [{ name: 'Tomaten', total: 25.98, unit_price: 12.99, rate: 7 }, { name: 'X', total: 10, unit_price: null, rate: null }]

@@ -1,6 +1,7 @@
 // Hoá đơn do chủ/quản lý tải lên được duyệt luôn nếu AI đọc đủ và các con số khớp nhau.
 // Thiếu hoặc lệch bất kỳ thông tin nào -> vẫn vào "Chờ kiểm tra".
 import { r2 } from './format'
+import { linesBasis } from './lines'
 import type { ParsedInvoice } from './ocr'
 
 export function autoProblems(pi: ParsedInvoice, payment: string | null, today = new Date().toISOString().slice(0, 10)): string[] {
@@ -27,6 +28,6 @@ export function autoProblems(pi: ParsedInvoice, payment: string | null, today = 
   if (taxes.length && Math.abs(r2(taxes.reduce((s, t) => s + t.gross, 0)) - gross) > 0.02) p.push('tax_sum')
   const lines = pi.lines || []
   if (!lines.length) p.push('lines')
-  else if (Math.abs(r2(lines.reduce((s, l) => s + (l.total || 0), 0)) - gross) > 0.05) p.push('lines_sum')
+  else if (!linesBasis(lines, taxes, gross)) p.push('lines_sum') // dòng hàng Brutto hoặc Netto đều được
   return [...new Set(p)]
 }

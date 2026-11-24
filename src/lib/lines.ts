@@ -1,6 +1,28 @@
-// Hoá đơn sỉ (METRO, Frucht & Feld…) thường in giá Netto từng dòng. App tính bằng Brutto,
-// nên nếu tổng các dòng = tổng Netto (không bằng tổng Brutto) thì đổi từng dòng sang Brutto theo % thuế.
+// Hoá đơn sỉ (METRO, Frucht & Feld…) in giá Netto từng dòng. Dòng hàng giữ nguyên giá Netto như trên hoá đơn;
+// kiểm tra: tổng dòng = tổng Netto, cộng thuế = tổng Brutto. Báo cáo / DATEV tự quy ra Brutto khi tính.
 import { r2 } from './format'
+import type { Doc } from './supabase'
+
+const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol
+/** 'gross' | 'net' | null (lệch cả hai) */
+export function linesBasis(lines: { total: number | null }[], taxes: { net: number }[], gross: number): 'gross' | 'net' | null {
+  const sum = r2(lines.reduce((s, l) => s + (Number(l.total) || 0), 0))
+  if (near(sum, gross, 0.05)) return 'gross'
+  if (taxes.length) {
+    const net = r2(taxes.reduce((s, t) => s + Number(t.net), 0))
+    if (near(sum, net, 0.05 + net * 0.002)) return 'net'
+  }
+  return null
+}
+/** Bản sao chứng từ với dòng hàng quy ra Brutto (chỉ để tính báo cáo / DATEV, không lưu) */
+export function grossDoc(d: Doc): Doc {
+  const ls = d.nh_document_lines || []
+  if (!ls.length) return d
+  const taxes = (d.nh_document_taxes || []).map((t) => ({ rate: Number(t.rate), net: Number(t.net) }))
+  const raw = ls.map((l) => ({ ...l, total: Number(l.total), unit_price: l.unit_price == null ? null : Number(l.unit_price), rate: l.rate == null ? null : Number(l.rate) }))
+  const g = linesToGross(raw, taxes, Number(d.gross))
+  return g === raw ? d : { ...d, nh_document_lines: g as typeof ls }
+}
 
 type L = { total: number; unit_price: number | null; rate: number | null }
 export function linesToGross<T extends L>(lines: T[], taxes: { rate: number; net: number }[], gross: number): T[] {
