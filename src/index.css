@@ -191,3 +191,8 @@ tr.no-cat-row td:first-child { color: var(--err); box-shadow: inset 3px 0 0 var(
   .tile { aspect-ratio: auto; min-height: 120px; padding: 14px 10px; gap: 8px; }
   .tile .ic { font-size: 2rem; }
 }
+
+.clock { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; color: var(--text); font-size: .95rem; }
+.clock b { color: var(--brand); }
+.clock-time { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--sun); }
+.clock-sec { opacity: .7; font-weight: 500; }

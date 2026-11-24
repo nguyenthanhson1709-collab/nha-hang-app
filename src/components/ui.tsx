@@ -6,7 +6,7 @@ import { parseNum } from '../lib/format'
 
 export function Spinner() { return <div className="center"><div className="spinner" /></div> }
 
-export function Top({ title, sub, back, right, onBack }: { title: string; sub?: string; back?: string | boolean; right?: ReactNode; onBack?: () => void }) {
+export function Top({ title, sub, back, right, onBack }: { title: string; sub?: ReactNode; back?: string | boolean; right?: ReactNode; onBack?: () => void }) {
   const nav = useNavigate()
   return (
     <div className="top">

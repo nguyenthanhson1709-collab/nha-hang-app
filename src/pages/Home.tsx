@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Clock } from '../components/Clock'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase, type Doc } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
@@ -63,7 +64,7 @@ export default function Home() {
   ]
   return (
     <>
-      <Top title={r.name} sub={`${t('thisMonth')} · ${thisMonth().slice(5)}/${thisMonth().slice(0, 4)}`} back={profile.is_owner ? '/restaurants' : undefined}
+      <Top title={r.name} sub={<Clock />} back={profile.is_owner ? '/restaurants' : undefined}
         right={<Link className="btn" to={m ? `/r/${rid}/settings` : '/settings'}>⚙︎</Link>} />
       <div className="page">
         <div className="tiles">
