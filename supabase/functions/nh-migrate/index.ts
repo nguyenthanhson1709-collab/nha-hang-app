@@ -3,9 +3,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const OLD_URL = "https://hwyrvsydubazmfrtysju.supabase.co";
-const TABLES = ["nh_profiles", "nh_restaurants", "nh_members", "nh_categories", "nh_item_memory", "nh_suppliers",
-  "nh_documents", "nh_document_payments", "nh_document_taxes", "nh_document_lines", "nh_zbons", "nh_cash_moves",
-  "nh_cash_counts", "nh_contracts", "nh_bank_statements", "nh_audit", "nh_periods"];
+// Người dùng chốt 2026-11-24: dữ liệu cũ là thử nghiệm → chỉ chép phần cài đặt (quán, nhóm hàng, nhà cung cấp, tài khoản), không chép chứng từ
+const TABLES = ["nh_profiles", "nh_restaurants", "nh_members", "nh_categories", "nh_item_memory", "nh_suppliers"];
 const BUCKET = "nh-belege";
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
 
