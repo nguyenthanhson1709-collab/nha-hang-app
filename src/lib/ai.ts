@@ -1,5 +1,5 @@
 // Đọc hoá đơn / Z-Bon bằng AI qua edge function nh-read. Lỗi hoặc chưa có khoá -> trả null để dùng bộ đọc miễn phí.
-import { supabase } from './supabase'
+import { supabase, BUCKET } from './supabase'
 import { r2 } from './format'
 import type { ParsedInvoice, ParsedZ } from './ocr'
 
@@ -41,4 +41,35 @@ export type Segment = { start_page: number; end_page: number; supplier: string |
 export async function aiSegment(rid: string, pdf: Blob, pages: number): Promise<Segment[] | null> {
   const r = await call<{ invoices: Segment[] }>('segment', rid, [{ blob: pdf, type: 'application/pdf' }], pages)
   return r?.invoices || null
+}
+
+/** Bổ sung đơn vị (và số lượng / giá đơn vị nếu còn trống) cho dòng hàng của hoá đơn cũ.
+ *  Chỉ điền ô trống, không đổi thành tiền, nhóm hàng hay tên. Trả về số dòng đã bổ sung. */
+export async function fillUnits(d: { restaurant_id: string; files: string[]; nh_document_lines?: { id?: string; name: string; qty: number | null; unit: string | null; unit_price: number | null }[] }): Promise<number> {
+  const lines = d.nh_document_lines || []
+  if (!lines.length || !d.files.length) return 0
+  const files = await Promise.all(d.files.map(async (p) => {
+    const { data, error } = await supabase.storage.from(BUCKET).download(p)
+    if (error || !data) throw error || new Error('download')
+    return { blob: data, type: data.type || (/\.pdf$/i.test(p) ? 'application/pdf' : 'image/jpeg') }
+  }))
+  const pi = await aiReadInvoice(d.restaurant_id, files)
+  const got = pi?.lines || []
+  if (!got.length) return 0
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9äöüß]+/g, '')
+  const byName = new Map(got.map((l) => [norm(l.name), l]))
+  let n = 0
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]
+    if (!l.id || l.unit) continue
+    const m = byName.get(norm(l.name)) || (got.length === lines.length ? got[i] : undefined)
+    if (!m?.unit) continue
+    const patch: Record<string, unknown> = { unit: m.unit }
+    if (l.qty == null && m.qty != null) patch.qty = m.qty
+    if (l.unit_price == null && m.unit_price != null) patch.unit_price = m.unit_price
+    const { error } = await supabase.from('nh_document_lines').update(patch).eq('id', l.id)
+    if (error) throw error
+    Object.assign(l, patch); n++
+  }
+  return n
 }

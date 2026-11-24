@@ -13,7 +13,7 @@ import { Spinner, Top, toast, useRestaurant } from '../components/ui'
 
 type Mode = 'month' | 'quarter' | 'year' | 'custom'
 type Tab = 'umsatz' | 'supplier' | 'food' | 'drink' | 'nonfood'
-type Item = { name: string; qty: number; sum: number; n: number; last: string; suppliers: Set<string>; ids: string[]; cid: string | null }
+type Item = { name: string; qty: number; sum: number; n: number; last: string; suppliers: Set<string>; ids: string[]; cid: string | null; unit: string }
 type DL = NonNullable<Doc['nh_document_lines']>[number]
 
 const TABS: { k: Tab; icon: string; vi: string; de: string }[] = [
@@ -42,10 +42,11 @@ function Bars({ data }: { data: { label: string; value: number }[] }) {
 function addItem(map: Map<string, Item>, l: DL, date: string, supplier: string) {
   const k = l.name.trim().toLowerCase().replace(/\s+/g, ' ')
   if (!k) return
-  const it = map.get(k) || { name: l.name.trim(), qty: 0, sum: 0, n: 0, last: '', suppliers: new Set<string>(), ids: [], cid: null }
+  const it = map.get(k) || { name: l.name.trim(), qty: 0, sum: 0, n: 0, last: '', suppliers: new Set<string>(), ids: [], cid: null, unit: '' }
   it.qty += Number(l.qty || 1); it.sum += Number(l.total); it.n++
   if (l.id) it.ids.push(l.id)
-  if (date >= it.last) { it.last = date; it.cid = l.category_id }
+  if (date >= it.last) { it.last = date; it.cid = l.category_id; if (l.unit) it.unit = l.unit }
+  else if (!it.unit && l.unit) it.unit = l.unit
   it.suppliers.add(supplier)
   map.set(k, it)
 }
@@ -163,7 +164,7 @@ export default function Reports() {
   const tabName = (k: Tab) => { const x = TABS.find((y) => y.k === k)!; return lang === 'de' ? x.de : x.vi }
   const itemCols = [{ h: 'Artikel', w: 76 }, { h: 'Menge', w: 18, right: true }, { h: 'Ø Preis', w: 22, right: true }, { h: 'Summe', w: 26, right: true }, { h: 'Zuletzt', w: 22 }, { h: 'Käufe', w: 18, right: true }]
   const itemRows = (m: Map<string, Item>) => [...m.values()].sort((a, b) => b.sum - a.sum)
-  const itemAoa = (m: Map<string, Item>) => itemRows(m).map((i) => [i.name, qtyFmt(i.qty), eur(i.sum / (i.qty || 1)), eur(i.sum), dmy(i.last), String(i.n)])
+  const itemAoa = (m: Map<string, Item>) => itemRows(m).map((i) => [i.name, `${qtyFmt(i.qty)}${i.unit ? ' ' + i.unit : ''}`, `${eur(i.sum / (i.qty || 1))}${i.unit ? '/' + i.unit : ''}`, eur(i.sum), dmy(i.last), String(i.n)])
   const umsatzLabel = (k: string) => (umsatz.byDay ? dmy(k) : monthLabel(k))
 
   function sections(): Parameters<typeof reportPdf>[3] {
@@ -317,7 +318,7 @@ function ItemTable({ items, t, showSupplier, cat }: { items: Item[]; t: ReturnTy
   return (
     <div className="tbl-wrap">
       <table>
-        <thead><tr><th>{t('item')}</th><th className="num">{t('qty')}</th><th className="num">Ø</th><th className="num">{t('total')}</th></tr></thead>
+        <thead><tr><th>{t('item')}</th><th className="num">{t('qty')}</th><th className="num">Ø €/{t('unitShort')}</th><th className="num">{t('total')}</th></tr></thead>
         <tbody>
           {items.map((i) => (
             <tr key={i.name + i.last} className={cat && !i.cid ? 'no-cat-row' : ''}>
@@ -333,8 +334,8 @@ function ItemTable({ items, t, showSupplier, cat }: { items: Item[]; t: ReturnTy
                   </select>
                 )}
               </td>
-              <td className="num">{qtyFmt(i.qty)}</td>
-              <td className="num">{eur(i.sum / (i.qty || 1), false)}</td>
+              <td className="num" style={{ whiteSpace: 'nowrap' }}>{qtyFmt(i.qty)}{i.unit && <span className="muted"> {i.unit}</span>}</td>
+              <td className="num" style={{ whiteSpace: 'nowrap' }}>{eur(i.sum / (i.qty || 1), false)}{i.unit && <span className="muted">/{i.unit}</span>}</td>
               <td className="num"><b>{eur(i.sum, false)}</b></td>
             </tr>
           ))}

@@ -9,6 +9,7 @@ import { download, folderFiles, folderPdf, scansPdf, type ExtraBeleg, type Folde
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
 import { MonthBar } from '../components/MonthBar'
 import { liveFlags } from '../lib/lines'
+import { fillUnits } from '../lib/ai'
 import { bulkUpload, bulkZbon, MAX_MB, MAX_PAGES, type BulkResult, type ZBulkResult } from '../lib/bulk'
 
 const FOLDERS: Folder[] = ['Bargeld', 'Rechnungseingang', 'Rechnungsausgang']
@@ -32,6 +33,7 @@ export default function Archive() {
   const [zbons, setZbons] = useState<ZBon[]>([])
   const [extra, setExtra] = useState<ExtraBeleg[]>([])
   const [locked, setLocked] = useState(false)
+  const [unitBusy, setUnitBusy] = useState('')
   const [q] = useState('')
   const [found, setFound] = useState<Doc[] | null>(null)
   const [fPay, setFPay] = useState(''); const [fRate, setFRate] = useState(''); const [fCat, setFCat] = useState(''); const [fSup, setFSup] = useState('')
@@ -163,6 +165,18 @@ export default function Archive() {
           </div>
         </details>
 
+        {m && !locked && (() => {
+          const miss = [...new Set(items.map((x) => x.d))].filter((d) => (d.nh_document_lines || []).length > 0 && (d.nh_document_lines || []).every((l) => !l.unit))
+          if (!miss.length) return null
+          return <button className="block" style={{ marginBottom: 10 }} disabled={!!unitBusy} onClick={async () => {
+            let done = 0, filled = 0
+            try {
+              for (const d of miss) { setUnitBusy(`${++done}/${miss.length}`); filled += await fillUnits(d) }
+              toast(lang === 'de' ? `${filled} Positionen ergänzt` : `Đã bổ sung đơn vị cho ${filled} dòng`)
+              setDocs((ds) => [...ds])
+            } catch (e) { toast(errMsg(e)) } finally { setUnitBusy('') }
+          }}>{unitBusy ? `… ${t('reading')} ${unitBusy}` : `📏 ${lang === 'de' ? `Einheiten ergänzen (${miss.length} Rechnungen)` : `Bổ sung đơn vị cho ${miss.length} hoá đơn`}`}</button>
+        })()}
         <div className="list">
           {items.map(({ d, amount, method, folder: fo }, i) => (
             <Link className="it" key={d.id + i} to={`/r/${rid}/doc/${d.id}`}>
