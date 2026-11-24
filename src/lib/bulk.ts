@@ -162,3 +162,62 @@ export async function bulkZbon(opts: { rid: string; files: File[]; onProgress: (
   res.added.sort((a, b) => a.date.localeCompare(b.date))
   return res
 }
+
+// ---- Scan/chụp nhiều trang trong một lần: AI tự tách thành từng hoá đơn ----
+export type ScanPage = { blob: Blob; type: string; name: string }
+export type ScanGroup = { blobs: Blob[]; types: string[]; names: string[]; pages: string }
+type Unit = { src: number; page: number; srcPages: number } // trang thứ `page` (0-based) của file thứ `src`
+
+/** Gom các trang (đã chia theo AI) về từng hoá đơn. Ảnh giữ nguyên ảnh; một file PDF nằm trọn trong một hoá đơn giữ nguyên file;
+ *  còn lại (PDF bị cắt giữa chừng) thì cắt thành PDF mới bằng `cut`. */
+export function groupUnits(units: Unit[], segs: { start_page: number; end_page: number }[], isImage: (src: number) => boolean):
+  { from: number; to: number; whole: number[] | null }[] {
+  return segs.map((sg) => {
+    const us = units.slice(sg.start_page - 1, sg.end_page)
+    const srcs = [...new Set(us.map((u) => u.src))]
+    // dùng file gốc khi mọi file trong nhóm là ảnh, hoặc PDF nằm trọn trong nhóm
+    const whole = srcs.every((s) => isImage(s) || us.filter((u) => u.src === s).length === us.find((u) => u.src === s)!.srcPages) ? srcs : null
+    return { from: sg.start_page, to: sg.end_page, whole }
+  })
+}
+
+/** Tách các trang vừa scan / chụp / chọn thành từng hoá đơn (một hoá đơn có thể nhiều trang).
+ *  AI lỗi hoặc không có khoá -> coi tất cả là một hoá đơn như trước. */
+export async function splitScan(rid: string, pages: ScanPage[], onProgress: (s: string) => void = () => {}): Promise<ScanGroup[]> {
+  const one: ScanGroup[] = [{ blobs: pages.map((p) => p.blob), types: pages.map((p) => p.type), names: pages.map((p) => p.name), pages: '' }]
+  const isImg = (i: number) => pages[i].type.startsWith('image/')
+  if (pages.some((p) => !p.type.startsWith('image/') && p.type !== 'application/pdf')) return one // có XML (e-Rechnung): giữ nguyên
+  try {
+    const all = await PDFDocument.create()
+    const units: Unit[] = []
+    for (let i = 0; i < pages.length; i++) {
+      const p = pages[i]
+      if (isImg(i)) {
+        const bytes = new Uint8Array(await p.blob.arrayBuffer())
+        const img = p.type === 'image/png' ? await all.embedPng(bytes) : await all.embedJpg(bytes)
+        all.addPage([img.width, img.height]).drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
+        units.push({ src: i, page: 0, srcPages: 1 })
+      } else {
+        const src = await PDFDocument.load(await p.blob.arrayBuffer(), { ignoreEncryption: true })
+        const n = src.getPageCount()
+        for (const pg of await all.copyPages(src, src.getPageIndices())) all.addPage(pg)
+        for (let k = 0; k < n; k++) units.push({ src: i, page: k, srcPages: n })
+      }
+    }
+    const n = units.length
+    if (n <= 1) return one
+    if (n > MAX_PAGES) throw new Error(`> ${MAX_PAGES} Seiten`)
+    const segs = await segmentAll(rid, all, n, onProgress)
+    if (segs.length <= 1) return one
+    const out: ScanGroup[] = []
+    for (const g of groupUnits(units, segs, isImg)) {
+      const label = g.from === g.to ? `S. ${g.from}` : `S. ${g.from}–${g.to}`
+      if (g.whole) out.push({ blobs: g.whole.map((s) => pages[s].blob), types: g.whole.map((s) => pages[s].type), names: g.whole.map((s) => pages[s].name), pages: label })
+      else out.push({ blobs: [await subPdf(all, g.from, g.to)], types: ['application/pdf'], names: ['rechnung.pdf'], pages: label })
+    }
+    return out
+  } catch (e) {
+    console.warn('splitScan', e)
+    return one
+  }
+}
