@@ -1,10 +1,11 @@
-// Chạy một lần: chép cấu hình app nhà hàng từ project cũ (hoadon-app) sang project này.
+// Chạy một lần: chép dữ liệu app nhà hàng từ project cũ (hoadon-app) sang project này.
 // Cần secret OLD_SERVICE_KEY (khoá service_role của project cũ). Gọi kèm header x-run = token trong bảng nh_import_token.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const OLD_URL = "https://hwyrvsydubazmfrtysju.supabase.co";
-// Chỉ chép cấu hình. Chứng từ, Z-Bon, Kassenbuch, đếm quỹ, audit, file là dữ liệu thử nghiệm: bắt đầu lại sạch.
+// Người dùng chốt 2026-11-24: dữ liệu cũ là thử nghiệm → chỉ chép phần cài đặt (quán, nhóm hàng, nhà cung cấp, tài khoản), không chép chứng từ
 const TABLES = ["nh_profiles", "nh_restaurants", "nh_members", "nh_categories", "nh_item_memory", "nh_suppliers"];
+const BUCKET = "nh-belege";
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
 
 Deno.serve(async (req) => {
@@ -50,5 +51,35 @@ Deno.serve(async (req) => {
     return json({ users: ok, errs });
   }
 
+  if (step === "files") {
+    // Ảnh / PDF: <restaurant_id>/<yyyy>/<mm>/<file>. Chép từng file, bỏ qua file đã có.
+    const limit = Number(new URL(req.url).searchParams.get("limit") || "60");
+    const walk = async (prefix: string): Promise<string[]> => {
+      const out: string[] = [];
+      for (let off = 0; ; off += 100) {
+        const { data } = await old.storage.from(BUCKET).list(prefix, { limit: 100, offset: off });
+        if (!data?.length) break;
+        for (const it of data) {
+          const p = prefix ? `${prefix}/${it.name}` : it.name;
+          if (it.id) out.push(p); else out.push(...(await walk(p)));
+        }
+        if (data.length < 100) break;
+      }
+      return out;
+    };
+    const all = await walk("");
+    let copied = 0, skipped = 0; const errs: string[] = [];
+    for (const p of all) {
+      if (copied >= limit) break;
+      const dir = p.split("/").slice(0, -1).join("/"), name = p.split("/").pop()!;
+      const { data: ex } = await neu.storage.from(BUCKET).list(dir, { search: name });
+      if (ex?.some((x) => x.name === name)) { skipped++; continue; }
+      const { data: blob, error } = await old.storage.from(BUCKET).download(p);
+      if (error || !blob) { errs.push(`${p}: ${error?.message}`); continue; }
+      const { error: e2 } = await neu.storage.from(BUCKET).upload(p, blob, { contentType: blob.type || undefined, upsert: false });
+      if (e2) errs.push(`${p}: ${e2.message}`); else copied++;
+    }
+    return json({ total: all.length, copied, skipped, errs: errs.slice(0, 20) });
+  }
   return json({ error: "unknown_step" }, 400);
 });
