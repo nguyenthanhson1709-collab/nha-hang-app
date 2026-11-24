@@ -44,6 +44,7 @@ const vi = {
   journal: 'Sổ nhật ký (Buchungsjournal)', soll: 'Soll', haben: 'Haben', period: 'Kỳ', from: 'Từ', to: 'Đến', week: 'Tuần', quarter: 'Quý', day: 'Ngày', custom: 'Tự chọn', year: 'Năm',
   vatNote: 'Chỉ để xem. Steuerberater nộp tờ khai.', datevNote: 'Lần đầu hãy nhờ Steuerberater thử nhập file và xác nhận số tài khoản.',
   rememberedCategory: 'Nhóm đã nhớ', suggestion: 'Gợi ý', perGuest: 'Doanh thu / khách',
+  splitHint: 'Scan nhiều hoá đơn một lần cũng được: AI tự tách từng hoá đơn (kể cả hoá đơn nhiều trang).', staffQueued: 'Đã nhận. AI đang đọc và tách hoá đơn, bạn có thể scan tiếp.', staffWorking: 'AI đang đọc {n} lượt tải lên. Đừng đóng trang cho tới khi xong.', staffResult: 'Đã lưu {n} hoá đơn', dupSkipped: 'bỏ qua {n} hoá đơn trùng', selectAll: 'Chọn tất cả', setPayFor: 'Gán cho {n} hoá đơn đã chọn:', noPayment: 'chưa chọn Bar/Thẻ', aiGuess: 'AI đoán',
 }
 export type Dict = typeof vi
 const de: Dict = {
@@ -90,6 +91,7 @@ const de: Dict = {
   journal: 'Buchungsjournal', soll: 'Soll', haben: 'Haben', period: 'Zeitraum', from: 'Von', to: 'Bis', week: 'Woche', quarter: 'Quartal', day: 'Tag', custom: 'Zeitraum', year: 'Jahr',
   vatNote: 'Nur zur Ansicht. Die Anmeldung macht der Steuerberater.', datevNote: 'Beim ersten Mal den Import vom Steuerberater testen und Konten bestätigen lassen.',
   rememberedCategory: 'Gemerkte Gruppe', suggestion: 'Vorschlag', perGuest: 'Umsatz / Gast',
+  splitHint: 'Mehrere Belege auf einmal gehen auch: Die KI trennt die Rechnungen (auch mehrseitige).', staffQueued: 'Erhalten. Die KI liest und trennt die Belege, Sie können weiter scannen.', staffWorking: 'Die KI liest {n} Upload(s). Bitte Seite nicht schließen, bis sie fertig ist.', staffResult: '{n} Belege gespeichert', dupSkipped: '{n} Duplikate übersprungen', selectAll: 'Alle auswählen', setPayFor: 'Für {n} ausgewählte Belege:', noPayment: 'Bar/Karte fehlt', aiGuess: 'KI vermutet',
 }
 
 export const dicts = { vi, de }

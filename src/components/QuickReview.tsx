@@ -1,7 +1,8 @@
 // Duyệt nhanh: xem tóm tắt từng hoá đơn chờ kiểm tra, bấm ✓ để duyệt mà không cần mở.
+// Chọn nhiều hoá đơn để gán Bar / Thẻ / Chuyển khoản cùng lúc (nhân viên tải lên không chọn cách trả).
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase, errMsg, type Doc } from '../lib/supabase'
+import { supabase, errMsg, type Doc, type PayMethod } from '../lib/supabase'
 import { useLang, useT } from '../lib/i18n'
 import { dmy, eur } from '../lib/format'
 import { autoProblems } from '../lib/autocheck'
@@ -22,7 +23,13 @@ function check(d: Doc) {
   const pay = d.nh_document_payments || []
   const problems = autoProblems({ doc_date: d.doc_date, supplier: d.supplier, invoice_no: d.invoice_no, seller_tax_id: d.seller_tax_id, gross: Number(d.gross), taxes, payment: null, lines },
     pay.length ? pay[0].method : null)
-  return { lines, problems, canApprove: pay.length > 0 && !!d.doc_date && Number(d.gross) > 0 }
+  return { lines, problems, canApprove: pay.length > 0 && !!d.doc_date && Number(d.gross) > 0, guess: pay.length ? null : aiPayment(d.ocr_text) }
+}
+
+/** Cách trả AI đọc được trên hoá đơn (chỉ để gợi ý) */
+function aiPayment(ocr: string | null): PayMethod | null {
+  if (!ocr?.startsWith('AI: ')) return null
+  try { const p = JSON.parse(ocr.slice(4))?.payment; return p === 'cash' || p === 'card' || p === 'transfer' ? p : null } catch { return null }
 }
 
 export function QuickReview({ docs, rid, onDone }: { docs: Doc[]; rid: string; onDone: () => void }) {
@@ -32,6 +39,23 @@ export function QuickReview({ docs, rid, onDone }: { docs: Doc[]; rid: string; o
   const [gone, setGone] = useState<Set<string>>(new Set())
   const rows = useMemo(() => docs.filter((d) => !gone.has(d.id)).map((d) => ({ d, ...check(d) })), [docs, gone])
   const clean = rows.filter((x) => x.canApprove && !x.problems.length)
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const picked = rows.filter((x) => sel.has(x.d.id))
+  const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+
+  async function setPayment(method: PayMethod) {
+    setBusy('pay')
+    try {
+      const ids = picked.map((x) => x.d.id)
+      const { error: e1 } = await supabase.from('nh_document_payments').delete().in('document_id', ids)
+      if (e1) throw e1
+      const { error: e2 } = await supabase.from('nh_document_payments').insert(picked.map((x) => ({ document_id: x.d.id, method, amount: Number(x.d.gross) })))
+      if (e2) throw e2
+      toast(`✓ ${t(method)}: ${ids.length}`)
+      setSel(new Set())
+    } catch (e) { toast(errMsg(e)) }
+    setBusy(null); onDone()
+  }
 
   async function approve(x: (typeof rows)[number]) {
     const flags = [...new Set(x.problems.map((p) => FLAG[p]).filter(Boolean))]
@@ -55,9 +79,31 @@ export function QuickReview({ docs, rid, onDone }: { docs: Doc[]; rid: string; o
   return (
     <>
       {clean.length > 0 && <button className="primary block" disabled={!!busy} style={{ marginBottom: 10 }} onClick={all}>✓ {t('quickAll', { n: String(clean.length) })}</button>}
+      {rows.length > 0 && (
+        <div className="card" style={{ marginBottom: 10, padding: 10, position: 'sticky', top: 0, zIndex: 2 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input type="checkbox" checked={picked.length === rows.length} ref={(el) => { if (el) el.indeterminate = picked.length > 0 && picked.length < rows.length }}
+              onChange={() => setSel(picked.length === rows.length ? new Set() : new Set(rows.map((x) => x.d.id)))} />
+            <span>{t('selectAll')}{picked.length > 0 && ` (${picked.length})`}</span>
+          </label>
+          {picked.length > 0 && (
+            <>
+              <div className="small muted" style={{ margin: '8px 0 6px' }}>{t('setPayFor', { n: String(picked.length) })}</div>
+              <div className="grid2" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+                {(['cash', 'card', 'transfer'] as PayMethod[]).map((mth) => (
+                  <button key={mth} className={mth === 'transfer' ? '' : 'primary'} disabled={!!busy} onClick={() => setPayment(mth)}>
+                    {mth === 'cash' ? '💶' : mth === 'card' ? '💳' : '🏦'} {t(mth)}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
       <div className="list">
         {rows.map((x) => (
           <div className="it" key={x.d.id}>
+            <input type="checkbox" checked={sel.has(x.d.id)} onChange={() => toggle(x.d.id)} style={{ flex: 'none', alignSelf: 'center', marginRight: 4 }} aria-label={x.d.supplier || ''} />
             <Link className="grow" style={{ minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={`/r/${rid}/doc/${x.d.id}`}>
               <div className="t">{x.d.supplier || '—'}</div>
               <div className="small muted">{dmy(x.d.doc_date)}{x.d.invoice_no && ` · Nr. ${x.d.invoice_no}`}</div>
@@ -71,7 +117,10 @@ export function QuickReview({ docs, rid, onDone }: { docs: Doc[]; rid: string; o
             </Link>
             <div className="right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
               <div className="num">{eur(x.d.gross)}</div>
-              <div>{(x.d.nh_document_payments || []).map((p) => <PayTag key={p.method} m={p.method} />)}</div>
+              <div>{(x.d.nh_document_payments || []).length
+                ? (x.d.nh_document_payments || []).map((p) => <PayTag key={p.method} m={p.method} />)
+                : <span className="tag err">{t('noPayment')}</span>}</div>
+              {x.guess && <div className="small muted">{t('aiGuess')}: {t(x.guess)}</div>}
               {x.canApprove
                 ? <button className={x.problems.length ? '' : 'primary'} disabled={!!busy} style={{ minHeight: 36, padding: '6px 12px' }} onClick={() => one(x)}>{busy === x.d.id ? '…' : `✓ ${t('quickOk')}`}</button>
                 : <Link className="btn" style={{ minHeight: 36, padding: '6px 12px' }} to={`/r/${rid}/doc/${x.d.id}`}>{t('open')} →</Link>}
