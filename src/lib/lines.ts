@@ -76,3 +76,13 @@ export function signCredit(d: Doc): Doc {
     nh_document_taxes: (d.nh_document_taxes || []).map((t) => ({ ...t, net: -Number(t.net), tax: -Number(t.tax), gross: -Number(t.gross) })),
   }
 }
+
+/** Số âm (hoá đơn ghi -30,17) = Gutschrift: lưu số dương + is_credit, dòng hàng đổi dấu */
+export function flipNegative<T extends { total: number; unit_price?: number | null }>(gross: number, taxes: { rate: number; net: number; tax: number; gross: number }[], lines: T[]) {
+  if (!(gross < 0)) return null
+  return {
+    gross: r2(-gross),
+    taxes: taxes.map((t) => ({ ...t, net: r2(Math.abs(t.net)), tax: r2(Math.abs(t.tax)), gross: r2(Math.abs(t.gross)) })),
+    lines: lines.map((l) => ({ ...l, total: r2(-Number(l.total)), unit_price: l.unit_price == null ? l.unit_price : r2(Math.abs(Number(l.unit_price))) })),
+  }
+}

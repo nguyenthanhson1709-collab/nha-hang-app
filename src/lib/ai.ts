@@ -1,6 +1,7 @@
 // Đọc hoá đơn / Z-Bon bằng AI qua edge function nh-read. Lỗi hoặc chưa có khoá -> trả null để dùng bộ đọc miễn phí.
 import { supabase, BUCKET } from './supabase'
 import { r2 } from './format'
+import { flipNegative } from './lines'
 import type { ParsedInvoice, ParsedZ } from './ocr'
 
 async function toB64(b: Blob): Promise<string> {
@@ -27,6 +28,9 @@ export async function aiReadInvoice(rid: string, files: { blob: Blob; type: stri
   r.gross = r2(r.gross || 0)
   r.taxes = (r.taxes || []).filter((t) => t.gross || t.net).map((t) => ({ rate: t.rate, net: r2(t.net), tax: r2(t.tax), gross: r2(t.gross) }))
   r.lines = r.lines || [] // giữ giá dòng như in trên hoá đơn (Netto hoặc Brutto)
+  const fl = flipNegative(r.gross, r.taxes, r.lines) // tổng âm = Gutschrift
+  if (fl) Object.assign(r, fl, { is_credit: true })
+  if (r.is_credit) { r.gross = Math.abs(r.gross); r.taxes = r.taxes.map((t) => ({ ...t, net: Math.abs(t.net), tax: Math.abs(t.tax), gross: Math.abs(t.gross) })) }
   return r
 }
 

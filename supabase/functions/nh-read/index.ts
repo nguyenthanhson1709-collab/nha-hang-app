@@ -63,7 +63,8 @@ Extrahiere die Daten exakt wie gedruckt. Regeln:
 - lines: jede Artikelzeile mit Zeilenbetrag; qty, unit und unit_price genau wie in der Zeile (z.B. "2,350 kg x 3,99 €/kg" -> qty 2.35, unit kg, unit_price 3.99; "3 Bund à 0,99" -> qty 3, unit Bund; "1 Kiste"); Pfand ist eine eigene Zeile. Rabatte als negative Zeile. rate über den Buchstaben (A/B) und die Legende.
 - payment: cash bei Bar/Gegeben, card bei EC/Girocard/Kreditkarte/Visa/Mastercard, transfer bei Überweisung/Zahlungsziel/Lastschrift, sonst null.
 - Datum: deutsches Format TT.MM.JJ oder TT.MM.JJJJ (Tag zuerst, dann Monat, dann Jahr). Bei "06.10.26" ist 26 das JAHR (2026), Tag 06, Monat 10 – die letzte Zahl nie als Tag lesen. Handschriftliche Daten Ziffer für Ziffer lesen. date_uncertain = true bei handschriftlichem, schwer lesbarem oder mehrdeutigem Datum (dann wird der Beleg manuell geprüft).
-- Gutschrift (is_credit = true): Beträge trotzdem positiv angeben, wie gedruckt ohne Minus.
+- Gutschrift (is_credit = true, z.B. "Gutschrift", "Kaufmännische Gutschrift", "Ihre Forderung", "Erstattung"): alle Beträge positiv angeben (ohne Minus), auch taxes und lines. Den MwSt-Block trotzdem vollständig lesen (Steuersatz, Netto, Steuer, Brutto).
+- Nachgestelltes Minus wie "28,20-" oder "1,97-" bedeutet einen negativen Betrag (typisch bei Gutschriften).
 - Unleserliches: bestmöglich schätzen; Felder, die nicht vorhanden sind: null.`;
 
 const PROMPT_Z = (map: Record<string, string>) => `Du liest einen Z-Bericht (Tagesabschluss) einer deutschen Restaurantkasse.

@@ -8,7 +8,7 @@ import { useLang, useT } from '../lib/i18n'
 import { dmy, eur, monthLabel, normName, r2 } from '../lib/format'
 import { deleteDoc, findDuplicate, folderParts, getDoc, lockedPeriods, saveChildren } from '../lib/data'
 import { guessCategory, loadMemory, remember } from '../lib/categorize'
-import { linesBasis, linesToNet } from '../lib/lines'
+import { flipNegative, linesBasis, linesToNet } from '../lib/lines'
 import { docPdf } from '../lib/pdf'
 import { aiReadInvoice } from '../lib/ai'
 import { Money, PayTag, Sheet, Spinner, Top, toast, useRestaurant, ComboInput } from '../components/ui'
@@ -48,7 +48,7 @@ export default function DocReview() {
     (async () => {
       const d = await getDoc(id!)
       setDoc(d)
-      setF({ supplier: d.supplier || '', doc_date: d.doc_date, invoice_no: d.invoice_no || '', seller_tax_id: d.seller_tax_id || '', note: d.note || '', gross: Number(d.gross), kind: d.kind, is_credit: !!d.is_credit })
+      setF({ supplier: d.supplier || '', doc_date: d.doc_date, invoice_no: d.invoice_no || '', seller_tax_id: d.seller_tax_id || '', note: d.note || '', gross: Math.abs(Number(d.gross)), kind: d.kind, is_credit: !!d.is_credit || (d.kind === 'purchase' && Number(d.gross) < 0) })
       setTaxes((d.nh_document_taxes || []).map((x) => ({ rate: Number(x.rate), net: Number(x.net), tax: Number(x.tax), gross: Number(x.gross) })))
       const mem = await loadMemory()
       const rem = new Set<number>()
@@ -114,12 +114,16 @@ export default function DocReview() {
     setBusy(true)
     try {
       const flags = [taxBad && 'sum_mismatch', linesBad && 'lines_mismatch', over250 && 'missing_tax_id'].filter(Boolean) as string[]
+      // Tổng âm (Gutschrift nhà cung cấp trả lại) → lưu số dương và đánh dấu Gutschrift
+      const fl = f.kind === 'purchase' ? flipNegative(f.gross, taxes, lines) : null
+      const gross = fl ? fl.gross : f.gross
+      const isCredit = f.kind === 'purchase' && (f.is_credit || !!fl)
       const { error } = await supabase.from('nh_documents').update({
         supplier: f.supplier || null, doc_date: f.doc_date, period: f.doc_date.slice(0, 7), invoice_no: f.invoice_no || null, seller_tax_id: f.seller_tax_id || null,
-        note: f.note || null, gross: f.gross, kind: f.kind, is_credit: f.kind === 'purchase' && f.is_credit, status: 'reviewed', flags,
+        note: f.note || null, gross, kind: f.kind, is_credit: isCredit, status: 'reviewed', flags,
       }).eq('id', doc.id)
       if (error) throw error
-      await saveChildren(doc.id, payments, taxes, lines, true)
+      await saveChildren(doc.id, payments.map((p) => ({ ...p, amount: r2(Math.abs(p.amount)) })), fl ? fl.taxes : taxes, fl ? fl.lines : lines, true)
       for (const l of lines) if (l.category_id && l.name) await remember(l.name, l.category_id)
       if (f.supplier.trim() && !suppliers.some((x) => x.toLowerCase() === f.supplier.trim().toLowerCase())) await supabase.from('nh_suppliers').insert({ name: f.supplier.trim(), tax_id: f.seller_tax_id || null })
       toast(t('saved'))
@@ -140,7 +144,9 @@ export default function DocReview() {
         return { blob: data, type: data.type || (/\.pdf$/i.test(p) ? 'application/pdf' : 'image/jpeg') }
       }))
       const pi = await aiReadInvoice(rid, files)
-      if (!pi?.lines?.length) { toast(lang === 'de' ? 'Keine Positionen erkannt' : 'AI không đọc được dòng hàng'); return }
+      if (!pi || (!pi.lines?.length && !pi.taxes?.length)) { toast(lang === 'de' ? 'Keine Positionen erkannt' : 'AI không đọc được dòng hàng'); return }
+      // Chưa có mức thuế (ví dụ Gutschrift số âm lúc trước bị lỗi): lấy luôn thuế và tổng tiền AI đọc được
+      if (!taxes.length && pi.taxes.length) { setTaxes(pi.taxes.map((x) => ({ ...x }))); setF((v) => ({ ...v, gross: pi.gross, is_credit: v.kind === 'purchase' && (v.is_credit || !!pi.is_credit) })) }
       const mem = await loadMemory()
       const old = new Map(lines.filter((l) => l.category_id).map((l) => [normName(l.name), l.category_id]))
       setLines(pi.lines.map((l, i) => ({
