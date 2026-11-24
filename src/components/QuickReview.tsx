@@ -5,6 +5,7 @@ import { supabase, errMsg, type Doc } from '../lib/supabase'
 import { useLang, useT } from '../lib/i18n'
 import { dmy, eur } from '../lib/format'
 import { autoProblems } from '../lib/autocheck'
+import { deleteDoc } from '../lib/data'
 import { PayTag, toast } from './ui'
 
 const P: Record<string, [string, string]> = {
@@ -73,6 +74,10 @@ export function QuickReview({ docs, rid, onDone }: { docs: Doc[]; rid: string; o
               {x.canApprove
                 ? <button className={x.problems.length ? '' : 'primary'} disabled={!!busy} style={{ minHeight: 36, padding: '6px 12px' }} onClick={() => one(x)}>{busy === x.d.id ? '…' : `✓ ${t('quickOk')}`}</button>
                 : <Link className="btn" style={{ minHeight: 36, padding: '6px 12px' }} to={`/r/${rid}/doc/${x.d.id}`}>{t('open')} →</Link>}
+              <button className="ghost small" disabled={!!busy} title={t('delete')} onClick={async () => {
+                if (!confirm(`${t('confirmDelete')}\n${x.d.supplier || '—'} · ${dmy(x.d.doc_date)} · ${eur(x.d.gross)}`)) return
+                try { await deleteDoc(x.d); setGone((s) => new Set(s).add(x.d.id)); toast(t('deleted')); onDone() } catch (e) { toast(errMsg(e)) }
+              }}>🗑 {t('delete')}</button>
             </div>
           </div>
         ))}

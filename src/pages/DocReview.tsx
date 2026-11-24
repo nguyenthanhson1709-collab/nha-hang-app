@@ -4,7 +4,7 @@ import { supabase, errMsg, signedUrl, BUCKET, type Doc, type Line, type PayMetho
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { dmy, eur, monthLabel, normName, r2 } from '../lib/format'
-import { findDuplicate, folderParts, getDoc, lockedPeriods, saveChildren } from '../lib/data'
+import { deleteDoc, findDuplicate, folderParts, getDoc, lockedPeriods, saveChildren } from '../lib/data'
 import { guessCategory, loadMemory, remember } from '../lib/categorize'
 import { linesBasis, linesToNet } from '../lib/lines'
 import { docPdf } from '../lib/pdf'
@@ -125,10 +125,8 @@ export default function DocReview() {
 
   async function del() {
     if (!doc || !confirm(t('confirmDelete'))) return
-    const { error } = await supabase.from('nh_documents').delete().eq('id', doc.id)
-    if (error) { toast(errMsg(error)); return }
-    await supabase.storage.from(BUCKET).remove(doc.files)
-    nav(`/r/${rid}`)
+    try { await deleteDoc(doc) } catch (e) { toast(errMsg(e)); return }
+    toast(t('deleted')); nav(-1)
   }
 
   async function showHistory() {

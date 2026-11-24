@@ -107,3 +107,15 @@ export function folderParts(d: Doc): { folder: 'Bargeld' | 'Rechnungseingang' | 
 }
 
 export { monthRange }
+
+/** Xoá chứng từ (cả file ảnh/PDF trong kho). Chỉ chủ / người phụ trách, tháng chưa khoá sổ (RLS kiểm tra). */
+export async function deleteDoc(d: Pick<Doc, 'id' | 'files'>) {
+  const { error } = await supabase.from('nh_documents').delete().eq('id', d.id)
+  if (error) throw error
+  if (!d.files?.length) return
+  // Giữ lại file còn dùng chung với chứng từ khác (hoá đơn tách tiền mặt + thẻ)
+  const { data: other } = await supabase.from('nh_documents').select('files').overlaps('files', d.files)
+  const used = new Set((other || []).flatMap((x) => x.files as string[]))
+  const rm = d.files.filter((f) => !used.has(f))
+  if (rm.length) await supabase.storage.from(BUCKET).remove(rm)
+}

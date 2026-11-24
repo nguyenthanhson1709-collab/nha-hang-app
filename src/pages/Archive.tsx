@@ -4,7 +4,7 @@ import { supabase, errMsg, type Doc, type ZBon } from '../lib/supabase'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { useLang, useT } from '../lib/i18n'
 import { dmy, eur, monthLabel, monthRange, thisMonth } from '../lib/format'
-import { DOC_SELECT, docsInRange, folderParts, lockedPeriods } from '../lib/data'
+import { DOC_SELECT, deleteDoc, docsInRange, folderParts, lockedPeriods } from '../lib/data'
 import { download, folderFiles, folderPdf, scansPdf, type ExtraBeleg, type Folder } from '../lib/pdf'
 import { PayTag, Top, toast, useRestaurant } from '../components/ui'
 import { MonthBar } from '../components/MonthBar'
@@ -171,6 +171,11 @@ export default function Archive() {
                 <div className="small muted">{dmy(d.doc_date)}{found && ` · ${LABEL[fo]}`}{d.status === 'uploaded' && <> · <span className="tag warn">{t('uploaded')}</span></>}{liveFlags(d).length > 0 && <> · <span className="tag err">!</span></>}</div>
               </div>
               <div className="right"><div className="num">{eur(amount)}</div>{method && <PayTag m={method.split('+')[0]} />}</div>
+              {m && !locked && <button className="ghost small" title={t('delete')} style={{ marginLeft: 4 }} onClick={async (e) => {
+                e.preventDefault(); e.stopPropagation()
+                if (!confirm(`${t('confirmDelete')}\n${d.supplier || '—'} · ${dmy(d.doc_date)} · ${eur(d.gross)}`)) return
+                try { await deleteDoc(d); setDocs((ds) => ds.filter((x) => x.id !== d.id)); toast(t('deleted')) } catch (err) { toast(errMsg(err)) }
+              }}>🗑</button>}
             </Link>
           ))}
           {!found && folder === 'Rechnungsausgang' && zbons.map((z) => (
