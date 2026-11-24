@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { DateField } from '../components/PeriodBar'
 import { goBack } from '../lib/nav'
 import { supabase, errMsg, signedUrl, BUCKET, type ZBon } from '../lib/supabase'
 import { canManage, useRole } from '../lib/app'
@@ -103,7 +104,7 @@ export default function ZbonReview() {
           <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0 }}>
             <div className="card">
               <div className="grid2">
-                <label className="f"><span>{t('zDate')}</span><input type="date" value={z.z_date} onChange={(e) => set('z_date', e.target.value)} /></label>
+                <div className="f"><span>{t('zDate')}</span><DateField value={z.z_date} onChange={(d) => d && set('z_date', d)} /></div>
                 <label className="f"><span>{t('zNo')}</span><input value={z.z_no || ''} onChange={(e) => set('z_no', e.target.value || null)} /></label>
               </div>
             </div>

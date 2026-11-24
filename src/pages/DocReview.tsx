@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { DateField } from '../components/PeriodBar'
 import { goBack } from '../lib/nav'
 import { supabase, errMsg, signedUrl, BUCKET, type Doc, type Line, type PayMethod, type TaxRow } from '../lib/supabase'
 import { canManage, catName, useApp, useRole } from '../lib/app'
@@ -194,7 +195,7 @@ export default function DocReview() {
                 <ComboInput value={f.supplier} onChange={(v) => setF({ ...f, supplier: v })} options={suppliers} />
               </div>
               <div className="grid2">
-                <label className="f"><span>{t('date')}</span><input type="date" value={f.doc_date} onChange={(e) => setF({ ...f, doc_date: e.target.value })} /></label>
+                <div className="f"><span>{t('date')}</span><DateField value={f.doc_date} onChange={(d) => d && setF({ ...f, doc_date: d })} /></div>
                 <label className="f"><span>{t('invoiceNo')}</span><input value={f.invoice_no} onChange={(e) => setF({ ...f, invoice_no: e.target.value })} /></label>
               </div>
               <label className="f"><span>{t('sellerTaxId')}</span><input className={over250 ? 'err-field' : ''} value={f.seller_tax_id} onChange={(e) => setF({ ...f, seller_tax_id: e.target.value })} /></label>

@@ -35,7 +35,7 @@ function Bar({ label, onPrev, onNext, pop, children, compact }: { label: ReactNo
 /** Lịch một tháng để chọn ngày */
 function Calendar({ value, onPick }: { value: string; onPick: (d: string) => void }) {
   const { lang } = useLang()
-  const [ym, setYm] = useState(value.slice(0, 7))
+  const [ym, setYm] = useState((value || today()).slice(0, 7))
   const first = new Date(ym + '-01T12:00:00Z')
   const lead = (first.getUTCDay() + 6) % 7
   const days = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate()
@@ -116,6 +116,18 @@ export function YearBar({ value, onChange }: { value: string; onChange: (p: stri
         {Array.from({ length: 12 }, (_, i) => start + i).map((yy) => <button key={yy} className={`${yy === y ? 'sel' : ''} ${yy === nowY ? 'now' : ''}`} onClick={() => pick(yy)}>{yy}</button>)}
       </div>
       <button className="ghost block mb-today" onClick={() => pick(nowY)}>{lang === 'de' ? 'Aktuelles Jahr' : 'Năm nay'}</button>
+    </Bar>
+  )
+}
+
+/** Ô chọn ngày trong biểu mẫu (cùng kiểu), có thể để trống nếu allowEmpty */
+export function DateField({ value, onChange, allowEmpty }: { value: string | null; onChange: (d: string | null) => void; allowEmpty?: boolean }) {
+  const { lang } = useLang()
+  const pop = usePop()
+  return (
+    <Bar pop={pop} compact label={value ? dayLabel(value, lang) : <span className="muted">—</span>}>
+      <Calendar value={value || ''} onPick={(d) => { onChange(d); pop.setOpen(false) }} />
+      {allowEmpty && value && <button className="ghost block" style={{ color: 'var(--err)' }} onClick={() => { onChange(null); pop.setOpen(false) }}>{lang === 'de' ? 'Kein Datum' : 'Bỏ ngày'}</button>}
     </Bar>
   )
 }

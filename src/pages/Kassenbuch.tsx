@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { DateField } from '../components/PeriodBar'
 import { supabase, errMsg, signedUrl, type CashCount, type CashMove, type ZBon } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
 import { useT } from '../lib/i18n'
@@ -195,7 +196,7 @@ export default function Kassenbuch() {
       <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { addPhotos(e.target.files); e.target.value = '' }} />
       <Sheet open={!!move && !scanner} onClose={closeMove} title={move ? (move.channel === 'viva' ? 'Viva Wallet (Kartenzahlung)' : t(move.type)) : ''}>
         {move && <>
-          <label className="f"><span>{t('date')}</span><input type="date" value={move.date} onChange={(e) => setMove({ ...move, date: e.target.value })} /></label>
+          <div className="f"><span>{t('date')}</span><DateField value={move.date} onChange={(d) => d && setMove({ ...move, date: d })} /></div>
           <label className="f"><span>{t('amount')}</span><Money value={move.amount} onChange={(v) => setMove({ ...move, amount: v })} /></label>
           <label className="f"><span>{t('description')}</span><input value={move.description} onChange={(e) => setMove({ ...move, description: e.target.value })} /></label>
           {(move.type !== 'geldtransit' || move.channel === 'viva') && <>
@@ -217,7 +218,7 @@ export default function Kassenbuch() {
       </Sheet>
       <Sheet open={!!count} onClose={() => setCount(null)} title={t('count')}>
         {count && <>
-          <label className="f"><span>{t('date')}</span><input type="date" value={count.date} onChange={(e) => changeCountDate(e.target.value)} /></label>
+          <div className="f"><span>{t('date')}</span><DateField value={count.date} onChange={(d) => d && changeCountDate(d)} /></div>
           <div className="row between" style={{ marginBottom: 8 }}><span>{t('bookBalance')}</span><b>{eur(count.book)}</b></div>
           <label className="f"><span>{t('counted')}</span><Money value={count.counted} onChange={(v) => setCount({ ...count, counted: v })} /></label>
           {r2(count.counted - count.book) !== 0 && <>

@@ -1,6 +1,7 @@
 // Hợp đồng ghi nợ tự động (Lastschrift): công ty tự rút tiền hàng tháng từ tài khoản
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { DateField } from '../components/PeriodBar'
 import { dropProps } from '../lib/drop'
 import { supabase, errMsg, signedUrl, BUCKET } from '../lib/supabase'
 import { canManage, useRole } from '../lib/app'
@@ -88,8 +89,8 @@ export default function Contracts() {
               </select></label>
           </div>
           <div className="grid2">
-            <label className="f"><span>{t('ctFrom')}</span><input type="date" value={edit.start_date || ''} onChange={(e) => setEdit({ ...edit, start_date: e.target.value || null })} /></label>
-            <label className="f"><span>{t('ctTo')}</span><input type="date" value={edit.end_date || ''} onChange={(e) => setEdit({ ...edit, end_date: e.target.value || null })} /></label>
+            <div className="f"><span>{t('ctFrom')}</span><DateField allowEmpty value={edit.start_date} onChange={(d) => setEdit({ ...edit, start_date: d })} /></div>
+            <div className="f"><span>{t('ctTo')}</span><DateField allowEmpty value={edit.end_date} onChange={(d) => setEdit({ ...edit, end_date: d })} /></div>
           </div>
           <label className="f"><span>{t('ctNo')}</span><input value={edit.contract_no || ''} onChange={(e) => setEdit({ ...edit, contract_no: e.target.value || null })} /></label>
           <label className="f"><span>{t('note')}</span><textarea value={edit.note || ''} onChange={(e) => setEdit({ ...edit, note: e.target.value || null })} /></label>
