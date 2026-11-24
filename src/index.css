@@ -230,3 +230,11 @@ tr.no-cat-row td:first-child { color: var(--err); box-shadow: inset 3px 0 0 var(
 /* Bảng chọn ngày nổi giữa màn hình (trong khung nhập ở đáy màn hình) */
 .mb-float-bg { position: fixed; inset: 0; z-index: 60; background: rgb(0 0 0 / .45); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .mb-pop.mb-float { position: relative; top: auto; left: auto; transform: none; width: min(360px, 100%); max-height: calc(100dvh - 32px); overflow: auto; }
+
+/* Chọn nhiều dòng hàng để gán nhóm */
+.line-item button.li-no { border: 0; padding: 0; min-height: 28px; cursor: pointer; }
+.line-item.picked, .line-item.picked:nth-of-type(even) { border-color: var(--brand); border-left-color: var(--brand); box-shadow: 0 0 0 2px rgb(246 135 18 / .35); }
+.line-item.picked .li-no { background: var(--brand); color: var(--on-brand); }
+.pick-bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; margin-bottom: 8px; background: var(--card); }
+.pick-bar.on { padding: 8px 10px; border: 1px solid var(--brand); border-radius: 12px; }
+.pick-bar.on .cat-sel { flex: 1; min-width: 160px; margin-top: 0; min-height: 38px; }

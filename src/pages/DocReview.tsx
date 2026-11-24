@@ -35,6 +35,7 @@ export default function DocReview() {
   const [taxes, setTaxes] = useState<TaxRow[]>([])
   const [lines, setLines] = useState<Line[]>([])
   const [openLines, setOpenLines] = useState(false)
+  const [pick, setPick] = useState<Set<number>>(new Set()) // chọn nhiều dòng để gán chung một nhóm
   const [payMode, setPayMode] = useState<PayMode>(null)
   const [mix, setMix] = useState({ cash: 0, other: 0, otherMethod: 'card' as PayMethod })
   const [suppliers, setSuppliers] = useState<string[]>([])
@@ -170,7 +171,7 @@ export default function DocReview() {
         pos: i, name: l.name, qty: l.qty, unit: l.unit || null, unit_price: l.unit_price, total: l.total, rate: l.rate,
         category_id: old.get(normName(l.name)) ?? guessCategory(l.name, categories, mem).id,
       })))
-      setRemembered(new Set()); setOpenLines(true)
+      setRemembered(new Set()); setPick(new Set()); setOpenLines(true)
       toast(lang === 'de' ? 'Neu gelesen – bitte prüfen und Speichern' : 'Đã đọc lại, kiểm tra rồi bấm Lưu')
     } catch (e) { toast(errMsg(e)) } finally { setRereading(false) }
   }
@@ -189,6 +190,11 @@ export default function DocReview() {
   }
 
   if (!doc || !r) return <Spinner />
+  const catOptions = tops.map((tp) => (
+    <optgroup key={tp.id} label={catName(tp, lang)}>
+      {subs.filter((c) => c.parent_id === tp.id).map((c) => <option key={c.id} value={c.id}>{catName(c, lang)}</option>)}
+    </optgroup>
+  ))
   const parts = folderParts({ ...doc, gross: f.gross, kind: f.kind, nh_document_payments: payments })
 
   return (
@@ -302,10 +308,31 @@ export default function DocReview() {
               {basis === 'gross' && !readOnly && taxes.some((x) => x.rate > 0) && lines.length > 0 && <div className="small muted" style={{ marginTop: 4 }}>
                 {t('linesGross')} <button className="ghost small" style={{ minHeight: 30 }} onClick={() => setLines(linesToNet(lines, taxes))}>{t('toNet')}</button></div>}
               {linesBad && <div className="alert warn">{t('linesMismatch')}<br /><span className="small">Σ {eur(lineSum)} ≠ Netto {eur(netSum)} / Brutto {eur(f.gross)}</span></div>}
+              {openLines && !readOnly && lines.length > 1 && (
+                <div className={`pick-bar${pick.size ? ' on' : ''}`}>
+                  {pick.size ? <>
+                    <b>{lang === 'de' ? `${pick.size} ausgewählt` : `Đã chọn ${pick.size}`}</b>
+                    <select className="cat-sel" value="" onChange={(e) => {
+                      const v = e.target.value; if (!v) return
+                      setLines((ls) => ls.map((l, j) => (pick.has(j) ? { ...l, category_id: v } : l)))
+                      setRemembered((r0) => { const n = new Set(r0); pick.forEach((j) => n.delete(j)); return n })
+                      toast(lang === 'de' ? `${pick.size} Positionen zugeordnet` : `Đã ghép ${pick.size} dòng vào nhóm`); setPick(new Set())
+                    }}>
+                      <option value="">→ {t('category')}…</option>
+                      {catOptions}
+                    </select>
+                    <button className="ghost small" onClick={() => setPick(new Set())}>✕</button>
+                  </> : <>
+                    <span className="small muted">{lang === 'de' ? 'Nummer antippen, um mehrere auszuwählen' : 'Bấm vào số thứ tự để chọn nhiều dòng'}</span>
+                    {noCat > 0 && <button className="ghost small" onClick={() => setPick(new Set(lines.map((l, j) => (l.category_id ? -1 : j)).filter((j) => j >= 0)))}>{lang === 'de' ? 'Alle ohne Gruppe' : 'Chọn dòng chưa có nhóm'}</button>}
+                    <button className="ghost small" onClick={() => setPick(new Set(lines.map((_, j) => j)))}>{lang === 'de' ? 'Alle' : 'Chọn tất cả'}</button>
+                  </>}
+                </div>
+              )}
               {openLines && lines.map((l, i) => (
-                <div className={`line-item${l.category_id ? '' : ' no-cat'}`} key={i}>
-                  <div className="row"><span className="li-no">{i + 1}</span><input className="li-name" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder={t('item')} />
-                    {!readOnly && <button className="ghost" onClick={() => setLines(lines.filter((_, j) => j !== i))}>✕</button>}</div>
+                <div className={`line-item${l.category_id ? '' : ' no-cat'}${pick.has(i) ? ' picked' : ''}`} key={i}>
+                  <div className="row"><button type="button" className="li-no" disabled={readOnly} onClick={() => setPick((p0) => { const n = new Set(p0); if (n.has(i)) n.delete(i); else n.add(i); return n })}>{pick.has(i) ? '✓' : i + 1}</button><input className="li-name" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder={t('item')} />
+                    {!readOnly && <button className="ghost" onClick={() => { setLines(lines.filter((_, j) => j !== i)); setPick(new Set()) }}>✕</button>}</div>
                   <div className="row" style={{ marginTop: 6 }}>
                     <input style={{ width: 64 }} inputMode="decimal" placeholder={t('qty')} value={l.qty ?? ''} onChange={(e) => setLine(i, { qty: e.target.value ? Number(e.target.value.replace(',', '.')) : null })} />
                     <input style={{ width: 72 }} placeholder={t('unit')} value={l.unit ?? ''} onChange={(e) => setLine(i, { unit: e.target.value || null })} />
@@ -322,11 +349,7 @@ export default function DocReview() {
                   <div className="row" style={{ marginTop: 6 }}>
                     <select className={l.category_id ? '' : 'cat-missing'} value={l.category_id || ''} onChange={(e) => { setLine(i, { category_id: e.target.value || null }); setRemembered((s) => { const n = new Set(s); n.delete(i); return n }) }}>
                       <option value="">— {t('category')} —</option>
-                      {tops.map((tp) => (
-                        <optgroup key={tp.id} label={catName(tp, lang)}>
-                          {subs.filter((c) => c.parent_id === tp.id).map((c) => <option key={c.id} value={c.id}>{catName(c, lang)}</option>)}
-                        </optgroup>
-                      ))}
+                      {catOptions}
                     </select>
                     {remembered.has(i) && <span className="tag">{t('rememberedCategory')}</span>}
                   </div>
