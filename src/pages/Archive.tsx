@@ -46,6 +46,11 @@ export default function Archive() {
   const [tick, setTick] = useState(0)
   const [bulk, setBulk] = useState<BulkResult | null>(null)
   const [zb, setZb] = useState<ZBulkResult | null>(null)
+  // Chọn nhiều chứng từ để xoá một lần
+  const [pick, setPick] = useState(false)
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [delBusy, setDelBusy] = useState('')
+  useEffect(() => { setPick(false); setSel(new Set()) }, [folder, period])
 
   useEffect(() => {
     if (!rid) return
@@ -96,6 +101,27 @@ export default function Archive() {
     }
     return out
   }, [docs, found, folder, fPay, fRate, fCat, fSup])
+
+  const canDel = !!m && !locked
+  const ids = [...new Set(items.map((x) => x.d.id))]
+  const picked = ids.filter((id) => sel.has(id))
+  const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const delPicked = async () => {
+    const list = docs.concat(found || []).filter((d, i, a) => sel.has(d.id) && a.findIndex((x) => x.id === d.id) === i)
+    if (!list.length) return
+    const total = list.reduce((s, d) => s + Number(d.gross || 0), 0)
+    if (!confirm(`${t('confirmDelete')}\n${t('delN', { n: String(list.length) })} · ${eur(total)}`)) return
+    let ok = 0; const gone = new Set<string>(); let lastErr: unknown = null
+    for (const d of list) {
+      setDelBusy(`${ok + 1}/${list.length}`)
+      try { await deleteDoc(d); ok++; gone.add(d.id) } catch (e) { lastErr = e }
+    }
+    setDelBusy('')
+    setDocs((ds) => ds.filter((x) => !gone.has(x.id)))
+    setFound((fs) => fs && fs.filter((x) => !gone.has(x.id)))
+    setSel(new Set()); setPick(false)
+    toast(lastErr ? `${t('deleted')}: ${ok}/${list.length} · ${errMsg(lastErr)}` : `${t('deleted')}: ${ok}`)
+  }
 
   if (!r || !m) return null
   const sum = items.reduce((s, i) => s + i.amount, 0)
@@ -191,15 +217,35 @@ export default function Archive() {
             } catch (e) { toast(errMsg(e)) } finally { setUnitBusy('') }
           }}>{unitBusy ? `… ${t('reading')} ${unitBusy}` : `📏 ${lang === 'de' ? `Einheiten ergänzen (${miss.length} Rechnungen)` : `Bổ sung đơn vị cho ${miss.length} hoá đơn`}`}</button>
         })()}
+        {canDel && items.length > 0 && (pick ? (
+          <div className="card" style={{ marginBottom: 10, padding: 10, position: 'sticky', top: 0, zIndex: 2 }}>
+            <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={picked.length === ids.length} ref={(el) => { if (el) el.indeterminate = picked.length > 0 && picked.length < ids.length }}
+                  onChange={() => setSel(picked.length === ids.length ? new Set() : new Set(ids))} />
+                <span>{t('selectAll')}{picked.length > 0 && ` (${picked.length})`}</span>
+              </label>
+              <div className="row" style={{ gap: 6 }}>
+                <button className="danger small" disabled={!picked.length || !!delBusy} onClick={delPicked}>🗑 {delBusy ? `… ${delBusy}` : t('delN', { n: String(picked.length) })}</button>
+                <button className="ghost small" disabled={!!delBusy} onClick={() => { setPick(false); setSel(new Set()) }}>{t('cancel')}</button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 6 }}>
+            <button className="ghost small" onClick={() => setPick(true)}>☑ {t('pickMany')}</button>
+          </div>
+        ))}
         <div className="list">
           {items.map(({ d, amount, method, folder: fo }, i) => (
-            <Link className="it" key={d.id + i} to={`/r/${rid}/doc/${d.id}`}>
+            <Link className="it" key={d.id + i} to={`/r/${rid}/doc/${d.id}`} onClick={pick ? (e) => { e.preventDefault(); toggle(d.id) } : undefined}>
+              {pick && <input type="checkbox" checked={sel.has(d.id)} readOnly style={{ flex: 'none', alignSelf: 'center', marginRight: 8, pointerEvents: 'none' }} aria-label={d.supplier || ''} />}
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="t">{d.supplier || '—'}{folderParts(d).length > 1 && <span className="tag" style={{ marginLeft: 6 }}>⇄</span>}</div>
                 <div className="small muted">{dmy(d.doc_date)}{found && ` · ${LABEL[fo]}`}{d.status === 'uploaded' && <> · <span className="tag warn">{t('uploaded')}</span></>}{liveFlags(d).length > 0 && <> · <span className="tag err">!</span></>}{dupIds.has(d.id) && <> · <span className="tag err">⧉ {t('dupShort')}</span></>}{d.is_credit && <> · <span className="tag ok">Gutschrift</span></>}</div>
               </div>
               <div className="right"><div className="num">{eur(amount)}</div>{method && <PayTag m={method.split('+')[0]} />}</div>
-              {m && !locked && <button className="ghost small" title={t('delete')} style={{ marginLeft: 4 }} onClick={async (e) => {
+              {canDel && !pick && <button className="ghost small" title={t('delete')} style={{ marginLeft: 4 }} onClick={async (e) => {
                 e.preventDefault(); e.stopPropagation()
                 if (!confirm(`${t('confirmDelete')}\n${d.supplier || '—'} · ${dmy(d.doc_date)} · ${eur(d.gross)}`)) return
                 try { await deleteDoc(d); setDocs((ds) => ds.filter((x) => x.id !== d.id)); toast(t('deleted')) } catch (err) { toast(errMsg(err)) }
