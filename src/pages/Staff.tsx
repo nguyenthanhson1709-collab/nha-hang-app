@@ -8,8 +8,6 @@ import { dmy } from '../lib/format'
 import { EMP_TYPES, fullName, jobInfo, isActive, permitDaysLeft, PERMIT_WARN_DAYS, POSITIONS, type Employee, type HrSettings } from '../lib/hr'
 import { Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
 import { TileIcon } from '../components/Icons'
-import { dropProps } from '../lib/drop'
-import { importPayslips, type ImportResult } from '../lib/payslipImport'
 
 type Row = Employee & { id: string }
 
@@ -26,8 +24,6 @@ export default function Staff() {
   const [q, setQ] = useState('')
   const [editCo, setEditCo] = useState<string | null>(null)
 
-  const [busy, setBusy] = useState('')
-  const [result, setResult] = useState<ImportResult | null>(null)
   const load = () => {
     supabase.from('nh_employees').select('*').eq('restaurant_id', rid).order('last_name').order('first_name')
       .then(({ data, error }) => { if (error) toast(errMsg(error)); setList((data || []) as Row[]) })
@@ -35,12 +31,6 @@ export default function Staff() {
   }
   useEffect(() => { if (rid) load() }, [rid]) // eslint-disable-line
 
-  async function upload(files: File[]) {
-    if (!files.length || busy) return
-    setBusy('…')
-    try { setResult(await importPayslips(rid!, files, setBusy)); load() } catch (x) { toast(errMsg(x)) }
-    setBusy('')
-  }
 
   if (!r || !canManage(role)) return null
   const active = (list || []).filter((e) => isActive(e))
@@ -61,16 +51,10 @@ export default function Staff() {
       <div className="page">
         <div className="tiles">
           <button className="tile" onClick={() => nav(`/r/${rid}/hr/new`)}><TileIcon name="userAdd" /><span>{de ? 'Neuer Mitarbeiter' : 'Nhân viên mới'}</span></button>
-          <label className="tile" {...dropProps((fl) => upload(Array.from(fl)))} style={{ cursor: 'pointer' }}>
-            <TileIcon name="inbox" /><span>{de ? 'Lohnabrechnungen hochladen' : 'Tải bảng lương'}</span><span className="small muted">PDF / ZIP (DATEV)</span>
-            <input type="file" accept="application/pdf,.pdf,.zip,application/zip" multiple hidden onChange={(ev) => { upload(Array.from(ev.target.files || [])); ev.target.value = '' }} />
-          </label>
           <button className="tile" onClick={() => toast(de ? 'Dienstplan kommt im nächsten Schritt' : 'Xếp lịch sẽ có ở bước tiếp theo')} style={{ opacity: 0.55 }}>
             <TileIcon name="calendar" /><span>{de ? 'Dienstplan' : 'Xếp lịch'}</span><span className="small muted">{de ? 'bald' : 'sắp có'}</span>
           </button>
         </div>
-
-        {busy && <div className="alert ok"><div className="row"><div className="spinner" style={{ width: 18, height: 18 }} />{de ? 'Lohnabrechnungen werden gelesen' : 'Đang đọc bảng lương'}: {busy}</div><div className="small">{de ? 'Seite bitte nicht schließen.' : 'Đừng đóng trang cho tới khi xong.'}</div></div>}
 
         {expiring.length > 0 && (
           <div className="alert warn">
@@ -110,21 +94,6 @@ export default function Staff() {
           </div>
         )}
       </div>
-
-      <Sheet open={!!result} onClose={() => setResult(null)} title={de ? 'Lohnabrechnungen importiert' : 'Đã tải bảng lương'}>
-        {result && <>
-          <div className="list">
-            <div className="it"><div className="grow">{de ? 'Neue Personalakten' : 'Hồ sơ mới tạo'}</div><b>{result.created.length}</b></div>
-            <div className="it"><div className="grow">{de ? 'Aktualisierte Akten' : 'Hồ sơ đã cập nhật'}</div><b>{result.updated.length}</b></div>
-            <div className="it"><div className="grow">{de ? 'Lohnabrechnungen gespeichert' : 'Bảng lương đã lưu'}</div><b>{result.added}</b></div>
-            {result.skipped > 0 && <div className="it"><div className="grow">{de ? 'Schon vorhanden (übersprungen)' : 'Đã có, bỏ qua'}</div><b>{result.skipped}</b></div>}
-          </div>
-          {result.left.length > 0 && <div className="alert warn"><b>{de ? 'Als ausgeschieden markiert' : 'Chuyển sang Đã nghỉ'} ({result.left.length}):</b> {result.left.join(', ')}</div>}
-          {result.unread.length > 0 && <div className="alert err"><b>{de ? 'Nicht lesbar' : 'Không đọc được'}:</b> {result.unread.join(', ')}</div>}
-          <p className="small muted">{de ? 'Beschäftigungsart (Vollzeit/Teilzeit) ist aus dem Festlohn geschätzt, bitte prüfen. Tätigkeit, Nationalität und Aufenthaltstitel stehen nicht auf der Lohnabrechnung.' : 'Loại hợp đồng toàn / bán thời gian được đoán theo mức lương cố định, anh kiểm tra lại. Công việc, quốc tịch và giấy cư trú không có trên bảng lương nên cần nhập tay.'}</p>
-          <button className="primary block" onClick={() => setResult(null)}>OK</button>
-        </>}
-      </Sheet>
 
       <Sheet open={editCo != null} onClose={() => setEditCo(null)} title={de ? 'Firma des Restaurants' : 'Công ty của nhà hàng'}>
         <label className="f"><span>{de ? 'Firma (erscheint im Personalbogen)' : 'Tên công ty (Firma), in trên giấy tờ nhân viên'}</span>

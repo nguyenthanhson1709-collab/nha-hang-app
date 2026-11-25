@@ -111,7 +111,7 @@ export default function EmployeePage() {
     setBusy(false)
   }
 
-  /** Đọc bảng lương cũ rồi tự điền vào form; bảng lương được lưu vào hồ sơ */
+  /** Đọc bảng lương cũ chỉ để tự điền vào form (không lưu file bảng lương) */
   async function fromPayslip(fl: FileList | File[]) {
     const files = Array.from(fl)
     if (!files.length || !e) return
@@ -135,17 +135,6 @@ export default function EmployeePage() {
         ...(!e.iban && p.ibanMasked && !(e.note || '').includes(p.ibanMasked) ? { note: [e.note, `IBAN lt. Lohnabrechnung: ${p.ibanMasked}`].filter(Boolean).join('\n') } : {}),
       }
       setE({ ...e, ...patch })
-      const docsNew = slips.filter((s) => !docs.some((d) => d.kind === 'payslip' && d.period === s.p.period) && !pending.some((x) => x.period === s.p.period))
-        .map((s) => ({ file: s.blob, name: `Lohnabrechnung ${s.p.period.slice(5)}/${s.p.period.slice(0, 4)}.pdf`, kind: 'payslip' as DocKind, period: s.p.period }))
-      if (isNew) setPending([...pending, ...docsNew])
-      else {
-        for (const d of docsNew) {
-          const path = await uploadHrFile(rid!, eid!, d.file, d.name)
-          const { error } = await supabase.from('nh_employee_docs').insert({ restaurant_id: rid, employee_id: eid, kind: 'payslip', period: d.period, title: d.name.replace(/\.pdf$/, ''), path })
-          if (error) throw error
-        }
-        loadChildren()
-      }
       toast(T(`Đã điền thông tin từ bảng lương ${p.period.slice(5)}/${p.period.slice(0, 4)}. Kiểm tra rồi bấm Lưu.`, `Daten aus Lohnabrechnung ${p.period.slice(5)}/${p.period.slice(0, 4)} übernommen. Bitte prüfen und speichern.`))
     } catch (x) { toast(errMsg(x)) }
     setBusy(false)
