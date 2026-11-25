@@ -12,7 +12,7 @@ import { guessCategory, loadMemory } from '../lib/categorize'
 import { Top, toast, useRestaurant } from '../components/ui'
 import Scanner, { type ScannedPage } from '../components/Scanner'
 import { autoScanImage, loadCv } from '../lib/scanner'
-import { aiReadInvoice, aiReadZbon } from '../lib/ai'
+import { aiReadInvoice, aiReadZbon, lastAiError } from '../lib/ai'
 import { autoProblems } from '../lib/autocheck'
 
 type Kind = 'purchase' | 'zbon' | 'sales'
@@ -39,7 +39,8 @@ async function saveInvoice(rid: string, g: ScanGroup, o: {
   const files0 = g.blobs.map((blob, i) => ({ blob, type: g.types[i] }))
   const hasXml = g.types.some((x) => x.includes('xml'))
   const aiInv = !hasXml ? await aiReadInvoice(rid, files0.filter((f) => !f.type.includes('xml'))) : null
-  let text = aiInv ? 'AI: ' + JSON.stringify(aiInv) : ''
+  // AI lỗi: ghi lý do vào đầu văn bản đọc được, để xem lại sau
+  let text = aiInv ? 'AI: ' + JSON.stringify(aiInv) : !hasXml && lastAiError ? `[AI-Fehler: ${lastAiError}]\n` : ''
   let parsedE: ParsedInvoice | null = null
   for (const p of aiInv ? [] : files0) {
     if (p.type.includes('xml')) { const x = await p.blob.text(); parsedE = parseEInvoice(x); text += x.slice(0, 20000); continue }
@@ -180,6 +181,7 @@ export default function Scan() {
           onDup: (pi, date, gross) => window.confirm(`${t('duplicate')}\n\n${pi.supplier} · ${date.split('-').reverse().join('.')} · ${gross.toFixed(2).replace('.', ',')} €\n\n${t('saveAnyway')}?`),
           onUpload: () => setBusy(t('uploading')),
         })
+        if (lastAiError) toast(`⚠ AI: ${lastAiError}`)
         if (!res) { setBusy(''); toast(t('duplicate')); return }
         if (res.auto) { toast(`✓ ${t('autoOk')}: ${res.supplier} · ${res.gross.toFixed(2).replace('.', ',')} €`); setPages([]); setPay(null); setBusy(''); return }
         nav(`/r/${rid}/doc/${res.id}`)

@@ -232,6 +232,33 @@ export function frameSharpness(cv: CV, video: HTMLVideoElement, quad: Quad | nul
   } finally { img.delete(); g.delete(); lap.delete(); mean.delete(); sd.delete() }
 }
 
+/** Vùng trong khung có giống tờ giấy không: sáng, ít màu, đủ lớn. Tránh tự chụp bàn phím, mặt bàn, đồ vật tối. */
+export function looksLikePaper(video: HTMLVideoElement, quad: Quad): boolean {
+  const vw = video.videoWidth, vh = video.videoHeight
+  const W = 160, s = W / vw, H = Math.max(1, Math.round(vh * s))
+  // diện tích tứ giác (công thức dây giày) so với khung hình
+  let a = 0
+  for (let i = 0; i < 4; i++) { const p = quad[i], q = quad[(i + 1) % 4]; a += p.x * q.y - q.x * p.y }
+  if (Math.abs(a) / 2 < vw * vh * 0.12) return false
+  const ctx = workCanvas(W, H)
+  ctx.drawImage(video, 0, 0, W, H)
+  const xs = quad.map((p) => p.x * s), ys = quad.map((p) => p.y * s)
+  // lấy phần giữa của khung bao (bỏ 20% mép) để không dính nền
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys)
+  const ix = Math.max(0, Math.floor(x0 + (x1 - x0) * 0.2)), iy = Math.max(0, Math.floor(y0 + (y1 - y0) * 0.2))
+  const iw = Math.min(W - ix, Math.ceil((x1 - x0) * 0.6)), ih = Math.min(H - iy, Math.ceil((y1 - y0) * 0.6))
+  if (iw < 4 || ih < 4) return false
+  const d = ctx.getImageData(ix, iy, iw, ih).data
+  let lum = 0, sat = 0, n = 0
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2]
+    lum += 0.299 * r + 0.587 * g + 0.114 * b
+    sat += Math.max(r, g, b) - Math.min(r, g, b); n++
+  }
+  lum /= n; sat /= n
+  return lum > 85 && sat < 70 // giấy dưới đèn yếu ~100, bàn phím/mặt bàn tối ~50
+}
+
 export function quadMoved(a: Quad | null, b: Quad | null, size: number) {
   if (!a || !b) return Infinity
   return Math.max(...a.map((p, i) => dist(p, b[i]))) / size
