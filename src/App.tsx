@@ -20,6 +20,19 @@ import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import RestaurantSettings from './pages/RestaurantSettings'
 
+// Mở app mới (tab mới / mở lại từ màn hình chính) -> luôn về trang đầu, không quay lại trang cũ (vd. trang scan).
+// Tải lại trang trong cùng một tab thì vẫn giữ trang đang xem.
+let freshChecked = false
+function openFresh(start: string) {
+  if (freshChecked) return
+  freshChecked = true
+  try {
+    if (sessionStorage.getItem('nh-open')) return
+    sessionStorage.setItem('nh-open', '1')
+  } catch { return }
+  if (location.hash.startsWith('#/') && location.hash !== `#${start}`) history.replaceState(null, '', `${location.pathname}${location.search}#${start}`)
+}
+
 function RestLayout({ children }: { children: React.ReactNode }) {
   const { rid } = useParams()
   return <>{children}<BottomNav rid={rid!} /></>
@@ -54,6 +67,7 @@ function Shell({ session }: { session: Session }) {
   const active = restaurants.filter((r) => r.active || profile.is_owner)
   const start = profile.is_owner ? '/restaurants' : active.length ? `/r/${active[0].id}` : null
   if (!start) return <div className="center"><div className="card"><p>{t('noAccess')}</p><button onClick={() => supabase.auth.signOut()}>{t('logout')}</button></div></div>
+  openFresh(start)
 
   return (
     <AppCtx.Provider value={{ ...state, reload: load }}>
