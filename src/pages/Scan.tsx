@@ -11,7 +11,6 @@ import { splitScan, type ScanGroup } from '../lib/bulk'
 import { guessCategory, loadMemory } from '../lib/categorize'
 import { Top, toast, useRestaurant } from '../components/ui'
 import Scanner, { type ScannedPage } from '../components/Scanner'
-import { autoScanImage, loadCv } from '../lib/scanner'
 import { aiReadInvoice, aiReadZbon, lastAiError } from '../lib/ai'
 import { autoProblems } from '../lib/autocheck'
 
@@ -94,13 +93,12 @@ export default function Scan() {
   const [busy, setBusy] = useState('')
   const [pay, setPay] = useState<PayMethod | null>(null)
   const [staffDone, setStaffDone] = useState(false)
-  const [scanner, setScanner] = useState<false | 'scan' | 'photo'>(false)
+  const [scanner, setScanner] = useState(false)
   const cam = useRef<HTMLInputElement>(null)
   const pick = useRef<HTMLInputElement>(null)
 
   useEffect(() => () => pages.forEach((p) => URL.revokeObjectURL(p.preview)), []) // eslint-disable-line
   // tải sẵn bộ xử lý ảnh khi mở trang scan, để máy scan và ảnh chụp xử lý ngay
-  useEffect(() => { const id = setTimeout(() => { loadCv().catch(() => {}) }, 300); return () => clearTimeout(id) }, [])
   const [, rerender] = useState(0)
   useEffect(() => { const f = () => rerender((x) => x + 1); queue.subs.add(f); return () => { queue.subs.delete(f) } }, [])
 
@@ -109,8 +107,8 @@ export default function Scan() {
     const add: Page[] = []
     for (const f of Array.from(fl)) {
       if (f.type.startsWith('image/')) {
-        let blob: Blob
-        try { blob = await autoScanImage(f) } catch { blob = await compressImage(f) }
+        // Không cắt mép tự động: giữ nguyên cả tờ hoá đơn, chỉ giảm dung lượng, AI tự đọc
+        const blob = await compressImage(f)
         const sh = await sharpness(blob)
         add.push({ blob, name: f.name.replace(/\.\w+$/, '') + '.jpg', type: 'image/jpeg', preview: URL.createObjectURL(blob), blurry: sh < BLUR_LIMIT })
       } else {
@@ -124,9 +122,7 @@ export default function Scan() {
     setScanner(false)
     const add: Page[] = []
     for (const p of ps) {
-      let { blob, preview } = p
-      // Ảnh chụp khi bộ nhận mép chưa sẵn: cắt mép, làm thẳng bây giờ
-      if (p.raw) try { blob = await autoScanImage(p.blob); URL.revokeObjectURL(preview); preview = URL.createObjectURL(blob) } catch { /* giữ ảnh gốc */ }
+      const { blob, preview } = p
       add.push({ blob, name: 'scan.jpg', type: 'image/jpeg', preview, blurry: (await sharpness(blob)) < BLUR_LIMIT })
     }
     setPages((x) => [...x, ...add])
@@ -224,13 +220,10 @@ export default function Scan() {
         <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
         <input ref={pick} type="file" accept="image/*,application/pdf,.xml,text/xml,application/xml" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
 
-        <button className="primary huge" onClick={() => { setStaffDone(false); setScanner('scan') }}>📄 {pages.length ? t('addPage') : t('scan')}</button>
-        <div className="grid2" style={{ marginTop: 8 }}>
-          <button onClick={() => { setStaffDone(false); setScanner('photo') }}>📷 {t('takePhoto')}</button>
-          <button onClick={() => { setStaffDone(false); pick.current?.click() }}>📁 {t('chooseFile')}<span className="drop-hint">{t('dropHint')}</span></button>
-        </div>
+        <button className="primary huge" onClick={() => { setStaffDone(false); setScanner(true) }}>📷 {pages.length ? t('addPage') : t('takePhoto')}</button>
+        <button className="block" style={{ marginTop: 8 }} onClick={() => { setStaffDone(false); pick.current?.click() }}>📁 {t('chooseFile')}<span className="drop-hint">{t('dropHint')}</span></button>
         {kind === 'purchase' && <div className="small muted" style={{ marginTop: 8 }}>{t('splitHint')}</div>}
-        {scanner && <Scanner plain={scanner === 'photo'} onDone={fromScanner} onCancel={() => setScanner(false)} onFallback={() => cam.current?.click()} />}
+        {scanner && <Scanner plain onDone={fromScanner} onCancel={() => setScanner(false)} onFallback={() => cam.current?.click()} />}
 
         {pages.length > 0 && (
           <div className="card" style={{ marginTop: 12 }}>
