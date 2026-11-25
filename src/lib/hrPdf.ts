@@ -39,8 +39,8 @@ export function personalbogenPdf(e: Employee, r: Restaurant, company: string | n
     ['Erwerbstätigkeit gestattet', yn(e.work_permitted)],
   ])
   section('Beschäftigung', [
-    ['Firma', company || e.company], ['Restaurant', r.name], ['Eintrittsdatum', dmy(e.entry_date)],
-    ['Tätigkeit', [e.job_title, e.position && POSITIONS[e.position][1]].filter(Boolean).join(' · ')],
+    ['Firma', company || e.company], ['Restaurant', r.name], ['Personal-Nr.', e.personnel_no], ['Eintrittsdatum', dmy(e.entry_date)],
+    ['Tätigkeit', e.job_title || (e.position ? POSITIONS[e.position][1] : '')],
     ['Beschäftigungsart', e.employment_type ? EMP_TYPES[e.employment_type][1] : ''],
     ['Wöchentliche Arbeitszeit', num(e.weekly_hours, ' Std.')], ['Monatlicher Bruttolohn', e.gross_monthly == null ? '' : eur(e.gross_monthly)],
     ['Stundenlohn', e.hourly_wage == null ? '' : eur(e.hourly_wage)], ['Urlaubstage / Jahr', num(e.vacation_days)],

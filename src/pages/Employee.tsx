@@ -8,17 +8,19 @@ import { dmy, eur, parseNum, todayIso } from '../lib/format'
 import { dropProps } from '../lib/drop'
 import { download } from '../lib/pdf'
 import {
-  DOC_KINDS, EMP_TYPES, emptyEmployee, fullName, hrSignedUrl, HR_BUCKET, isActive, openHrFile, permitDaysLeft, PERMIT_WARN_DAYS, POSITIONS,
-  uploadHrFile, validIban, validTaxId, type DocKind, type EmpContract, type EmpDoc, type EmpType, type Employee, type HrSettings, type Position,
+  DOC_KINDS, EMP_TYPES, guessKind, JOBS, jobInfo, PERMITS, permitInfo, emptyEmployee, fullName, hrSignedUrl, HR_BUCKET, isActive, openHrFile, permitDaysLeft, PERMIT_WARN_DAYS, POSITIONS,
+  uploadHrFile, validIban, validTaxId, type DocKind, type EmpContract, type EmpDoc, type EmpType, type Employee, type HrSettings,
 } from '../lib/hr'
 import { personalbogenPdf } from '../lib/hrPdf'
+import { readPayslips } from '../lib/payslipImport'
+import { baseSalary, empTypeOf, hourlyOf, splitName } from '../lib/payslip'
 import { DateField } from '../components/PeriodBar'
-import { Money, Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
+import { ComboInput, Money, Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
 
 /** Ô nhập có nhãn (khai báo ngoài component để ô không bị mất focus khi gõ) */
 function F({ l, children }: { l: string; children: ReactNode }) { return <div className="f"><span>{l}</span>{children}</div> }
 
-type Pending = { file: File; kind: DocKind }
+type Pending = { file: File | Blob; name: string; kind: DocKind; period?: string }
 const emptyContract = (e: Employee): EmpContract => ({
   employment_type: e.employment_type, start_date: e.entry_date || todayIso(), end_date: null, probation_until: null,
   weekly_hours: e.weekly_hours, gross_monthly: e.gross_monthly, hourly_wage: e.hourly_wage, vacation_days: e.vacation_days, terminated_on: null, note: null, files: [],
@@ -41,7 +43,6 @@ export default function EmployeePage() {
   const [docs, setDocs] = useState<EmpDoc[]>([])
   const [contracts, setContracts] = useState<(EmpContract & { id: string })[]>([])
   const [pending, setPending] = useState<Pending[]>([])
-  const [kind, setKind] = useState<DocKind>('passport')
   const [photoUrl, setPhotoUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [ct, setCt] = useState<EmpContract | null>(null)
@@ -95,8 +96,8 @@ export default function EmployeePage() {
         if (error) throw error
         const id = data.id as string
         for (const p of pending) {
-          const path = await uploadHrFile(rid!, id, p.file, p.file.name)
-          const { error: de2 } = await supabase.from('nh_employee_docs').insert({ restaurant_id: rid, employee_id: id, kind: p.kind, title: p.file.name, path })
+          const path = await uploadHrFile(rid!, id, p.file, p.name)
+          const { error: de2 } = await supabase.from('nh_employee_docs').insert({ restaurant_id: rid, employee_id: id, kind: p.kind, title: p.name, period: p.period || null, path })
           if (de2) throw de2
         }
         toast(T('Đã lưu nhân viên mới', 'Mitarbeiter angelegt'))
@@ -106,6 +107,46 @@ export default function EmployeePage() {
         if (error) throw error
         toast(T('Đã lưu', 'Gespeichert'))
       }
+    } catch (x) { toast(/nh_employees_pnr|duplicate key/.test(errMsg(x)) ? T('Mã nhân viên (Personal-Nr.) này đã có ở hồ sơ khác', 'Personal-Nr. ist bereits vergeben') : errMsg(x)) }
+    setBusy(false)
+  }
+
+  /** Đọc bảng lương cũ rồi tự điền vào form; bảng lương được lưu vào hồ sơ */
+  async function fromPayslip(fl: FileList | File[]) {
+    const files = Array.from(fl)
+    if (!files.length || !e) return
+    setBusy(true)
+    try {
+      const slips = await readPayslips(files)
+      if (!slips.length) { toast(T('Không đọc được bảng lương (cần PDF bảng lương DATEV)', 'Keine DATEV-Lohnabrechnung erkannt')); setBusy(false); return }
+      const p = slips[slips.length - 1].p
+      const withBase = [...slips].reverse().find((s) => (baseSalary(s.p) || 0) > 0)?.p
+      const typ = empTypeOf(withBase || p)
+      const hourly = [...slips].reverse().map((s) => hourlyOf(s.p)).find((h) => h != null) ?? null
+      const nm = splitName(p.name)
+      const patch: Partial<Employee> = {
+        ...(e.last_name.trim() ? {} : nm),
+        personnel_no: p.pnr || e.personnel_no, address: p.address ?? e.address, birth_date: p.birth ?? e.birth_date, tax_class: p.taxClass ?? e.tax_class,
+        pension_no: p.svNo ?? e.pension_no, health_insurance: p.health ?? e.health_insurance, tax_id: p.taxId ?? e.tax_id,
+        bank_name: p.bank ?? e.bank_name, company: p.employer ?? e.company, entry_date: p.entry ?? e.entry_date,
+        employment_type: e.employment_type ?? typ.employment_type, job_title: e.job_title ?? typ.job_title,
+        gross_monthly: e.gross_monthly ?? (withBase ? baseSalary(withBase) : null), hourly_wage: e.hourly_wage ?? hourly,
+        ...(p.exit ? { exit_date: p.exit } : {}),
+        ...(!e.iban && p.ibanMasked && !(e.note || '').includes(p.ibanMasked) ? { note: [e.note, `IBAN lt. Lohnabrechnung: ${p.ibanMasked}`].filter(Boolean).join('\n') } : {}),
+      }
+      setE({ ...e, ...patch })
+      const docsNew = slips.filter((s) => !docs.some((d) => d.kind === 'payslip' && d.period === s.p.period) && !pending.some((x) => x.period === s.p.period))
+        .map((s) => ({ file: s.blob, name: `Lohnabrechnung ${s.p.period.slice(5)}/${s.p.period.slice(0, 4)}.pdf`, kind: 'payslip' as DocKind, period: s.p.period }))
+      if (isNew) setPending([...pending, ...docsNew])
+      else {
+        for (const d of docsNew) {
+          const path = await uploadHrFile(rid!, eid!, d.file, d.name)
+          const { error } = await supabase.from('nh_employee_docs').insert({ restaurant_id: rid, employee_id: eid, kind: 'payslip', period: d.period, title: d.name.replace(/\.pdf$/, ''), path })
+          if (error) throw error
+        }
+        loadChildren()
+      }
+      toast(T(`Đã điền thông tin từ bảng lương ${p.period.slice(5)}/${p.period.slice(0, 4)}. Kiểm tra rồi bấm Lưu.`, `Daten aus Lohnabrechnung ${p.period.slice(5)}/${p.period.slice(0, 4)} übernommen. Bitte prüfen und speichern.`))
     } catch (x) { toast(errMsg(x)) }
     setBusy(false)
   }
@@ -113,12 +154,12 @@ export default function EmployeePage() {
   async function addFiles(fl: FileList | File[]) {
     const files = Array.from(fl)
     if (!files.length) return
-    if (isNew) { setPending([...pending, ...files.map((file) => ({ file, kind }))]); return }
+    if (isNew) { setPending([...pending, ...files.map((file) => ({ file, name: file.name, kind: guessKind(file.name) }))]); return }
     setBusy(true)
     try {
       for (const f of files) {
         const path = await uploadHrFile(rid!, eid!, f, f.name)
-        const { error } = await supabase.from('nh_employee_docs').insert({ restaurant_id: rid, employee_id: eid, kind, title: f.name, path })
+        const { error } = await supabase.from('nh_employee_docs').insert({ restaurant_id: rid, employee_id: eid, kind: guessKind(f.name), title: f.name, path })
         if (error) throw error
       }
       toast(T('Đã tải lên', 'Hochgeladen')); loadChildren()
@@ -211,6 +252,11 @@ export default function EmployeePage() {
       <div className="page">
         {!active && <div className="alert warn">{T('Đã nghỉ việc từ', 'Ausgeschieden zum')} {dmy(e.exit_date)}{e.exit_reason && ` · ${e.exit_reason}`}</div>}
         {warns.map((w) => <div key={w} className="alert warn">{w}</div>)}
+        <label className="btn block drop" style={{ marginBottom: 12 }} {...dropProps((fl) => fromPayslip(fl))}>
+          🧾 {T('Tải bảng lương cũ lên để tự điền thông tin', 'Alte Lohnabrechnung hochladen und Daten übernehmen')}
+          <span className="drop-hint">{busy ? T('Đang đọc…', 'Wird gelesen…') : T('Tên, địa chỉ, ngày sinh, Steuer-ID, số BH hưu trí, Krankenkasse, Steuerklasse… (PDF DATEV)', 'Name, Anschrift, Geburtsdatum, Steuer-ID, RV-Nr., Krankenkasse, Steuerklasse… (DATEV-PDF)')}</span>
+          <input type="file" accept="application/pdf,.pdf,.zip" multiple hidden disabled={busy} onChange={(ev) => { fromPayslip(ev.target.files || []); ev.target.value = '' }} />
+        </label>
 
         <div className="card">
           <h3 style={{ marginTop: 0 }}>{T('Cá nhân', 'Persönliche Angaben')}</h3>
@@ -238,8 +284,12 @@ export default function EmployeePage() {
 
         <div className="card">
           <h3 style={{ marginTop: 0 }}>{T('Cư trú và lao động', 'Aufenthalt und Erwerbstätigkeit')}</h3>
-          <F l={L('Giấy phép cư trú', 'Aufenthaltstitel')}><input {...txt('residence_permit')} placeholder="Niederlassungserlaubnis, Aufenthaltserlaubnis, EU…" /></F>
-          <F l={L('Hết hạn ngày (app nhắc trước 90 ngày)', 'gültig bis')}><DateField allowEmpty value={e.residence_permit_until} onChange={(d) => set({ residence_permit_until: d })} /></F>
+          <F l={L('Giấy phép cư trú', 'Aufenthaltstitel')}>
+            <ComboInput value={e.residence_permit || ''} options={PERMITS.map((p) => p[0])} placeholder={T('Chọn trong danh sách hoặc gõ', 'Auswählen oder eingeben')}
+              onChange={(v) => { const pi = permitInfo(v); set({ residence_permit: v || null, ...(pi && pi[2] != null && e.work_permitted == null ? { work_permitted: pi[2] } : {}), ...(pi?.[3] ? { residence_permit_until: null } : {}) }) }} />
+            {!de && permitInfo(e.residence_permit) && <div className="small muted" style={{ marginTop: 4 }}>{permitInfo(e.residence_permit)![1]}</div>}
+          </F>
+          {!permitInfo(e.residence_permit)?.[3] && <F l={L('Hết hạn ngày (app nhắc trước 90 ngày)', 'gültig bis')}><DateField allowEmpty value={e.residence_permit_until} onChange={(d) => set({ residence_permit_until: d })} /></F>}
           <F l={L('Được phép làm việc?', 'Erwerbstätigkeit gestattet')}>{yn('work_permitted')}</F>
         </div>
 
@@ -248,14 +298,13 @@ export default function EmployeePage() {
           <F l={L('Công ty', 'Firma')}><input {...txt('company')} placeholder="Vietbowl Mitte GmbH" /></F>
           <div className="grid2">
             <F l={L('Ngày bắt đầu làm', 'Eintrittsdatum')}><DateField allowEmpty value={e.entry_date} onChange={(d) => set({ entry_date: d })} /></F>
-            <F l={L('Vị trí', 'Bereich')}>
-              <select value={e.position || ''} onChange={(ev) => set({ position: (ev.target.value || null) as Position | null })}>
-                <option value="">—</option>
-                {(Object.keys(POSITIONS) as Position[]).map((k) => <option key={k} value={k}>{POSITIONS[k][li]}</option>)}
-              </select>
-            </F>
+            <F l={L('Mã nhân viên', 'Personal-Nr.')}><input inputMode="numeric" {...txt('personnel_no')} placeholder="00001" /></F>
           </div>
-          <F l={L('Công việc dự định', 'Tätigkeit')}><input {...txt('job_title')} placeholder="Koch, Servicekraft, Küchenhilfe…" /></F>
+          <F l={L('Công việc', 'Tätigkeit')}>
+            <ComboInput value={e.job_title || ''} options={JOBS.map((j) => j[0])} placeholder={T('Chọn trong danh sách hoặc gõ', 'Auswählen oder eingeben')}
+              onChange={(v) => { const j = jobInfo(v); set({ job_title: v || null, ...(j ? { position: j[2] } : {}) }) }} />
+            {!de && jobInfo(e.job_title) && <div className="small muted" style={{ marginTop: 4 }}>{jobInfo(e.job_title)![1]} · {POSITIONS[jobInfo(e.job_title)![2]][0]}</div>}
+          </F>
           <F l={L('Loại hợp đồng', 'Beschäftigungsart')}>
             <select value={e.employment_type || ''} onChange={(ev) => set({ employment_type: (ev.target.value || null) as EmpType | null })}>
               <option value="">—</option>
@@ -296,11 +345,6 @@ export default function EmployeePage() {
 
         <div className="card">
           <h3 style={{ marginTop: 0 }}>{T('Giấy tờ', 'Dokumente')}</h3>
-          <div className="row" style={{ marginBottom: 8 }}>
-            <select value={kind} onChange={(ev) => setKind(ev.target.value as DocKind)} style={{ flex: 1 }}>
-              {(Object.keys(DOC_KINDS) as DocKind[]).map((k) => <option key={k} value={k}>{DOC_KINDS[k][li]}</option>)}
-            </select>
-          </div>
           <label className="btn block drop" {...dropProps((fl) => addFiles(fl))}>📄 {T('Tải giấy tờ lên (PDF / ảnh)', 'Dokument hochladen (PDF / Foto)')}<span className="drop-hint">{T('hoặc kéo thả file vào đây', 'oder Datei hierher ziehen')}</span>
             <input type="file" accept="application/pdf,.pdf,image/*" multiple hidden disabled={busy} onChange={(ev) => { addFiles(ev.target.files || []); ev.target.value = '' }} />
           </label>
@@ -308,7 +352,7 @@ export default function EmployeePage() {
             <div className="list" style={{ marginTop: 8 }}>
               {pending.map((p, i) => (
                 <div key={i} className="it">
-                  <div className="grow" style={{ minWidth: 0 }}><div className="t">{p.file.name}</div><div className="small muted">{DOC_KINDS[p.kind][li]} · {T('lưu khi bấm Lưu', 'wird beim Speichern hochgeladen')}</div></div>
+                  <div className="grow" style={{ minWidth: 0 }}><div className="t">{p.name}</div><div className="small muted">{T('lưu khi bấm Lưu', 'wird beim Speichern hochgeladen')}</div></div>
                   <button className="ghost" onClick={() => setPending(pending.filter((_, j) => j !== i))}>✕</button>
                 </div>
               ))}
@@ -322,11 +366,11 @@ export default function EmployeePage() {
                   <div key={d.id} className="it">
                     <button className="ghost grow" style={{ justifyContent: 'flex-start', textAlign: 'left', minWidth: 0, padding: 0 }} onClick={() => openHrFile(d.path)}>
                       <div style={{ minWidth: 0 }}>
-                        <div className="t">📎 {DOC_KINDS[d.kind][li]}</div>
+                        <div className="t">📎 {d.kind === 'other' ? d.title : DOC_KINDS[d.kind][li]}</div>
                         <div className="small muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title} · {dmy(d.created_at)}</div>
                       </div>
                     </button>
-                    {['passport', 'residence', 'work_permit', 'id_card', 'health'].includes(d.kind) && (
+                    {!['payslip', 'contract', 'tax', 'certificate'].includes(d.kind) && (
                       <div style={{ width: 130 }} title={T('Hết hạn', 'gültig bis')}>
                         <DateField allowEmpty value={d.valid_until} onChange={(v) => setDocValid(d, v)} />
                         {dl != null && dl <= PERMIT_WARN_DAYS && <span className={`tag ${dl < 0 ? 'err' : 'warn'}`}>{dl < 0 ? T('hết hạn', 'abgelaufen') : `${dl} ${T('ngày', 'Tage')}`}</span>}

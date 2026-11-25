@@ -18,6 +18,7 @@ export interface Employee {
   gross_monthly: number | null; hourly_wage: number | null; weekly_hours: number | null; vacation_days: number | null
   multiple_employment: boolean | null; tax_class: number | null; pension_no: string | null; health_insurance: string | null
   tax_id: string | null; iban: string | null; bic: string | null; bank_name: string | null; note: string | null
+  personnel_no?: string | null
 }
 export interface EmpDoc { id: string; employee_id: string; kind: DocKind; title: string | null; path: string; valid_until: string | null; period: string | null; created_at: string }
 export interface EmpContract {
@@ -40,6 +41,61 @@ export const DOC_KINDS: Record<DocKind, [string, string]> = {
   id_card: ['CMND / Personalausweis', 'Personalausweis'], contract: ['Hợp đồng lao động', 'Arbeitsvertrag'], payslip: ['Bảng lương', 'Lohnabrechnung'],
   sv: ['Thẻ bảo hiểm xã hội', 'SV-Ausweis'], tax: ['Giấy tờ thuế', 'Steuerunterlagen'], health: ['Bảo hiểm y tế / Gesundheitszeugnis', 'Krankenkasse / Gesundheitszeugnis'],
   certificate: ['Bằng cấp / chứng chỉ', 'Zeugnis / Bescheinigung'], other: ['Khác', 'Sonstiges'],
+}
+
+/** Các loại giấy phép cư trú ở Đức: [tên Đức (lưu và in ra), giải thích tiếng Việt, được làm việc?, không thời hạn?] */
+export const PERMITS: [string, string, boolean | null, boolean][] = [
+  ['Deutsche Staatsangehörigkeit', 'Quốc tịch Đức, không cần giấy phép', true, true],
+  ['EU/EWR/Schweiz – Freizügigkeit', 'Công dân EU / EWR / Thuỵ Sĩ, được làm việc tự do', true, true],
+  ['Niederlassungserlaubnis (§ 9 AufenthG)', 'Định cư vĩnh viễn, được làm mọi việc', true, true],
+  ['Erlaubnis zum Daueraufenthalt-EU (§ 9a AufenthG)', 'Cư trú dài hạn EU, được làm mọi việc', true, true],
+  ['Aufenthaltserlaubnis – Familiennachzug (§§ 27–36 AufenthG)', 'Cư trú theo diện đoàn tụ gia đình (vợ/chồng/con), thường được làm việc', true, false],
+  ['Aufenthaltserlaubnis – Beschäftigung (§§ 18a, 18b, 19c AufenthG)', 'Cư trú để làm việc, chỉ làm đúng công việc ghi trên giấy', null, false],
+  ['Aufenthaltserlaubnis – Ausbildung (§ 16a AufenthG)', 'Cư trú để học nghề (Ausbildung)', null, false],
+  ['Aufenthaltserlaubnis – Studium (§ 16b AufenthG)', 'Du học: tối đa 140 ngày (hoặc 280 nửa ngày) / năm', true, false],
+  ['Aufenthaltserlaubnis – Sprachkurs (§ 16f AufenthG)', 'Học tiếng: thường không được làm việc', false, false],
+  ['Aufenthaltserlaubnis – humanitäre Gründe (§§ 22–25 AufenthG)', 'Cư trú vì lý do nhân đạo, xem ghi chú trên giấy', null, false],
+  ['Blaue Karte EU (§ 18g AufenthG)', 'Thẻ xanh EU (lao động trình độ cao)', true, false],
+  ['Chancenkarte (§ 20a AufenthG)', 'Thẻ cơ hội: tối đa 20 giờ / tuần', true, false],
+  ['Fiktionsbescheinigung (§ 81 Abs. 4 AufenthG)', 'Giấy tạm khi đang gia hạn, giữ quyền của giấy cũ', null, false],
+  ['Aufenthaltsgestattung (Asylverfahren)', 'Đang xin tị nạn: cần Sở Ngoại kiều cho phép làm việc', null, false],
+  ['Duldung (§ 60a AufenthG)', 'Tạm hoãn trục xuất: cần Sở Ngoại kiều cho phép làm việc', null, false],
+  ['Nationales Visum (D-Visum)', 'Visa quốc gia, xem ghi chú trên visa', null, false],
+]
+export const permitInfo = (v: string | null) => PERMITS.find((p) => p[0] === v)
+
+/** Công việc (Tätigkeit): [tên Đức (lưu và in ra), tiếng Việt, khu vực dùng khi xếp lịch] */
+export const JOBS: [string, string, Position][] = [
+  ['Koch / Köchin', 'Đầu bếp', 'kitchen'],
+  ['Beikoch / Beiköchin', 'Phụ bếp', 'kitchen'],
+  ['Sushi-Koch / Sushi-Köchin', 'Đầu bếp sushi', 'kitchen'],
+  ['Küchenhilfe', 'Phụ việc bếp', 'kitchen'],
+  ['Servicekraft', 'Phục vụ', 'service'],
+  ['Restaurantleiter/in', 'Quản lý nhà hàng', 'service'],
+  ['Schichtleiter/in', 'Trưởng ca', 'service'],
+  ['Thekenkraft / Barkeeper', 'Quầy / pha chế', 'bar'],
+  ['Kassierer/in', 'Thu ngân', 'bar'],
+  ['Spülkraft', 'Rửa bát', 'dish'],
+  ['Reinigungskraft', 'Dọn vệ sinh', 'other'],
+  ['Lieferfahrer/in', 'Giao hàng', 'other'],
+  ['Bürokraft', 'Văn phòng', 'other'],
+  ['Geschäftsführer/in', 'Giám đốc', 'other'],
+]
+export const jobInfo = (v: string | null) => JOBS.find((j) => j[0] === v)
+
+/** Đoán loại giấy tờ theo tên file (không cần chọn tay) */
+export function guessKind(name: string): DocKind {
+  const n = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  if (/lohn|gehalt|abrechnung|luong/.test(n)) return 'payslip'
+  if (/arbeitsvertrag|vertrag|hop ?dong|contract/.test(n)) return 'contract'
+  if (/aufenthalt|eat|cu tru|residence/.test(n)) return 'residence'
+  if (/arbeitserlaubnis|work.?permit/.test(n)) return 'work_permit'
+  if (/reisepass|passport|ho chieu|\bpass\b/.test(n)) return 'passport'
+  if (/sv.?ausweis|sozialversicherung/.test(n)) return 'sv'
+  if (/ausweis|id.?card|cmnd|cccd/.test(n)) return 'id_card'
+  if (/gesundheit|krankenkasse|infektionsschutz/.test(n)) return 'health'
+  if (/steuer|tax/.test(n)) return 'tax'
+  return 'other'
 }
 
 export const emptyEmployee = (company: string | null): Employee => ({
