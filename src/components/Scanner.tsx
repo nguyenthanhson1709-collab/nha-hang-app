@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLang } from '../lib/i18n'
-import { canvasToBlob, detectQuad, fitScale, frameSharpness, freeCanvas, jpegQuality, loadCv, looksLikePaper, quadMoved, warpAndEnhance, type Mode, type Quad } from '../lib/scanner'
+import { canvasToBlob, detectQuad, fitScale, frameSharpness, freeCanvas, jpegQuality, loadCv, looksLikePaper, quadMoved, quickSharpness, warpAndEnhance, type Mode, type Quad } from '../lib/scanner'
 
 export interface ScannedPage { blob: Blob; preview: string; raw?: boolean }
 
@@ -47,7 +47,8 @@ export default function Scanner({ onDone, onCancel, plain = false, onFallback }:
         v.srcObject = stream
         await v.play()
         const track = stream.getVideoTracks()[0]
-        const caps = (track.getCapabilities?.() || {}) as { torch?: boolean }
+        const caps = (track.getCapabilities?.() || {}) as { torch?: boolean; focusMode?: string[] }
+        if (caps.focusMode?.includes('continuous')) track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => {})
         if (caps.torch) setTorch(false)
         setStatus('ready'); setHint(T.manual)
         // Bộ nhận mép giấy (OpenCV, ~10 MB) chỉ tải sau khi camera đã chạy; lỗi vẫn chụp tay được
@@ -117,9 +118,15 @@ export default function Scanner({ onDone, onCancel, plain = false, onFallback }:
       c.width = Math.round(v.videoWidth * sc); c.height = Math.round(v.videoHeight * sc)
       const ctx = c.getContext('2d')
       if (!ctx) throw new Error('canvas')
-      ctx.drawImage(v, 0, 0, c.width, c.height)
+      // Chống rung: lấy 6 khung hình trong ~0,5 giây, giữ khung nét nhất (tay rung thì có khung bị nhoè)
+      setHint(T.steady)
+      let best = -1
+      for (let i = 0; i < 6; i++) {
+        const sh = quickSharpness(v)
+        if (sh > best) { best = sh; ctx.drawImage(v, 0, 0, c.width, c.height) }
+        if (i < 5) await new Promise((r) => setTimeout(r, 90))
+      }
       out = c
-      await new Promise((r) => requestAnimationFrame(() => r(null))) // cho màn hình kịp chớp trước khi xử lý
       let q: Quad | null = st.current.quad ? (st.current.quad.map((p) => ({ x: p.x * sc, y: p.y * sc })) as Quad) : null
       const cv = plain ? null : st.current.cv
       // Chỉ làm thẳng khi bộ nhận mép đã sẵn; nếu chưa thì giữ ảnh gốc, app sẽ tự cắt mép khi xử lý

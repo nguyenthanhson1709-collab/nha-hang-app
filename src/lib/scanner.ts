@@ -230,6 +230,23 @@ export function looksLikePaper(video: HTMLVideoElement, quad: Quad): boolean {
   return lum > 85 && sat < 70 // giấy dưới đèn yếu ~100, bàn phím/mặt bàn tối ~50
 }
 
+/** Độ nét nhanh (không cần OpenCV): năng lượng cạnh trên ảnh xám nhỏ. Dùng để chọn khung ít rung nhất khi chụp. */
+export function quickSharpness(video: HTMLVideoElement): number {
+  const W = 240, H = Math.max(1, Math.round(video.videoHeight * W / video.videoWidth))
+  const ctx = workCanvas(W, H)
+  ctx.drawImage(video, 0, 0, W, H)
+  const d = ctx.getImageData(0, 0, W, H).data
+  const g = new Float32Array(W * H)
+  for (let i = 0; i < W * H; i++) g[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]
+  let e = 0
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x
+    const l = 4 * g[i] - g[i - 1] - g[i + 1] - g[i - W] - g[i + W]
+    e += l * l
+  }
+  return e / (W * H)
+}
+
 export function quadMoved(a: Quad | null, b: Quad | null, size: number) {
   if (!a || !b) return Infinity
   return Math.max(...a.map((p, i) => dist(p, b[i]))) / size
