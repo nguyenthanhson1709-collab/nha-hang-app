@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLang } from '../lib/i18n'
-import { canvasToBlob, detectQuad, frameSharpness, freeCanvas, jpegQuality, loadCv, quadMoved, warpAndEnhance, type Mode, type Quad } from '../lib/scanner'
+import { canvasToBlob, detectQuad, frameSharpness, freeCanvas, jpegQuality, loadCv, looksLikePaper, quadMoved, warpAndEnhance, type Mode, type Quad } from '../lib/scanner'
 
 export interface ScannedPage { blob: Blob; preview: string; raw?: boolean }
 
@@ -58,7 +58,9 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
         const loop = () => {
           if (stop) return
           if (!st.current.busy && v.videoWidth) try {
-            const q = detectQuad(cv, v, v.videoWidth, v.videoHeight)
+            // chỉ nhận khung giống tờ giấy (sáng, ít màu, đủ lớn); bàn phím, mặt bàn... bị bỏ qua
+            const q0 = detectQuad(cv, v, v.videoWidth, v.videoHeight)
+            const q = q0 && looksLikePaper(v, q0) ? q0 : null
             const moved = quadMoved(q, st.current.quad, Math.max(v.videoWidth, v.videoHeight))
             st.current.stable = q && moved < 0.015 ? st.current.stable + 1 : 0
             st.current.quad = q
