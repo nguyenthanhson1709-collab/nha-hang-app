@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLang } from '../lib/i18n'
-import { canvasToBlob, detectQuad, frameSharpness, freeCanvas, jpegQuality, loadCv, looksLikePaper, quadMoved, warpAndEnhance, type Mode, type Quad } from '../lib/scanner'
+import { canvasToBlob, detectQuad, fitScale, frameSharpness, freeCanvas, jpegQuality, loadCv, looksLikePaper, quadMoved, warpAndEnhance, type Mode, type Quad } from '../lib/scanner'
 
 export interface ScannedPage { blob: Blob; preview: string; raw?: boolean }
 
@@ -9,7 +9,8 @@ const TXT = {
   de: { loading: 'Scanner wird geladen…', hold: 'Ganzes Blatt in den Rahmen', steady: 'Ruhig halten…', manual: 'Zum Aufnehmen runden Knopf drücken', shot: 'Aufgenommen', next: 'Aufgenommen. Nächste Seite oder Fertig', done: 'Fertig', auto: 'Auto', noCam: 'Kamera nicht verfügbar. Bitte Zugriff erlauben oder normales Foto nutzen.', pages: 'Seiten', modes: { scan: 'Scan', gray: 'Grau', color: 'Farbe' } },
 }
 
-export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedPage[]) => void; onCancel: () => void }) {
+/** plain = chụp ảnh thường (không cắt mép, ảnh màu), vẫn ở trong camera để chụp liên tiếp nhiều tấm */
+export default function Scanner({ onDone, onCancel, plain = false, onFallback }: { onDone: (pages: ScannedPage[]) => void; onCancel: () => void; plain?: boolean; onFallback?: () => void }) {
   const { lang } = useLang()
   const T = TXT[lang]
   const video = useRef<HTMLVideoElement>(null)
@@ -17,14 +18,14 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [hint, setHint] = useState(T.loading)
   const [pages, setPages] = useState<ScannedPage[]>([])
-  const [auto, setAuto] = useState(true)
-  const [mode, setMode] = useState<Mode>('scan')
+  const [auto, setAuto] = useState(!plain)
+  const [mode, setMode] = useState<Mode>(plain ? 'color' : 'scan')
   const [flash, setFlash] = useState(false)
   const [torch, setTorch] = useState<boolean | null>(null)
   const [err, setErr] = useState('')
   const [shooting, setShooting] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const st = useRef({ quad: null as Quad | null, shotQuad: null as Quad | null, stable: 0, busy: false, lastShot: 0, auto: true, mode: 'scan' as Mode, stream: null as MediaStream | null, cv: null as any })
+  const st = useRef({ quad: null as Quad | null, shotQuad: null as Quad | null, stable: 0, busy: false, lastShot: 0, auto: !plain, mode: (plain ? 'color' : 'scan') as Mode, stream: null as MediaStream | null, cv: null as any })
 
   useEffect(() => { st.current.auto = auto }, [auto])
   useEffect(() => { st.current.mode = mode }, [mode])
@@ -50,7 +51,7 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
         if (caps.torch) setTorch(false)
         setStatus('ready'); setHint(T.manual)
         // Bộ nhận mép giấy (OpenCV, ~10 MB) chỉ tải sau khi camera đã chạy; lỗi vẫn chụp tay được
-        if (stop) return
+        if (stop || plain) return // ảnh thường: không cần bộ nhận mép giấy
         const cv = await loadCv().catch((e) => { setErr(String(e?.message || e)); return null })
         if (!cv || stop) return
         st.current.cv = cv
@@ -111,7 +112,7 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
     let out: HTMLCanvasElement | null = null
     try {
       // Giới hạn cỡ ảnh để iPhone không hết bộ nhớ canvas
-      const sc = Math.min(1, 2400 / Math.max(v.videoWidth, v.videoHeight))
+      const sc = plain ? fitScale(v.videoWidth, v.videoHeight) : Math.min(1, 2400 / Math.max(v.videoWidth, v.videoHeight))
       const mode = st.current.mode
       c.width = Math.round(v.videoWidth * sc); c.height = Math.round(v.videoHeight * sc)
       const ctx = c.getContext('2d')
@@ -120,11 +121,11 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
       out = c
       await new Promise((r) => requestAnimationFrame(() => r(null))) // cho màn hình kịp chớp trước khi xử lý
       let q: Quad | null = st.current.quad ? (st.current.quad.map((p) => ({ x: p.x * sc, y: p.y * sc })) as Quad) : null
-      const cv = st.current.cv
+      const cv = plain ? null : st.current.cv
       // Chỉ làm thẳng khi bộ nhận mép đã sẵn; nếu chưa thì giữ ảnh gốc, app sẽ tự cắt mép khi xử lý
       if (cv) try { q = q || detectQuad(cv, c, c.width, c.height); out = warpAndEnhance(cv, c, q, mode) } catch (e) { out = c; setErr(String((e as Error)?.message || e)) }
-      const blob = await canvasToBlob(out, cv ? jpegQuality(mode) : 0.85)
-      setPages((p) => [...p, { blob, preview: URL.createObjectURL(blob), raw: !cv } as ScannedPage])
+      const blob = await canvasToBlob(out, cv ? jpegQuality(mode) : plain ? 0.8 : 0.85)
+      setPages((p) => [...p, { blob, preview: URL.createObjectURL(blob), raw: !cv && !plain } as ScannedPage])
       setHint(T.shot)
       st.current.lastShot = Date.now(); st.current.stable = 0; st.current.shotQuad = st.current.quad
     } catch (e) {
@@ -159,14 +160,14 @@ export default function Scanner({ onDone, onCancel }: { onDone: (pages: ScannedP
       </div>
 
       {err && <div style={{ position: 'absolute', top: 70, left: 12, right: 12, background: 'rgba(180,35,24,.85)', padding: 8, borderRadius: 8, fontSize: 12 }}>{err}</div>}
-      {status === 'error' && <div className="center" style={{ position: 'absolute', inset: 0, padding: 24, textAlign: 'center' }}><div>{T.noCam}<br /><br /><button onClick={onCancel}>OK</button></div></div>}
+      {status === 'error' && <div className="center" style={{ position: 'absolute', inset: 0, padding: 24, textAlign: 'center' }}><div>{T.noCam}<br /><br />{onFallback && <><button onClick={() => { onCancel(); onFallback() }}>📷</button>{' '}</>}<button onClick={onCancel}>OK</button></div></div>}
       {status === 'loading' && <div className="center" style={{ position: 'absolute', inset: 0 }}><div className="spinner" /></div>}
 
       <div style={{ ...bar, bottom: 0, flexDirection: 'column', paddingBottom: 'max(14px, env(safe-area-inset-bottom))', background: 'linear-gradient(transparent, rgba(0,0,0,.75))' }}>
-        <div style={{ display: 'flex', gap: 6 }}>
+        {!plain && <div style={{ display: 'flex', gap: 6 }}>
           {(['scan', 'gray', 'color'] as Mode[]).map((m) => <button key={m} style={pill(mode === m)} onClick={() => setMode(m)}>{T.modes[m]}</button>)}
           <button style={pill(auto)} onClick={() => setAuto(!auto)}>{T.auto} {auto ? '✓' : ''}</button>
-        </div>
+        </div>}
         <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 12 }}>
           <div style={{ flex: 1, display: 'flex', gap: 6, overflowX: 'auto' }}>
             {pages.map((p, i) => (

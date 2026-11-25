@@ -94,7 +94,7 @@ export default function Scan() {
   const [busy, setBusy] = useState('')
   const [pay, setPay] = useState<PayMethod | null>(null)
   const [staffDone, setStaffDone] = useState(false)
-  const [scanner, setScanner] = useState(false)
+  const [scanner, setScanner] = useState<false | 'scan' | 'photo'>(false)
   const cam = useRef<HTMLInputElement>(null)
   const pick = useRef<HTMLInputElement>(null)
 
@@ -224,13 +224,13 @@ export default function Scan() {
         <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
         <input ref={pick} type="file" accept="image/*,application/pdf,.xml,text/xml,application/xml" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
 
-        <button className="primary huge" onClick={() => { setStaffDone(false); setScanner(true) }}>📄 {pages.length ? t('addPage') : t('scan')}</button>
+        <button className="primary huge" onClick={() => { setStaffDone(false); setScanner('scan') }}>📄 {pages.length ? t('addPage') : t('scan')}</button>
         <div className="grid2" style={{ marginTop: 8 }}>
-          <button onClick={() => { setStaffDone(false); cam.current?.click() }}>📷 {t('takePhoto')}</button>
+          <button onClick={() => { setStaffDone(false); setScanner('photo') }}>📷 {t('takePhoto')}</button>
           <button onClick={() => { setStaffDone(false); pick.current?.click() }}>📁 {t('chooseFile')}<span className="drop-hint">{t('dropHint')}</span></button>
         </div>
         {kind === 'purchase' && <div className="small muted" style={{ marginTop: 8 }}>{t('splitHint')}</div>}
-        {scanner && <Scanner onDone={fromScanner} onCancel={() => setScanner(false)} />}
+        {scanner && <Scanner plain={scanner === 'photo'} onDone={fromScanner} onCancel={() => setScanner(false)} onFallback={() => cam.current?.click()} />}
 
         {pages.length > 0 && (
           <div className="card" style={{ marginTop: 12 }}>
