@@ -16,7 +16,7 @@ create function storage.foldername(name text) returns text[] language sql as $$ 
 grant usage on schema public, auth, storage to authenticated, anon;
 grant execute on function auth.uid() to authenticated, anon;
 `)
-for (const f of ['001_nh_schema.sql', '003_nh_hardening.sql', '004_nh_kassenbuch_order.sql', '005_nh_cash_moves_channel.sql', '006_nh_contracts.sql', '007_nh_bank_statements.sql', '008_nh_profiles_home_title.sql', '009_nh_card_source.sql', '010_nh_credit_note.sql', '011_nh_credit_ref.sql']) await db.exec(readFileSync(`supabase/migrations/${f}`, 'utf8'))
+for (const f of ['001_nh_schema.sql', '003_nh_hardening.sql', '004_nh_kassenbuch_order.sql', '005_nh_cash_moves_channel.sql', '006_nh_contracts.sql', '007_nh_bank_statements.sql', '008_nh_profiles_home_title.sql', '009_nh_card_source.sql', '010_nh_credit_note.sql', '011_nh_credit_ref.sql', '012_nh_hr.sql', '012_nh_hr.sql']) await db.exec(readFileSync(`supabase/migrations/${f}`, 'utf8'))
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;`)
 
 const O = '11111111-1111-4111-8111-111111111111', M = '22222222-2222-4222-8222-222222222222', S = '33333333-3333-4333-8333-333333333333', X = '44444444-4444-4444-8444-444444444444'
@@ -86,6 +86,22 @@ const vv = await as(M, () => q(`select text, einnahme, ausgabe from nh_kassenbuc
 ok(!(vv instanceof Error) && vv.some((r) => /Viva/.test(String(r.text)) && Number(r.ausgabe) === 50) && vv.some((r) => Number(r.einnahme) === 400), 'Viva Wallet: Trinkgeld = 650 − 600 = 50 ra khỏi két')
 const aud = await q(`select count(*)::int n from nh_audit`)
 ok(Number(aud[0].n) > 3, 'Nhật ký sửa đổi được ghi')
+
+// Nhân sự: chỉ chủ + người phụ trách đúng quán
+const e1 = await as(M, () => q(`insert into nh_employees(restaurant_id, last_name, first_name, iban) values ($1,'Nguyen','An','DE89370400440532013000') returning id`, [A]))
+ok(!(e1 instanceof Error) && !!e1[0].id, 'Người phụ trách thêm nhân viên vào quán mình')
+const empId = (e1 as Record<string, unknown>[])[0].id as string
+ok((await as(M, () => q(`insert into nh_employees(restaurant_id, last_name) values ($1,'X')`, [B]))) instanceof Error, 'Người phụ trách không thêm nhân viên vào quán khác')
+const sEmp = await as(S, () => q(`select id from nh_employees`))
+ok(Array.isArray(sEmp) && sEmp.length === 0, 'Tài khoản nhân viên không xem được hồ sơ nhân sự')
+ok((await as(S, () => q(`insert into nh_employees(restaurant_id, last_name) values ($1,'X')`, [A]))) instanceof Error, 'Tài khoản nhân viên không thêm được nhân viên')
+ok(!((await as(M, () => q(`insert into nh_shifts(restaurant_id, employee_id, shift_date, start_time, end_time, break_min) values ($1,$2,'2026-11-26','10:00','18:00',30)`, [A, empId]))) instanceof Error), 'Xếp ca cho nhân viên')
+ok((await as(O, () => q(`insert into nh_shifts(restaurant_id, employee_id, shift_date, start_time, end_time) values ($1,$2,'2026-11-26','10:00','18:00')`, [B, empId]))) instanceof Error, 'Không gắn ca của nhân viên quán A vào quán B')
+ok(!((await as(M, () => q(`insert into nh_employee_docs(restaurant_id, employee_id, kind, path) values ($1,$2,'passport',$3)`, [A, empId, `${A}/${empId}/p.pdf`]))) instanceof Error), 'Lưu giấy tờ nhân viên')
+const xDocs = await as(X, () => q(`select id from nh_employee_docs`))
+ok(Array.isArray(xDocs) && xDocs.length === 0, 'Người ngoài không thấy giấy tờ nhân viên')
+await as(O, () => q(`delete from nh_employees where id=$1`, [empId]))
+ok((await q(`select count(*)::int n from nh_shifts`))[0].n === 0, 'Xoá nhân viên thì xoá luôn ca làm, giấy tờ')
 
 console.log(fails ? `\n${fails} kiểm tra thất bại` : '\nTất cả kiểm tra đạt')
 process.exit(fails ? 1 : 0)

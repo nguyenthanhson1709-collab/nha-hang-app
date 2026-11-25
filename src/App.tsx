@@ -19,6 +19,8 @@ import Statements from './pages/Statements'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import RestaurantSettings from './pages/RestaurantSettings'
+import Staff from './pages/Staff'
+import EmployeePage from './pages/Employee'
 
 // Mở app mới (tab mới / mở lại từ màn hình chính) -> luôn về trang đầu, không quay lại trang cũ (vd. trang scan).
 // Tải lại trang trong cùng một tab thì vẫn giữ trang đang xem.
@@ -86,6 +88,8 @@ function Shell({ session }: { session: Session }) {
           <Route path="/r/:rid/contracts" element={<RestLayout><Contracts /></RestLayout>} />
           <Route path="/r/:rid/statements" element={<RestLayout><Statements /></RestLayout>} />
           <Route path="/r/:rid/reports" element={<RestLayout><Reports /></RestLayout>} />
+          <Route path="/r/:rid/hr" element={<RestLayout><Staff /></RestLayout>} />
+          <Route path="/r/:rid/hr/:eid" element={<RestLayout><EmployeePage /></RestLayout>} />
           <Route path="/r/:rid/settings" element={<RestLayout><RestaurantSettings /></RestLayout>} />
           <Route path="*" element={<Navigate to={start} replace />} />
         </Routes>

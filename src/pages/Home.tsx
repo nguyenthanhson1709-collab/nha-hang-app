@@ -62,6 +62,7 @@ export default function Home() {
     ...(m ? [{ icon: 'archive', label: t('archive'), to: `/r/${rid}/archive` }] : []),
     ...(m ? [{ icon: 'book', label: t('kassenbuch'), to: `/r/${rid}/kb` }] : []),
     ...(m ? [{ icon: 'chart', label: t('reports'), to: `/r/${rid}/reports` }] : []),
+    ...(m ? [{ icon: 'people', label: t('hr'), to: `/r/${rid}/hr` }] : []),
   ]
   return (
     <>
