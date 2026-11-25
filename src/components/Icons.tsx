@@ -52,6 +52,16 @@ const P: Record<string, ReactNode> = {
   box: <>
     <path d="M12 3.5l8 4v9l-8 4-8-4v-9z" /><path d="M4 7.5l8 4 8-4M12 11.5v9" />
   </>,
+  people: <>
+    <circle cx="9" cy="8.5" r="3.2" /><path d="M3.5 19.5c0-3.2 2.5-5.5 5.5-5.5s5.5 2.3 5.5 5.5" />
+    <path d="M15.5 5.6a3 3 0 0 1 0 5.8M17 14.3c2.1.6 3.5 2.6 3.5 5.2" />
+  </>,
+  userAdd: <>
+    <circle cx="10" cy="8.5" r="3.4" /><path d="M3.5 19.5c0-3.4 2.9-5.8 6.5-5.8 1.5 0 2.9.4 4 1.1" /><path d="M18 14v6M15 17h6" />
+  </>,
+  calendar: <>
+    <rect x="3.5" y="5" width="17" height="15.5" rx="1.8" /><path d="M3.5 9.5h17M8 3v4M16 3v4" /><path d="M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2" />
+  </>,
 }
 
 export function Icon({ name, size = 30 }: { name: string; size?: number }) {
