@@ -60,7 +60,7 @@ function quadFromEdges(cv: CV, edges: CV, W: number, H: number): Pt[] | null {
   let best: Pt[] | null = null
   try {
     cv.findContours(edges, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-    let bestArea = W * H * 0.12
+    let bestArea = W * H * 0.25 // khung nhỏ hơn 1/4 ảnh thường là ô trong tờ giấy (bảng, khung chữ), không phải mép giấy
     for (let i = 0; i < contours.size(); i++) {
       const cnt = contours.get(i)
       const area = cv.contourArea(cnt)
@@ -84,48 +84,6 @@ function quadFromEdges(cv: CV, edges: CV, W: number, H: number): Pt[] | null {
   return best
 }
 
-/** Giấy trắng trên nền trắng: không thấy mép, lấy vùng có chữ rồi nới ra một chút */
-function quadFromText(cv: CV, gray: CV, W: number, H: number): Pt[] | null {
-  const grad = new cv.Mat(), bw = new cv.Mat(), contours = new cv.MatVector(), hier = new cv.Mat()
-  try {
-    const k3 = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3))
-    cv.morphologyEx(gray, grad, cv.MORPH_GRADIENT, k3); k3.delete()
-    cv.threshold(grad, bw, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)
-    // nối các chữ thành một khối
-    const k = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(Math.round(W / 25), Math.round(W / 40)))
-    cv.morphologyEx(bw, bw, cv.MORPH_CLOSE, k); k.delete()
-    const k2 = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3))
-    cv.morphologyEx(bw, bw, cv.MORPH_OPEN, k2); k2.delete()
-    cv.findContours(bw, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-    // gộp các khối lớn nằm gần khối lớn nhất (dòng chữ cách nhau)
-    const boxes: { r: CV; area: number; cnt: CV }[] = []
-    for (let i = 0; i < contours.size(); i++) {
-      const cnt = contours.get(i), area = cv.contourArea(cnt)
-      if (area > W * H * 0.002) boxes.push({ r: cv.boundingRect(cnt), area, cnt }); else cnt.delete()
-    }
-    if (!boxes.length) return null
-    boxes.sort((a, b) => b.area - a.area)
-    const main = boxes[0].r
-    let x0 = main.x, y0 = main.y, x1 = main.x + main.width, y1 = main.y + main.height
-    const pts: number[] = []
-    for (const b of boxes) {
-      const r = b.r
-      const near = r.x < x1 + W * 0.05 && r.x + r.width > x0 - W * 0.05 && r.y < y1 + H * 0.06 && r.y + r.height > y0 - H * 0.06
-      if (near) {
-        x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.width); y1 = Math.max(y1, r.y + r.height)
-        for (let j = 0; j < b.cnt.rows; j++) pts.push(b.cnt.data32S[j * 2], b.cnt.data32S[j * 2 + 1])
-      }
-      b.cnt.delete()
-    }
-    if ((x1 - x0) * (y1 - y0) < W * H * 0.08 || (x1 - x0) * (y1 - y0) > W * H * 0.9) return null
-    const m = cv.matFromArray(pts.length / 2, 1, cv.CV_32SC2, pts)
-    const r = cv.minAreaRect(m); m.delete()
-    // nới lề 5%
-    r.size = { width: r.size.width * 1.08 + W * 0.02, height: r.size.height * 1.06 + W * 0.02 }
-    return (cv.RotatedRect.points(r) as Pt[]).map((q) => ({ x: Math.max(0, Math.min(W, q.x)), y: Math.max(0, Math.min(H, q.y)) }))
-  } finally { grad.delete(); bw.delete(); contours.delete(); hier.delete() }
-}
-
 /** Tìm tứ giác lớn nhất giống tờ giấy trên ảnh (toạ độ theo ảnh nguồn) */
 export function detectQuad(cv: CV, src: HTMLCanvasElement | HTMLImageElement | HTMLVideoElement, sw: number, sh: number): Quad | null {
   const W = 400, s = W / sw, H = Math.round(sh * s)
@@ -146,9 +104,22 @@ export function detectQuad(cv: CV, src: HTMLCanvasElement | HTMLImageElement | H
       if (pts) break
     }
     k.delete()
-    if (!pts) pts = quadFromText(cv, gray, W, H)
+    // Không còn đoán mép theo vùng chữ: hay cắt mất đầu/cuối hoá đơn. Không chắc thì giữ cả ảnh.
   } finally { img.delete(); gray.delete(); blur.delete(); edges.delete() }
-  return pts ? order(pts.map((p) => ({ x: p.x / s, y: p.y / s }))) : null
+  if (!pts) return null
+  const q = order(pts.map((p) => ({ x: p.x / s, y: p.y / s })))
+  return pageLike(q, sw, sh) ? expand(q, sw, sh, 0.015) : null
+}
+
+/** Tờ giấy chụp dọc: cao ít nhất 0,8 lần rộng. Dải ngang (một đoạn bảng, ô ngân hàng...) bị loại để không cắt mất nội dung. */
+function pageLike(q: Quad, sw: number, sh: number) {
+  const w = (dist(q[0], q[1]) + dist(q[3], q[2])) / 2, h = (dist(q[0], q[3]) + dist(q[1], q[2])) / 2
+  return w * h >= sw * sh * 0.22 && h >= w * 0.8
+}
+/** Nới khung ra một chút để chữ sát mép không bị cắt */
+function expand(q: Quad, sw: number, sh: number, f: number): Quad {
+  const cx = q.reduce((a, p) => a + p.x, 0) / 4, cy = q.reduce((a, p) => a + p.y, 0) / 4
+  return q.map((p) => ({ x: Math.max(0, Math.min(sw, p.x + (p.x - cx) * f * 2)), y: Math.max(0, Math.min(sh, p.y + (p.y - cy) * f * 2)) })) as Quad
 }
 
 /** Cỡ ảnh lưu: đủ đọc chữ, không nặng. Giới hạn theo số điểm ảnh (không theo cạnh dài) để bon dài vẫn đủ rộng. */
