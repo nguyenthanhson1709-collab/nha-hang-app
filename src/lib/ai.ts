@@ -57,13 +57,20 @@ async function call<T>(kind: 'invoice' | 'zbon' | 'segment', rid: string, files:
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const { data, error } = await supabase.functions.invoke('nh-read', { body })
-      if (!error && data?.result) return data.result as T
+      if (!error && data?.result) { lastAiError = ''; return data.result as T }
       console.warn('nh-read', error || data)
-      if (error && 'context' in error && (error.context as Response)?.status && (error.context as Response).status < 500) return null
-    } catch (e) { console.warn('nh-read', e) }
+      const res = error && 'context' in error ? (error.context as Response) : null
+      let detail = ''
+      try { const j = res ? await res.clone().json() : data; detail = [j?.error, j?.status, j?.message].filter(Boolean).join(' · ') } catch { /* không đọc được nội dung lỗi */ }
+      lastAiError = `${kind}: ${detail || (error as Error)?.message || 'không rõ'}`.slice(0, 300)
+      if (res?.status && res.status < 500) return null
+    } catch (e) { console.warn('nh-read', e); lastAiError = `${kind}: ${String((e as Error)?.message || e)}`.slice(0, 300) }
   }
   return null
 }
+
+/** Lỗi AI gần nhất (để báo cho người dùng và lưu vào chứng từ). Rỗng khi lần gọi cuối thành công. */
+export let lastAiError = ''
 
 export async function aiReadInvoice(rid: string, files: { blob: Blob; type: string }[]): Promise<ParsedInvoice | null> {
   const r = await call<ParsedInvoice>('invoice', rid, files)
