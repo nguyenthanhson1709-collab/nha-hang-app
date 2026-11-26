@@ -726,6 +726,9 @@ html.gembed .gbg,html.gembed .gfx,html.gembed header.topbar,html.gembed .site-fo
 html.gembed main,html.gembed .wrap,html.gembed #app{padding:0!important;margin:0!important;max-width:none!important}
 html.gembed .guest{display:block!important;padding:0!important;margin:0!important}
 html.gembed .gcard{margin:0!important;border-radius:20px}
+/* inapp=1: nằm trong app nhà hàng (ô Bàn đặt), dùng chung phiên đăng nhập; ẩn đầu trang, chân trang, nút đăng xuất */
+html.inapp header.topbar,html.inapp .site-foot,html.inapp .staffbar{display:none!important}
+html.inapp main{padding-top:12px!important;padding-bottom:96px!important}
 html.sdark .who-pop{background:#2a1d12;color:#fff;border:1px solid rgba(242,140,40,.55)}
 html.sdark .who-pop::after{border-top-color:rgba(242,140,40,.55)}
 /* ---- party size scroll wheel (owner 2026-11-19) ---- */
@@ -1604,7 +1607,7 @@ function renderManage(){
 function me(){return S.team.find(x=>x.id===ui.user)}
 function isOwner(){const m=me();return m&&m.role==="owner"}
 function renderStaff(){
-  if(!me())return renderLogin();
+  if(!me())return ui.inapp?`<p class="muted" style="padding:24px;text-align:center">${ui.pinErr?PL({de:"Keine Berechtigung.",en:"No access.",vi:"Bạn không có quyền xem đặt bàn."}):PL({de:"Laden …",en:"Loading …",vi:"Đang tải …"})}</p>`:renderLogin();
   const tabs=[["book",t("tBook")],["floor",t("tFloor")]];if(isOwner())tabs.push(["settings",t("tSettings")],["team",t("tTeam")],["reviews",PL({de:"Bewertungen",en:"Reviews",vi:"Đánh giá"})]);else if(ui.tab==="team"||ui.tab==="settings"||ui.tab==="reviews")ui.tab="book";
   const pend=S.bookings.filter(b=>b.status==="pending"&&b.date>=todayS()).length;
   let body=ui.tab==="book"?renderBook():ui.tab==="floor"?renderFloor():ui.tab==="settings"?renderSettings():ui.tab==="reviews"?renderReviews():renderTeam();
@@ -2069,7 +2072,7 @@ const DEVICE_KEY="vb-device";
 function deviceToken(){try{return localStorage.getItem(DEVICE_KEY)}catch(e){return null}}
 async function afterLogin(){
   const {data}=await sb.rpc("nh_bk_my_staff",{p_rid:RID});
-  if(!data||!data.id){await sb.auth.signOut();ui.user=null;ui.pinErr=true;ui.pinMsg=t("wrongLogin");render();return false}
+  if(!data||!data.id){if(!ui.inapp)await sb.auth.signOut();ui.user=null;ui.pinErr=true;ui.pinMsg=t("wrongLogin");render();return false}
   S.team=[{id:data.id,name:data.name,role:data.role}];ui.user=data.id;ui.tab="book";
   await reloadAll();
   ui.pin="";ui.pinErr=false;ui.loginMode="pin";render();
@@ -2094,7 +2097,7 @@ async function ownerLogin(email,pw){
   if(error){const el=document.getElementById("l-err");if(el)el.hidden=false;return}
   await afterLogin();
 }
-async function logout(){await sb.auth.signOut();ui.user=null;S.bookings=[];S.team=[];LOADED.clear();SNAP=null;ui.loginMode="pin";ui.pin="";render()}
+async function logout(){if(ui.inapp)return;await sb.auth.signOut();ui.user=null;S.bookings=[];S.team=[];LOADED.clear();SNAP=null;ui.loginMode="pin";ui.pin="";render()}
 
 /* devices that may use PIN login (owner only) */
 let DEVICES=[];
@@ -2238,6 +2241,7 @@ async function start(){
   if(p.get("lang")&&L[p.get("lang")])ui.lang=p.get("lang");
   {const ch=(p.get("src")||p.get("utm_source")||"").toLowerCase();const okc=["web","google","instagram","facebook","qr"];
    if(okc.includes(ch))ui.g.channel=ch;}  /* kept in memory only: nothing stored on the guest's device */
+  if(p.get("inapp")==="1"){ui.inapp=true;document.documentElement.classList.add("inapp")}
   if(p.get("embed")==="1"){ui.embed=true;document.documentElement.classList.add("gembed");if(!ui.g.channel)ui.g.channel="web";gEmbedResize()}
   if(p.get("review")){Object.assign(ui.g,{review:true,rv:{code:p.get("review"),token:p.get("t")||"",stars:Math.min(5,Math.max(0,parseInt(p.get("s")||"0",10)||0)),comment:"",loading:true}});}
   if(p.get("code")){Object.assign(ui.g,{manage:true,mCode:p.get("code"),mToken:p.get("t")||""});}
@@ -2249,6 +2253,7 @@ async function start(){
   if(STAFF_MODE){
     const {data:{session}}=await sb.auth.getSession();
     if(session)await afterLogin();
+    else if(ui.inapp){ui.pinErr=true;render()}
     sb.channel("nh_bk_bookings").on("postgres_changes",{event:"*",schema:"public",table:"nh_bk_bookings",filter:"restaurant_id=eq."+RID},pl=>{
       if(!me())return;
       if(pl.eventType==="INSERT"&&pl.new&&pl.new.source==="online")toast(t("newOnline",pl.new.name));
