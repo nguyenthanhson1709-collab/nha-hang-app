@@ -195,7 +195,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
       try { imgs = await kasseImages(files) } catch { imgs = files.map((f) => ({ blob: f, type: f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : 'image/jpeg') })) }
       const r = await aiReadKasse(rid!, imgs)
       if (!r || !r.lines?.length) throw new Error(L(`Không đọc được hoá đơn Kasse. ${lastAiError}`, `Kassenbon konnte nicht gelesen werden. ${lastAiError}`))
-      const got = kasseToItems(r.lines, articles)
+      const got = kasseToItems(r.lines, articles, lunch)
       setItems((list) => [...list, ...got].map((it, j) => ({ ...it, position: j + 1 })))
       if (r.doc_date && !isQuote) setInvoice((i) => ({ ...i, delivery_type: 'service_date', delivery_date: r.doc_date, delivery_end: null }))
       setDirty(true)
@@ -203,7 +203,12 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
       const match = Math.abs(sum - round2(r.gross || 0)) < 0.01
       const head = L(`Đã đọc ${r.lines.length} dòng từ hoá đơn Kasse${r.receipt_no ? ` ${r.receipt_no}` : ''}${r.doc_date ? ` (${fmtDate(r.doc_date)})` : ''}, gộp thành ${got.length} món.`,
         `${r.lines.length} Positionen vom Kassenbon${r.receipt_no ? ` ${r.receipt_no}` : ''}${r.doc_date ? ` (${fmtDate(r.doc_date)})` : ''} übernommen, zusammengefasst zu ${got.length}.`)
-      if (match) setOk(`${head} ${L(`Tổng ${fmtEur(sum)} khớp với Kasse.`, `Summe ${fmtEur(sum)} stimmt mit der Kasse überein.`)}`)
+      const unknown = got.filter((it) => !it.article_id && !(it.unit_price_gross > 0))
+      const unk = unknown.length ? ' ' + L(`Không tìm thấy trong danh mục, hãy nhập giá: ${unknown.map((it) => it.name || '?').join(', ')}.`, `Nicht in der Artikelliste, bitte Preis eintragen: ${unknown.map((it) => it.name || '?').join(', ')}.`) : ''
+      if (!(Number(r.gross) > 0)) {
+        const msg = `${head} ${L(`Giấy không ghi giá: giá lấy theo danh mục (${lunch ? 'giá trưa' : 'giá thường'}). Tổng ${fmtEur(sum)}.`, `Ohne Preise: Preise aus der Artikelliste (${lunch ? 'Mittagspreis' : 'Normalpreis'}). Summe ${fmtEur(sum)}.`)}${unk}`
+        if (unknown.length) setErr(msg); else setOk(msg)
+      } else if (match) setOk(`${head} ${L(`Tổng ${fmtEur(sum)} khớp với Kasse.`, `Summe ${fmtEur(sum)} stimmt mit der Kasse überein.`)}`)
       else {
         const base = items.length
         const doubt = kasseDoubts(got, articles).map(({ item, prices }) => L(
