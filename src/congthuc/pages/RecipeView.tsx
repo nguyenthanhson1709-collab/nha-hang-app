@@ -4,7 +4,7 @@ import { Spinner } from '../../components/ui'
 import PdfSheet from '../../components/PdfSheet'
 import { costPct, fmtEur, fmtPct, fmtQty, ingPrice, itemCost, priceRise, recipeAllergens, recipeCost, RISE_WARN, scaleQty, UNIT_LABEL, type Item } from '../rc'
 import { usePhotoUrls, useRc } from '../api'
-import { AllergenChips, RcShell, StatusBadge, useL, useRcPerm } from '../ui'
+import { AllergenChips, NumInput, RcShell, StatusBadge, useL, useRcPerm } from '../ui'
 import { initials } from './Recipes'
 
 export default function RecipeView() {
@@ -123,7 +123,7 @@ export default function RecipeView() {
               <h2>{L('Nguyên liệu', 'Zutaten')}</h2>
               <div className="rc-scale">
                 <button onClick={() => setPortions((p) => Math.max(1, Math.round((p - 1) * 100) / 100))} aria-label="−">−</button>
-                <input inputMode="decimal" value={portions || ''} onChange={(e) => setPortions(Number(e.target.value.replace(',', '.')) || 0)} />
+                <NumInput value={portions || null} onChange={(v) => setPortions(v || 0)} />
                 <span className="muted small">{L('phần', 'Port.')}</span>
                 <button onClick={() => setPortions((p) => Math.round((p + 1) * 100) / 100)} aria-label="+">+</button>
                 {f !== 1 && <button className="ghost small" onClick={() => setPortions(Number(r.portions))}>↺</button>}

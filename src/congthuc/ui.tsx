@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, useParams } from 'react-router-dom'
 import { canManage, useApp, useRole } from '../lib/app'
 import { useLang } from '../lib/i18n'
@@ -117,4 +117,24 @@ export function useSort<K extends string>(init: K, dir: 1 | -1 = 1) {
     </th>
   )
   return { key: s.k, dir: s.d, th }
+}
+
+/** Ô nhập số kiểu Đức: gõ được dấu phẩy (1,5). Giữ nguyên chữ đang gõ, chỉ đổi thành số khi gửi lên. */
+export function NumInput({ value, onChange, className, placeholder, numeric }: { value: number | null | undefined; onChange: (n: number | null) => void; className?: string; placeholder?: string; numeric?: boolean }) {
+  const fmt = (n: number | null | undefined) => (n == null || isNaN(Number(n)) ? '' : String(Number(n)).replace('.', ','))
+  const [s, setS] = useState(fmt(value))
+  const [focus, setFocus] = useState(false)
+  useEffect(() => { if (!focus) setS(fmt(value)) }, [value, focus])
+  return (
+    <input className={className} inputMode={numeric ? 'numeric' : 'decimal'} placeholder={placeholder} value={s}
+      onFocus={(e) => { setFocus(true); const el = e.currentTarget; setTimeout(() => el.select(), 0) }}
+      onBlur={() => { setFocus(false); setS(fmt(value)) }}
+      onChange={(e) => {
+        const v = e.target.value.replace(/[^0-9.,-]/g, '')
+        setS(v)
+        const t = v.replace(/\./g, '').replace(',', '.')
+        const n = Number(t.includes('.') ? t : v.replace(',', '.'))
+        onChange(v.trim() === '' || isNaN(n) ? null : n)
+      }} />
+  )
 }
