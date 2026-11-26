@@ -29,3 +29,76 @@ export function kasseToItems(lines: KasseLine[], articles: Article[]): InvoiceIt
   }
   return out
 }
+
+// ---------- Chuẩn bị ảnh gửi AI ----------
+// Bon Kasse rất dài và hẹp: gửi nguyên trang thì AI phải thu nhỏ đến mức không đọc được chữ.
+// Vì vậy vẽ lại với chiều rộng cố định rồi cắt thành nhiều ảnh, cắt ở khoảng trắng giữa hai dòng.
+const TILE_W = 900
+const TILE_H = 1300
+const MAX_TILES = 8
+
+/** Chọn vị trí cắt gần `target` nhất mà hàng điểm ảnh gần như trắng (giữa hai dòng chữ) */
+export function bestCut(dark: number[], target: number, range: number): number {
+  let best = target, bestScore = Infinity
+  for (let y = Math.max(1, target - range); y <= Math.min(dark.length - 1, target); y++) {
+    const score = dark[y] * 1000 + (target - y) // ưu tiên hàng trắng, rồi gần target
+    if (score < bestScore) { bestScore = score; best = y }
+  }
+  return best
+}
+
+function rowDarkness(c: HTMLCanvasElement): number[] {
+  const { data } = c.getContext('2d')!.getImageData(0, 0, c.width, c.height)
+  const out = new Array<number>(c.height).fill(0)
+  for (let y = 0; y < c.height; y++) {
+    let n = 0
+    for (let x = 0; x < c.width; x += 2) {
+      const i = (y * c.width + x) * 4
+      if (data[i] + data[i + 1] + data[i + 2] < 384) n++
+    }
+    out[y] = n
+  }
+  return out
+}
+
+function slice(c: HTMLCanvasElement, tileH: number): HTMLCanvasElement[] {
+  if (c.height <= tileH * 1.15) return [c]
+  const dark = rowDarkness(c)
+  const parts: HTMLCanvasElement[] = []
+  let top = 0
+  while (top < c.height) {
+    const end = c.height - top <= tileH * 1.15 ? c.height : bestCut(dark, top + tileH, Math.round(tileH * 0.15))
+    const t = document.createElement('canvas'); t.width = c.width; t.height = end - top
+    t.getContext('2d')!.drawImage(c, 0, top, c.width, end - top, 0, 0, c.width, end - top)
+    parts.push(t); top = end
+  }
+  return parts
+}
+
+async function toCanvas(f: File, width: number): Promise<HTMLCanvasElement[]> {
+  const { pdfToCanvases, loadImage } = await import('../lib/ocr')
+  if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) return pdfToCanvases(f, width)
+  const img = await loadImage(f)
+  URL.revokeObjectURL(img.src)
+  const s = Math.min(1, (width * 1.5) / img.naturalWidth) // ảnh chụp: giữ đủ nét, không quá lớn
+  const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s)
+  const ctx = c.getContext('2d')!
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height)
+  ctx.drawImage(img, 0, 0, c.width, c.height)
+  return [c]
+}
+
+/** PDF/ảnh bon Kasse -> tối đa 8 ảnh JPEG, mỗi ảnh một đoạn bon từ trên xuống dưới */
+export async function kasseImages(files: File[]): Promise<{ blob: Blob; type: string }[]> {
+  let width = TILE_W
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const pages = (await Promise.all(files.map((f) => toCanvas(f, width)))).flat()
+    const tiles = pages.flatMap((c) => slice(c, Math.round(TILE_H * c.width / TILE_W)))
+    if (tiles.length <= MAX_TILES || attempt === 3) {
+      return Promise.all(tiles.slice(0, MAX_TILES).map((t) => new Promise<{ blob: Blob; type: string }>((res, rej) =>
+        t.toBlob((b) => (b ? res({ blob: b, type: 'image/jpeg' }) : rej(new Error('toBlob'))), 'image/jpeg', 0.85))))
+    }
+    width = Math.round(width * 0.8) // quá nhiều đoạn: vẽ nhỏ hơn một chút
+  }
+  return []
+}
