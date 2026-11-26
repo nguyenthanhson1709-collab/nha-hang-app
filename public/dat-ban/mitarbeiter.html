@@ -729,6 +729,7 @@ html.gembed .gcard{margin:0!important;border-radius:20px}
 /* inapp=1: nằm trong app nhà hàng (ô Bàn đặt), dùng chung phiên đăng nhập; ẩn đầu trang, chân trang, nút đăng xuất */
 html.inapp header.topbar,html.inapp .site-foot,html.inapp .staffbar{display:none!important}
 html.inapp main{padding-top:12px!important;padding-bottom:96px!important}
+html.inapp.gdark .gbg{background-image:url(img/bg-s.jpg)}
 html.sdark .who-pop{background:#2a1d12;color:#fff;border:1px solid rgba(242,140,40,.55)}
 html.sdark .who-pop::after{border-top-color:rgba(242,140,40,.55)}
 /* ---- party size scroll wheel (owner 2026-11-19) ---- */
@@ -2016,7 +2017,7 @@ async function loadDays(days){
   S.bookings=keep.concat(data.map(fromBooking));days.forEach(d=>LOADED.add(d));
 }
 function baseDays(){const out=[];for(let i=-1;i<15;i++)out.push(addDays(todayS(),i));out.push(ui.bookDate);return out}
-async function reloadAll(){await loadStaffData();await loadDays([...new Set([...baseDays(),...LOADED])]);SNAP=clone(S)}
+async function reloadAll(){await Promise.all([loadStaffData(),loadDays([...new Set([...baseDays(),...LOADED])])]);SNAP=clone(S)}
 /* a day the screen needs but that is not loaded yet */
 function needDays(ds){ds=(ds||[]).filter(d=>d&&!LOADED.has(d));if(!ds.length||!me())return;ds.forEach(d=>LOADED.add(d));loadDays(ds).then(()=>{SNAP=clone(S);render();if(M)renderModal()})}
 function needDay(d){if(!d||LOADED.has(d)||!me())return;LOADED.add(d);loadDays([d]).then(()=>{SNAP=clone(S);render();if(M)renderModal()})}
@@ -2071,10 +2072,9 @@ function diffOps(A,B){
 const DEVICE_KEY="vb-device";
 function deviceToken(){try{return localStorage.getItem(DEVICE_KEY)}catch(e){return null}}
 async function afterLogin(){
-  const {data}=await sb.rpc("nh_bk_my_staff",{p_rid:RID});
+  const [{data}]=await Promise.all([sb.rpc("nh_bk_my_staff",{p_rid:RID}),reloadAll()]); /* song song cho nhanh; RLS vẫn chặn người không có quyền */
   if(!data||!data.id){if(!ui.inapp)await sb.auth.signOut();ui.user=null;ui.pinErr=true;ui.pinMsg=t("wrongLogin");render();return false}
-  S.team=[{id:data.id,name:data.name,role:data.role}];ui.user=data.id;ui.tab="book";
-  await reloadAll();
+  if(!S.team.some(m=>m.id===data.id))S.team.unshift({id:data.id,name:data.name,role:data.role});ui.user=data.id;ui.tab="book";
   ui.pin="";ui.pinErr=false;ui.loginMode="pin";render();
   const nw=S.bookings.filter(b=>b.status==="pending"&&b.date>=todayS());if(nw.length)toast(t("newOnline",nw.map(b=>b.name).join(", ")));
   return true;
@@ -2245,13 +2245,14 @@ async function start(){
   if(p.get("embed")==="1"){ui.embed=true;document.documentElement.classList.add("gembed");if(!ui.g.channel)ui.g.channel="web";gEmbedResize()}
   if(p.get("review")){Object.assign(ui.g,{review:true,rv:{code:p.get("review"),token:p.get("t")||"",stars:Math.min(5,Math.max(0,parseInt(p.get("s")||"0",10)||0)),comment:"",loading:true}});}
   if(p.get("code")){Object.assign(ui.g,{manage:true,mCode:p.get("code"),mToken:p.get("t")||""});}
-  await loadSettings();
+  const sess0=STAFF_MODE?(await sb.auth.getSession()).data.session:null;
+  if(!sess0)await loadSettings();
   if(ui.g.party<S.settings.minOnline)ui.g.party=S.settings.minOnline;
   render();
   if(ui.g.review)reviewLoad();
   if(ui.g.manage&&ui.g.mToken)guestLookup();
   if(STAFF_MODE){
-    const {data:{session}}=await sb.auth.getSession();
+    const session=sess0;
     if(session)await afterLogin();
     else if(ui.inapp){ui.pinErr=true;render()}
     sb.channel("nh_bk_bookings").on("postgres_changes",{event:"*",schema:"public",table:"nh_bk_bookings",filter:"restaurant_id=eq."+RID},pl=>{
