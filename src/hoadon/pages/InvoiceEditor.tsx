@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   deleteDraft, finalizeInvoice, listArticles, listCustomers, loadCompany, loadInvoice,
   findInvoiceFromQuote, markSent, saveCustomer, saveDraft, sendInvoiceEmail, setInvoiceStatus, snapshotOf,
@@ -111,6 +111,9 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
   const { rid, id } = useParams()
   const L = useL()
   const nav = useNavigate()
+  const location = useLocation()
+  // Vừa hoàn tất hoá đơn mới: mở PDF ngay khi tải xong
+  const wantPreview = useRef(Boolean((location.state as { preview?: boolean } | null)?.preview))
   const [company, setCompany] = useState<Company | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [articles, setArticles] = useState<Article[]>([])
@@ -146,6 +149,12 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     loaded.current = true
     loadInvoice(id).then(({ invoice, items }) => { setInvoice(invoice); setItems(items) }).catch((e) => setErr(e.message))
   }, [id])
+
+  useEffect(() => {
+    if (!wantPreview.current || !company || !invoice.invoice_number || !items.length) return
+    wantPreview.current = false
+    pdfLib().then(({ renderInvoicePdf }) => renderInvoicePdf(company, invoice as Invoice, items)).then(setPreview).catch((e) => setErr(e.message))
+  }, [company, invoice, items])
 
   const customer = customers.find((c) => c.id === invoice.customer_id) ?? null
   useEffect(() => { if (customer && !custEmail) setCustEmail(customer.emails ?? '') }, [customer]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -185,7 +194,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
-  async function save(): Promise<string | null> {
+  async function save(go = true): Promise<string | null> {
     setErr(''); setOk('')
     if (!invoice.customer_snapshot?.name?.trim()) { setErr(L('Hãy nhập tên khách hàng.', 'Bitte Kundennamen eingeben.')); return null }
     if (!items.length) { setErr(L('Hãy thêm ít nhất một món.', 'Bitte mindestens eine Position hinzufügen.')); return null }
@@ -194,7 +203,8 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     try {
       const newId = await saveDraft(rid!, invoice, items)
       setDirty(false)
-      if (!id) nav(`${listBase}/${newId}`, { replace: true })
+      // Hoá đơn mới: đổi địa chỉ sang /:id (trang được tải lại). Khi hoàn tất thì đợi cấp số xong mới đổi.
+      if (!id && go) nav(`${listBase}/${newId}`, { replace: true })
       setInvoice((i) => ({ ...i, id: newId }))
       setOk(L('Đã lưu nháp.', 'Entwurf gespeichert.'))
       return newId
@@ -205,13 +215,15 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     if (!confirm(isQuote
       ? L('Hoàn tất Angebot? Sau khi hoàn tất sẽ có số Angebot và không sửa được nữa.', 'Angebot abschließen? Danach erhält es eine Nummer und kann nicht mehr geändert werden.')
       : L('Hoàn tất hoá đơn? Sau khi hoàn tất sẽ có số hoá đơn và không sửa được nữa.', 'Rechnung abschließen? Danach erhält sie eine Nummer und kann nicht mehr geändert werden.'))) return
-    const invId = await save()
+    const invId = await save(false)
     if (!invId) return
     setBusy(true)
     try {
       await finalizeInvoice(invId)
+      if (!id) { nav(`${listBase}/${invId}`, { replace: true, state: { preview: true } }); return }
       const r = await loadInvoice(invId)
       setInvoice(r.invoice); setItems(r.items)
+      if (company) { const { renderInvoicePdf } = await pdfLib(); setPreview(await renderInvoicePdf(company, r.invoice, r.items)) }
       setOk(L(`Đã hoàn tất ${docName} ${r.invoice.invoice_number}.`, `${isQuote ? 'Angebot' : 'Rechnung'} ${r.invoice.invoice_number} abgeschlossen.`))
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
@@ -460,7 +472,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
       <div className="sticky-actions">
         {!locked && invoice.id && <button className="danger" onClick={removeDraft} disabled={busy}>{L('Xoá nháp', 'Entwurf löschen')}</button>}
         <button onClick={previewPdf} disabled={busy || !items.length}>{L('Xem / In PDF', 'PDF ansehen / drucken')}</button>
-        {!locked && <button onClick={save} disabled={busy || (!dirty && Boolean(invoice.id))}>{L('Lưu nháp', 'Entwurf speichern')}</button>}
+        {!locked && <button onClick={() => save()} disabled={busy || (!dirty && Boolean(invoice.id))}>{L('Lưu nháp', 'Entwurf speichern')}</button>}
         {!locked && <button className="primary" onClick={finalize} disabled={busy}>{isQuote ? L('Hoàn tất Angebot', 'Angebot abschließen') : L('Hoàn tất hoá đơn', 'Rechnung abschließen')}</button>}
         {locked && invoice.status !== 'cancelled' && <button onClick={share} disabled={busy}>{L('Chia sẻ', 'Teilen')}</button>}
         {locked && invoice.status !== 'cancelled' && <button onClick={openMail} disabled={busy}>{L('Gửi email', 'Per E-Mail senden')}</button>}

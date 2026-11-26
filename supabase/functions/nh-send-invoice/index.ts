@@ -38,8 +38,9 @@ Deno.serve(async (req) => {
   if (!inv) return json({ error: "Không có quyền" }, 403);
   if (!inv.invoice_number) return json({ error: "Hoá đơn chưa hoàn tất" }, 400);
 
-  const user = Deno.env.get("SMTP_USER");
-  const pass = Deno.env.get("SMTP_PASS");
+  const user = (Deno.env.get("SMTP_USER") ?? "").trim();
+  // App Password của Google hiện thành 4 nhóm có dấu cách: bỏ dấu cách
+  const pass = (Deno.env.get("SMTP_PASS") ?? "").replace(/\s+/g, "");
   if (!user || !pass) return json({ error: "Chưa cấu hình email gửi đi (SMTP_USER, SMTP_PASS trong Supabase Secrets)." }, 500);
 
   const { data: company } = await supabase.from("nh_inv_company").select("name, email").eq("restaurant_id", inv.restaurant_id).maybeSingle();
@@ -61,7 +62,7 @@ Deno.serve(async (req) => {
     return json({ ok: true, id: info.messageId });
   } catch (e) {
     const msg = (e as Error).message;
-    if (/Invalid login|Username and Password not accepted|535/i.test(msg)) return json({ error: "Gmail từ chối đăng nhập: kiểm tra SMTP_USER và mật khẩu ứng dụng (App Password)." }, 502);
+    if (/Invalid login|Username and Password not accepted|53[45]/i.test(msg)) return json({ error: `Gmail từ chối đăng nhập (${user.replace(/(.{2}).*(@.*)/, "$1…$2")}): kiểm tra SMTP_USER và mật khẩu ứng dụng (App Password). [${msg.slice(0, 120)}]` }, 502);
     return json({ error: msg }, 502);
   }
 });
