@@ -12,7 +12,7 @@ import { fillTemplate } from '../template'
 import { LANGS, companyText, type Lang } from '../pdfText'
 import { pdfFilename } from '../docname'
 import { InvShell, StatusBadge, useL } from '../ui'
-import { kasseToItems } from '../kasse'
+import { kasseImages, kasseToItems } from '../kasse'
 import { aiReadKasse, lastAiError } from '../../lib/ai'
 import PdfSheet from '../../components/PdfSheet'
 
@@ -133,6 +133,8 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
   const [mail, setMail] = useState<{ to: string; subject: string; body: string } | null>(null)
   const [preview, setPreview] = useState<Blob | null>(null)
   const loaded = useRef(false)
+  // Thông báo nằm ở đầu trang: cuộn lên để người dùng thấy (nút Lưu ở cuối trang)
+  useEffect(() => { if (err || ok) window.scrollTo({ top: 0, behavior: 'smooth' }) }, [err, ok])
 
   const locked = Boolean(invoice.invoice_number)
   const isQuote = invoice.doc_type === 'quote'
@@ -189,7 +191,9 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     if (!files.length) return
     setErr(''); setOk(''); setReading(true)
     try {
-      const r = await aiReadKasse(rid!, files.map((f) => ({ blob: f, type: f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : 'image/jpeg') })))
+      let imgs: { blob: Blob; type: string }[]
+      try { imgs = await kasseImages(files) } catch { imgs = files.map((f) => ({ blob: f, type: f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : 'image/jpeg') })) }
+      const r = await aiReadKasse(rid!, imgs)
       if (!r || !r.lines?.length) throw new Error(L(`Không đọc được hoá đơn Kasse. ${lastAiError}`, `Kassenbon konnte nicht gelesen werden. ${lastAiError}`))
       const got = kasseToItems(r.lines, articles)
       setItems((list) => [...list, ...got].map((it, j) => ({ ...it, position: j + 1 })))

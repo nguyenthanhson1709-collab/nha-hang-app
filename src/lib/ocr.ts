@@ -120,6 +120,23 @@ export async function pdfText(file: Blob): Promise<string> {
   return out.join('\n')
 }
 
+/** Vẽ các trang PDF thành canvas với chiều rộng cho trước (px) */
+export async function pdfToCanvases(file: Blob, width: number): Promise<HTMLCanvasElement[]> {
+  const lib = await pdfjs()
+  const doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise
+  const res: HTMLCanvasElement[] = []
+  for (let p = 1; p <= doc.numPages; p++) {
+    const page = await doc.getPage(p)
+    const vp = page.getViewport({ scale: width / page.getViewport({ scale: 1 }).width })
+    const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height)
+    const ctx = c.getContext('2d')!
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height)
+    await page.render({ canvasContext: ctx, viewport: vp, canvas: c } as never).promise
+    res.push(c)
+  }
+  return res
+}
+
 /** Vẽ các trang PDF thành ảnh JPEG (dùng khi xuất PDF tổng hợp) */
 export async function pdfToImages(file: Blob, scale = 1.6): Promise<string[]> {
   const lib = await pdfjs()
