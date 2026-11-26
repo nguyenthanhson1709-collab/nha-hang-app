@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   deleteDraft, finalizeInvoice, listArticles, listCustomers, loadCompany, loadInvoice,
   findInvoiceFromQuote, markSent, saveCustomer, saveDraft, sendInvoiceEmail, setInvoiceStatus, snapshotOf,
@@ -111,6 +111,9 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
   const { rid, id } = useParams()
   const L = useL()
   const nav = useNavigate()
+  const location = useLocation()
+  // Vừa hoàn tất hoá đơn mới: mở PDF ngay khi tải xong
+  const wantPreview = useRef(Boolean((location.state as { preview?: boolean } | null)?.preview))
   const [company, setCompany] = useState<Company | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [articles, setArticles] = useState<Article[]>([])
@@ -146,6 +149,12 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     loaded.current = true
     loadInvoice(id).then(({ invoice, items }) => { setInvoice(invoice); setItems(items) }).catch((e) => setErr(e.message))
   }, [id])
+
+  useEffect(() => {
+    if (!wantPreview.current || !company || !invoice.invoice_number || !items.length) return
+    wantPreview.current = false
+    pdfLib().then(({ renderInvoicePdf }) => renderInvoicePdf(company, invoice as Invoice, items)).then(setPreview).catch((e) => setErr(e.message))
+  }, [company, invoice, items])
 
   const customer = customers.find((c) => c.id === invoice.customer_id) ?? null
   useEffect(() => { if (customer && !custEmail) setCustEmail(customer.emails ?? '') }, [customer]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -211,9 +220,10 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     setBusy(true)
     try {
       await finalizeInvoice(invId)
-      if (!id) { nav(`${listBase}/${invId}`, { replace: true }); return }
+      if (!id) { nav(`${listBase}/${invId}`, { replace: true, state: { preview: true } }); return }
       const r = await loadInvoice(invId)
       setInvoice(r.invoice); setItems(r.items)
+      if (company) { const { renderInvoicePdf } = await pdfLib(); setPreview(await renderInvoicePdf(company, r.invoice, r.items)) }
       setOk(L(`Đã hoàn tất ${docName} ${r.invoice.invoice_number}.`, `${isQuote ? 'Angebot' : 'Rechnung'} ${r.invoice.invoice_number} abgeschlossen.`))
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
