@@ -293,6 +293,8 @@ export default function EmployeePage() {
     if (k === 'weekly_hours') return `${String(v).replace('.', ',')} ${T('giờ / tuần', 'Std. / Woche')}`
     if (k === 'work_days') return `${String(v).replace('.', ',')} ${T('ngày / tuần', 'Tage / Woche')}`
     if (k === 'daily_hours') return `${String(v).replace('.', ',')} ${T('giờ / ngày', 'Std. / Tag')}`
+    if (k === 'vacation_year') return `${String(v).replace('.', ',')} ${T('ngày', 'Tage')}`
+    if (k === 'vacation_left') return `${String(v).replace('.', ',')} ${T('ngày', 'Tage')}${e.vacation_as_of ? ` · ${T('tính đến', 'Stand')} ${e.vacation_as_of.slice(5)}/${e.vacation_as_of.slice(0, 4)}` : ''}`
     if (k === 'vacation_days') return `${String(v).replace('.', ',')} ${T('ngày / năm', 'Tage / Jahr')}`
     return String(v)
   }
@@ -302,7 +304,7 @@ export default function EmployeePage() {
     residence_permit: L('Giấy phép cư trú', 'Aufenthaltstitel'), residence_permit_until: L('Hết hạn ngày', 'gültig bis'), work_permitted: L('Được phép làm việc', 'Erwerbstätigkeit gestattet'),
     company: L('Công ty', 'Firma'), personnel_no: L('Mã nhân viên', 'Personal-Nr.'), entry_date: L('Ngày vào làm', 'Eintrittsdatum'), job_title: L('Vị trí', 'Tätigkeit'),
     employment_type: L('Hợp đồng', 'Beschäftigungsart'), weekly_hours: L('Giờ làm', 'Arbeitszeit'), work_days: L('Ngày làm', 'Arbeitstage'), daily_hours: L('Giờ mỗi ngày', 'tägl. Arbeitszeit'), gross_monthly: L('Lương tháng', 'Monatslohn'),
-    hourly_wage: L('Lương giờ', 'Stundenlohn'), vacation_days: L('Ngày phép', 'Urlaubsanspruch'), multiple_employment: L('Làm thêm nơi khác', 'Mehrfachbeschäftigung'),
+    hourly_wage: L('Lương giờ', 'Stundenlohn'), vacation_days: L('Ngày phép', 'Urlaubsanspruch'), vacation_year: L('Phép năm nay', 'Jahresurlaub'), vacation_left: L('Phép còn lại', 'Resturlaub'), multiple_employment: L('Làm thêm nơi khác', 'Mehrfachbeschäftigung'),
     tax_id: L('Mã số thuế', 'Steuer-ID'), pension_no: L('Số BH hưu trí', 'RV-Nummer'), tax_class: L('Bậc thuế', 'Steuerklasse'),
     health_insurance: L('Bảo hiểm y tế', 'Krankenkasse'), iban: 'IBAN', bic: 'BIC', bank_name: L('Ngân hàng', 'Bank'), note: L('Ghi chú', 'Notiz'),
   }
@@ -321,7 +323,7 @@ export default function EmployeePage() {
     tax: { title: T('Thuế và bảo hiểm', 'Steuer und Sozialversicherung'), icon: 'shield', fields: [
       { k: 'tax_id', fixed: true }, { k: 'pension_no', fixed: true }, { k: 'tax_class' }, { k: 'health_insurance' }] },
     bank: { title: T('Tài khoản ngân hàng', 'Bankverbindung'), icon: 'bank', fields: [{ k: 'iban' }, { k: 'bic' }, { k: 'bank_name' }] },
-    leave: { title: T('Phép năm', 'Urlaubsanspruch'), icon: 'calendar', fields: [{ k: 'vacation_days' }] },
+    leave: { title: T('Phép năm', 'Urlaubsanspruch'), icon: 'calendar', fields: [{ k: 'vacation_days' }, { k: 'vacation_year' }, { k: 'vacation_left' }] },
     note: { title: T('Ghi chú', 'Notiz'), icon: 'note', fields: [{ k: 'note', full: true }] },
   }
   const editable = (f: FD) => !f.fixed || e[f.k] == null || e[f.k] === ''
@@ -399,7 +401,7 @@ export default function EmployeePage() {
           {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}
         </select>)
       case 'gross_monthly': case 'hourly_wage': return <Money value={(v as number) ?? null} onChange={(x) => up({ [k]: x || null } as Partial<Employee>)} />
-      case 'weekly_hours': case 'vacation_days': case 'work_days': case 'daily_hours': return <input inputMode="decimal" value={v == null ? '' : String(v).replace('.', ',')} onChange={(ev) => up({ [k]: ev.target.value.trim() ? parseNum(ev.target.value) : null } as Partial<Employee>)} />
+      case 'weekly_hours': case 'vacation_days': case 'work_days': case 'daily_hours': case 'vacation_year': case 'vacation_left': return <input inputMode="decimal" value={v == null ? '' : String(v).replace('.', ',')} onChange={(ev) => up({ [k]: ev.target.value.trim() ? parseNum(ev.target.value) : null } as Partial<Employee>)} />
       case 'address': case 'note': return <textarea rows={2} value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
       case 'phone': return <input type="tel" value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
       case 'email': return <input type="email" value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
