@@ -28,6 +28,10 @@ import InvoiceEditor from './hoadon/pages/InvoiceEditor'
 import InvCustomers from './hoadon/pages/Customers'
 import InvArticles from './hoadon/pages/Articles'
 import InvSettings from './hoadon/pages/InvSettings'
+import BkBookings from './datban/pages/Bookings'
+import BkFloor from './datban/pages/Floor'
+import BkReviews from './datban/pages/Reviews'
+import BkSettingsPage from './datban/pages/BkSettings'
 
 // Mở app mới (tab mới / mở lại từ màn hình chính) -> luôn về trang đầu, không quay lại trang cũ (vd. trang scan).
 // Tải lại trang trong cùng một tab thì vẫn giữ trang đang xem.
@@ -113,6 +117,10 @@ function Shell({ session }: { session: Session }) {
           <Route path="/r/:rid/inv/articles" element={<RestLayout><InvArticles /></RestLayout>} />
           <Route path="/r/:rid/inv/settings" element={<RestLayout><InvSettings /></RestLayout>} />
           <Route path="/r/:rid/inv/:id" element={<RestLayout><InvoiceEditor /></RestLayout>} />
+          <Route path="/r/:rid/bk" element={<RestLayout><BkBookings /></RestLayout>} />
+          <Route path="/r/:rid/bk/floor" element={<RestLayout><BkFloor /></RestLayout>} />
+          <Route path="/r/:rid/bk/reviews" element={<RestLayout><BkReviews /></RestLayout>} />
+          <Route path="/r/:rid/bk/settings" element={<RestLayout><BkSettingsPage /></RestLayout>} />
           <Route path="/r/:rid/settings" element={<RestLayout><RestaurantSettings /></RestLayout>} />
           <Route path="*" element={<Navigate to={start} replace />} />
         </Routes>

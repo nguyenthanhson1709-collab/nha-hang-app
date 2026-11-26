@@ -19,6 +19,7 @@ const LU: Record<string, React.ReactNode> = {
   chart: <><path d="M3 3v16a2 2 0 0 0 2 2h16" /><path d="m19 9-5 5-4-4-3 3" /></>,
   invoice: <><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" /><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" /><path d="M12 17.5v-11" /></>,
   people: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
+  calendar: <><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /><path d="m9 16 2 2 4-4" /></>,
   arrow: <><path d="M7 7h10v10" /><path d="M7 17 17 7" /></>,
   settings: <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></>,
 }
@@ -40,7 +41,7 @@ export default function Home() {
   const [sp] = useSearchParams()
   const view = sp.get('v')
   const [tick, setTick] = useState(0)
-  const [s, setS] = useState<{ spend: number; cash: number; card: number; transfer: number; rev: number; bal: number; missing: string[]; review: Doc[]; mine: Doc[] } | null>(null)
+  const [s, setS] = useState<{ spend: number; cash: number; card: number; transfer: number; rev: number; bal: number; missing: string[]; review: Doc[]; mine: Doc[]; bk?: { n: number; g: number } } | null>(null)
 
   useEffect(() => {
     if (!r) return
@@ -64,7 +65,12 @@ export default function Home() {
       const { data: mine } = !m
         ? await supabase.from('nh_documents').select('*, nh_document_payments(*)').eq('restaurant_id', rid!).eq('created_by', profile.id).order('created_at', { ascending: false }).limit(30)
         : { data: [] }
-      setS({ spend: purchase.reduce((a, d) => a + Number(d.gross), 0), cash: sum('cash'), card: sum('card'), transfer: sum('transfer'), rev, bal, missing, review: (review || []) as Doc[], mine: (mine || []) as Doc[] })
+      let bk: { n: number; g: number } | undefined
+      if (m) {
+        const { data: bks } = await supabase.from('nh_bk_bookings').select('party').eq('restaurant_id', rid!).eq('day', todayIso()).in('status', ['pending', 'confirmed', 'seated'])
+        if (bks?.length) bk = { n: bks.length, g: bks.reduce((a, b) => a + Number(b.party), 0) }
+      }
+      setS({ bk, spend: purchase.reduce((a, d) => a + Number(d.gross), 0), cash: sum('cash'), card: sum('card'), transfer: sum('transfer'), rev, bal, missing, review: (review || []) as Doc[], mine: (mine || []) as Doc[] })
     })()
   }, [rid, r, m, profile.id, tick])
 
@@ -83,6 +89,7 @@ export default function Home() {
       { icon: 'archive', label: t('archive'), desc: de ? 'Buchhaltungsunterlagen' : 'Tài liệu kế toán', to: `/r/${rid}/archive` },
       { icon: 'book', label: t('kassenbuch'), desc: de ? 'Kassenbuch führen' : 'Sổ quỹ tiền mặt', to: `/r/${rid}/kb` },
       { icon: 'chart', label: t('reports'), desc: de ? 'Auswertungen und Statistik' : 'Thống kê và phân tích', to: `/r/${rid}/reports` },
+      { icon: 'calendar', label: de ? 'Reservierungen' : 'Bàn đặt', desc: s?.bk ? (de ? `Heute: ${s.bk.n} Res. · ${s.bk.g} Gäste` : `Hôm nay: ${s.bk.n} đơn · ${s.bk.g} khách`) : (de ? 'Tischreservierungen und Tischplan' : 'Xem và quản lý đặt bàn'), to: `/r/${rid}/bk` },
       { icon: 'invoice', label: t('invoicing'), desc: de ? 'Rechnungen und Angebote' : 'Hoá đơn và Angebot', to: `/r/${rid}/inv` },
       { icon: 'people', label: t('hr'), desc: de ? 'Personalakten verwalten' : 'Quản lý hồ sơ nhân viên', to: `/r/${rid}/hr` },
     ] : []),
