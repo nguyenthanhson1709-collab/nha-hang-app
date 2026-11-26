@@ -1,6 +1,6 @@
 // Đọc/ghi Supabase cho module viết hoá đơn. Mọi dữ liệu theo từng nhà hàng (restaurant_id).
 import { supabase } from '../lib/supabase'
-import type { Article, Company, Customer, CustomerSnapshot, Invoice, InvoiceItem } from './types'
+import type { Article, Company, Customer, CustomerSnapshot, Invoice, InvoiceItem, TextPresets } from './types'
 import { computeTotals, round2 } from './money'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
@@ -26,6 +26,11 @@ export async function saveCompany(rid: string, c: Partial<Company>) {
   const row = { ...c } as Record<string, unknown>
   delete row.restaurant_id; delete row.updated_at
   check(await supabase.from('nh_inv_company').update(row).eq('restaurant_id', rid))
+}
+
+/** Lưu danh sách câu mẫu (lời mở đầu / lời kết) của quán */
+export async function saveTextPresets(rid: string, presets: TextPresets) {
+  check(await supabase.from('nh_inv_company').update({ text_presets: presets }).eq('restaurant_id', rid))
 }
 
 export async function listCustomers(rid: string, includeArchived = false): Promise<Customer[]> {

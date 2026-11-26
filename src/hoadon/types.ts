@@ -10,7 +10,10 @@ export interface Company {
   intro_text_en: string; closing_text_en: string
   email_subject_en: string; email_body_en: string
   logo_url: string | null
+  text_presets?: TextPresets
 }
+
+export interface TextPresets { intro: string[]; closing: string[] }
 
 export interface Customer {
   id: string
