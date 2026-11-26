@@ -29,6 +29,11 @@ import InvCustomers from './hoadon/pages/Customers'
 import InvArticles from './hoadon/pages/Articles'
 import InvSettings from './hoadon/pages/InvSettings'
 import BkApp from './datban/BkApp'
+import RcRecipes from './congthuc/pages/Recipes'
+import RcRecipeView from './congthuc/pages/RecipeView'
+import RcRecipeEditor from './congthuc/pages/RecipeEditor'
+import RcIngredients from './congthuc/pages/Ingredients'
+import RcConcepts from './congthuc/pages/Concepts'
 
 // Mở app mới (tab mới / mở lại từ màn hình chính) -> luôn về trang đầu, không quay lại trang cũ (vd. trang scan).
 // Tải lại trang trong cùng một tab thì vẫn giữ trang đang xem.
@@ -117,6 +122,12 @@ function Shell({ session }: { session: Session }) {
           <Route path="/r/:rid/inv/settings" element={<RestLayout><InvSettings /></RestLayout>} />
           <Route path="/r/:rid/inv/:id" element={<RestLayout><InvoiceEditor /></RestLayout>} />
           <Route path="/r/:rid/bk/*" element={<RestLayout><BkApp /></RestLayout>} />
+          <Route path="/r/:rid/rc" element={<RestLayout><RcRecipes /></RestLayout>} />
+          <Route path="/r/:rid/rc/concepts" element={<RestLayout><RcConcepts /></RestLayout>} />
+          <Route path="/r/:rid/rc/ing" element={<RestLayout><RcIngredients /></RestLayout>} />
+          <Route path="/r/:rid/rc/new" element={<RestLayout><RcRecipeEditor key="new" /></RestLayout>} />
+          <Route path="/r/:rid/rc/:id" element={<RestLayout><RcRecipeView /></RestLayout>} />
+          <Route path="/r/:rid/rc/:id/edit" element={<RestLayout><RcRecipeEditor /></RestLayout>} />
           <Route path="/r/:rid/settings" element={<RestLayout><RestaurantSettings /></RestLayout>} />
           <Route path="*" element={<Navigate to={start} replace />} />
         </Routes>
