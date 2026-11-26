@@ -141,7 +141,7 @@ export default function RestaurantSettings() {
             </div>
             <div className="small muted">{(f.card_source || 'zbon') === 'zbon'
               ? (lang === 'de' ? 'Umsatz, Kartenzahlung und Trinkgeld lt. Z-Bon. Trinkgeld steht direkt unter der Kartenzahlung.' : 'Umsatz, Kartenzahlung và Trinkgeld đều lấy theo Z-Bon. Trinkgeld ghi ngay dưới dòng Kartenzahlung.')
-              : (lang === 'de' ? 'Umsatz und Trinkgeld lt. Z-Bon, Kartenzahlung = Viva Wallet (im Kassenbuch unter − Viva Wallet eintragen). Tage ohne Viva-Betrag: Kartenzahlung lt. Z-Bon.' : 'Umsatz và Trinkgeld theo Z-Bon, Kartenzahlung = số Viva Wallet (nhập ở Kassenbuch, nút − Viva Wallet). Ngày chưa nhập Viva thì Kartenzahlung theo Z-Bon.')}</div>
+              : (lang === 'de' ? 'Umsatz lt. Z-Bon, Kartenzahlung = Viva Wallet (im Kassenbuch unter − Viva Wallet eintragen), kein tägliches Trinkgeld. Am Monatsende eine Zeile „Trinkgeld von Viva Wallet“ = Σ Viva − Σ Kreditzahlung. Tage ohne Viva-Betrag: Kartenzahlung lt. Z-Bon.' : 'Umsatz theo Z-Bon, Kartenzahlung = số Viva Wallet (nhập ở Kassenbuch, nút − Viva Wallet), không có Trinkgeld từng ngày. Cuối tháng có một dòng „Trinkgeld von Viva Wallet“ = tổng Viva − tổng Kreditzahlung. Ngày chưa nhập Viva thì Kartenzahlung theo Z-Bon.')}</div>
           </div>
           <div className="card">
             <h3 style={{ marginTop: 0 }}>{t('posMap')}</h3>

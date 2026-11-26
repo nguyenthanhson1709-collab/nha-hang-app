@@ -52,6 +52,7 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
   if (vivaMode) for (const m of moves) if (m.channel === 'viva') viva.set(m.move_date, r2((viva.get(m.move_date) || 0) + Number(m.amount)))
   const zDays = new Set(zbons.filter((z) => Number(z.total)).map((z) => z.z_date))
 
+  let vivaTip = 0
   // Z-Bon: cả doanh thu trong ngày vào Einnahmen; ngay dưới là Kartenzahlung, rồi Trinkgeld
   for (const z of zbons) {
     const total = Number(z.total); if (!total) continue
@@ -68,17 +69,25 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
     const transfer = Number(z.transfer_pos) || 0 // Überweisung lt. Z-Bon: không vào két
     const v = viva.get(z.z_date)
     if (vivaMode && v != null) {
-      // Kartenzahlung = số Viva Wallet; Trinkgeld vẫn theo Z-Bon, ngay dưới (người dùng chốt 2026-11-26)
+      // Kartenzahlung = số Viva Wallet, không có dòng Trinkgeld từng ngày (người dùng chốt 2026-11-26);
+      // chênh lệch Viva − Kreditzahlung gộp thành một dòng "Trinkgeld von Viva Wallet" cả tháng (xem dưới)
       if (v) out.push({ ...base, date: z.z_date, aus: v, ausNetto: v, konto: '1360', text: `Kartenzahlung (Viva Wallet) - ${dm(z.z_date)}`, link, prio: 2.5, ts: z.created_at })
-      const tipZ = zTip(z)
-      if (tipZ > 0) out.push({ ...base, date: z.z_date, aus: tipZ, ausNetto: tipZ, konto: '1592', text: 'Trinkgeld (Karte) an Personal ausgezahlt', link, prio: 2.6, ts: z.created_at })
+      vivaTip = r2(vivaTip + v - cardZ)
     } else {
       if (cardZ) out.push({ ...base, date: z.z_date, aus: cardZ, ausNetto: cardZ, konto: '1360', text: `Kartenzahlung - ${dm(z.z_date)}${vivaMode ? ' (lt. Z-Bon, Viva fehlt)' : ''}`, link, prio: 2.5, ts: z.created_at })
       const tipZ = zTip(z)
-      if (tipZ > 0)
+      if (!vivaMode && tipZ > 0)
         out.push({ ...base, date: z.z_date, aus: tipZ, ausNetto: tipZ, konto: '1592', text: 'Trinkgeld (Karte) an Personal ausgezahlt', link, prio: 2.6, ts: z.created_at })
     }
     if (transfer > 0) out.push({ ...base, date: z.z_date, aus: transfer, ausNetto: transfer, konto: '1360', text: 'Überweisung', link, prio: 2.7, ts: z.created_at })
+  }
+
+  // Quán theo Viva Wallet: một dòng cả tháng, ngày cuối tháng. Einnahmen = Σ Viva − Σ Kreditzahlung (các ngày có cả hai)
+  if (vivaMode && vivaTip) {
+    const last = new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate()
+    const d = `${period}-${String(last).padStart(2, '0')}`
+    out.push({ ...base, date: d, konto: '1590', text: 'Trinkgeld von Viva Wallet', prio: 5, ts: '9999',
+      ...(vivaTip > 0 ? { ein: vivaTip, einNetto: vivaTip } : { aus: -vivaTip, ausNetto: -vivaTip }) })
   }
 
   // Thu/chi khác, nộp tiền vào ngân hàng
