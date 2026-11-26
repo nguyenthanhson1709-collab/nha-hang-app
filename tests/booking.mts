@@ -19,7 +19,7 @@ grant execute on function auth.uid() to authenticated, anon;
 await db.exec(`create function extensions.gen_random_bytes(n int) returns bytea language sql as $$ select decode(md5(random()::text), 'hex') $$;
 grant execute on function extensions.gen_random_bytes(int) to anon, authenticated;`)
 const mig = (f: string) => readFileSync(`supabase/migrations/${f}`, 'utf8').replace(/create extension[^;]*;/g, '')
-for (const f of ['001_nh_schema.sql', '003_nh_hardening.sql', '020_nh_booking.sql', '020_nh_booking.sql']) await db.exec(mig(f))
+for (const f of ['001_nh_schema.sql', '003_nh_hardening.sql', '021_nh_booking.sql', '021_nh_booking.sql']) await db.exec(mig(f))
 
 const O = '11111111-1111-4111-8111-111111111111', M = '22222222-2222-4222-8222-222222222222', S = '33333333-3333-4333-8333-333333333333', X = '44444444-4444-4444-8444-444444444444'
 const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -28,8 +28,8 @@ update public.nh_profiles set is_owner = true where id = '${O}';
 update public.nh_profiles set full_name = 'Lan' where id = '${S}';
 insert into public.nh_restaurants(id,name) values ('${A}','Vietbowl Mitte GmbH'),('${B}','B');
 insert into public.nh_members values ('${A}','${M}','manager',now()),('${A}','${S}','staff',now()),('${B}','${X}','manager',now());`)
-await db.exec(mig('022_nh_booking_seed.sql'))
-await db.exec(mig('022_nh_booking_seed.sql')) // chạy lại không nạp trùng
+await db.exec(mig('023_nh_booking_seed.sql'))
+await db.exec(mig('023_nh_booking_seed.sql')) // chạy lại không nạp trùng
 
 let fails = 0
 const ok = (cond: boolean, msg: string) => { console.log(`${cond ? '✓' : '✗'} ${msg}`); if (!cond) fails++ }

@@ -1,4 +1,4 @@
--- 022: Dữ liệu ban đầu của module Đặt bàn cho Vietbowl Potsdamer Platz (= quán "Vietbowl Mitte GmbH" trong app):
+-- 023: Dữ liệu ban đầu của module Đặt bàn cho Vietbowl Potsdamer Platz (= quán "Vietbowl Mitte GmbH" trong app):
 -- cài đặt như app cũ (chưa nhận khách online: online_enabled = false cho tới khi chuyển trang khách),
 -- 4 khu, 73 bàn theo bản vẽ quán, luật cao điểm mặc định. Chỉ nạp khi quán chưa có sơ đồ.
 -- Khi chuyển dữ liệu từ app cũ, sơ đồ/luật/cài đặt sẽ được thay bằng bản đang chạy thật.
