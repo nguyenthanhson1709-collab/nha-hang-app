@@ -115,7 +115,7 @@ export default function EmployeePage() {
   const [ab, setAb] = useState<{ anrede: Anrede; job: string; date: string } | null>(null)
   // Bản xem trước: chưa lưu gì cho tới khi bấm Lưu
   const [pv, setPv] = useState<{ title: string; pdf: Blob; docx?: Blob; base: string; kind: 'contract' | 'certificate'; miss?: string; saved?: boolean } | null>(null)
-  const [fv, setFv] = useState<{ title: string; blob: Blob; name: string; slip?: boolean; link?: string } | null>(null)
+  const [fv, setFv] = useState<{ title: string; blob: Blob; name: string; slip?: boolean } | null>(null)
   const [exitF, setExitF] = useState<{ date: string | null; reason: string } | null>(null)
 
   async function loadChildren() {
@@ -454,21 +454,29 @@ export default function EmployeePage() {
       if (error || !data) throw error || new Error('download')
       const ext = (path.split('.').pop() || 'pdf').toLowerCase()
       const blob = data.type && data.type !== 'application/octet-stream' ? data : new Blob([data], { type: ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}` })
-      // Bảng lương: tạo sẵn link tải (hết hạn sau 7 ngày) để nút WhatsApp mở chat ngay khi bấm
-      const link = slip ? (await supabase.storage.from(HR_BUCKET).createSignedUrl(path, 7 * 24 * 3600)).data?.signedUrl : undefined
-      setFv({ title, slip, link, blob, name: `${title.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '_')}.${ext}` })
+      // Bảng lương: tên file gọn để gửi cho nhân viên, vd. Lohnabrechnung_11-2026_Lina_Nguyen.pdf
+      const asc = (x: string | null) => (x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+      const per = title.match(/(\d{2})\/(\d{4})/)
+      const name = slip ? [`Lohnabrechnung${per ? `_${per[1]}-${per[2]}` : ''}`, asc(e!.first_name), asc(e!.last_name)].filter(Boolean).join('_') + `.${ext}`
+        : `${title.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '_')}.${ext}`
+      setFv({ title, slip, blob, name })
     } catch { openHrFile(path) } finally { setBusy(false) }
   }
-  /** Gửi bảng lương qua WhatsApp: mở thẳng chat với số điện thoại trong hồ sơ, lời nhắn tiếng Đức kèm link tải PDF
-   *  (link ký số, tự hết hạn sau 7 ngày). Trình duyệt không thể tự đính kèm file vào WhatsApp nên gửi bằng link. */
-  const sendWhatsApp = (f: { title: string; link?: string }) => {
-    if (!f.link) { toast(T('Chưa tạo được link bảng lương, thử mở lại.', 'Link konnte nicht erstellt werden.')); return }
+  /** Gửi bảng lương qua WhatsApp: gửi chính file PDF qua bảng chia sẻ của điện thoại (chọn WhatsApp, chọn người nhận).
+   *  Trình duyệt không thể đưa file thẳng vào một chat WhatsApp; máy tính không chia sẻ được file nên tải file về
+   *  và mở chat WhatsApp với số trong hồ sơ để đính kèm. */
+  const sendWhatsApp = async (f: { title: string; blob: Blob; name: string }) => {
     const m = f.title.match(/(\d{2}\/\d{4})/)
-    const text = `Hallo ${(e.first_name || '').trim()}, hier ist deine Lohnabrechnung${m ? ` ${m[1]}` : ''} (Link 7 Tage gültig):\n${f.link}\n\nViele Grüße\n${hs?.company_name || e.company || r.name}`
+    const text = `Hallo ${(e.first_name || '').trim()}, anbei deine Lohnabrechnung${m ? ` ${m[1]}` : ''}. Viele Grüße, ${hs?.company_name || e.company || r.name}`
+    const file = new File([f.blob], f.name, { type: f.blob.type || 'application/pdf' })
+    try {
+      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], text }); return }
+    } catch (x) { if ((x as Error)?.name === 'AbortError') return }
     let ph = (e.phone || '').replace(/[^\d+]/g, '')
     if (ph.startsWith('+')) ph = ph.slice(1); else if (ph.startsWith('00')) ph = ph.slice(2); else if (ph.startsWith('0')) ph = `49${ph.slice(1)}`
+    download(f.blob, f.name)
     window.open(`https://wa.me/${ph}?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
-    if (!ph) toast(T('Hồ sơ chưa có số điện thoại, hãy chọn người nhận trong WhatsApp.', 'Keine Telefonnummer, Empfänger in WhatsApp wählen.'))
+    toast(T('Đã tải file. Đính kèm file vào WhatsApp rồi gửi.', 'Datei geladen. In WhatsApp anhängen und senden.'))
   }
   const docRow = (d: EmpDoc) => {
     const dl = permitDaysLeft(d.valid_until)
