@@ -135,6 +135,7 @@ export function InvoicePdf({ company, invoice, items, qrDataUrl }: InvoicePdfPro
             <View style={s.recipient}>
               <Text style={s.recipientName}>{c.name}</Text>
               {c.supplement ? <Text>{c.supplement}</Text> : null}
+              {c.supplement2 ? <Text>{c.supplement2}</Text> : null}
               {c.street ? <Text>{c.street}</Text> : null}
               <Text>{[c.zip, c.city].filter(Boolean).join(' ')}</Text>
               {c.country && c.country !== 'DE' ? <Text>{countryName(c.country)}</Text> : null}

@@ -106,7 +106,7 @@ function NameCombo({ value, customers, onType, onPick, label }: {
 }
 
 const sameAddress = (a: CustomerSnapshot, c: Customer) =>
-  (a.name ?? '') === c.name && (a.supplement ?? '') === (c.supplement ?? '') && (a.street ?? '') === (c.street ?? '') &&
+  (a.name ?? '') === c.name && (a.supplement ?? '') === (c.supplement ?? '') && (a.supplement2 ?? '') === (c.supplement2 ?? '') && (a.street ?? '') === (c.street ?? '') &&
   (a.zip ?? '') === (c.zip ?? '') && (a.city ?? '') === (c.city ?? '') && (a.country ?? 'DE') === (c.country ?? 'DE')
 
 export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invoice' | 'quote' }) {
@@ -124,6 +124,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     : { doc_type: 'invoice', invoice_date: todayIso(), status: 'draft', customer_snapshot: {}, delivery_type: 'service_date', delivery_date: todayIso() })
   const [items, setItems] = useState<InvoiceItem[]>([])
   const [lunch, setLunch] = useState(false)
+  const [sup2, setSup2] = useState(false)
   const [err, setErr] = useState('')
   const [ok, setOk] = useState('')
   const [busy, setBusy] = useState(false)
@@ -230,7 +231,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     if (!a.name?.trim()) { setErr(L('Hãy nhập tên khách hàng.', 'Bitte Kundennamen eingeben.')); return }
     setBusy(true); setErr('')
     try {
-      const fields = { name: a.name.trim(), supplement: a.supplement ?? '', street: a.street ?? '', zip: a.zip ?? '', city: a.city ?? '', country: a.country || 'DE', emails: custEmail }
+      const fields = { name: a.name.trim(), supplement: a.supplement ?? '', supplement2: a.supplement2 ?? '', street: a.street ?? '', zip: a.zip ?? '', city: a.city ?? '', country: a.country || 'DE', emails: custEmail }
       const saved = await saveCustomer(rid!, asNew || !customer ? { kind: 'customer', ...fields } : { id: customer.id, ...fields })
       setCustomers((list) => [...list.filter((c) => c.id !== saved.id), saved].sort((x, y) => x.name.localeCompare(y.name)))
       setInvoice((i) => ({ ...i, customer_id: saved.id, customer_snapshot: snapshotOf(saved) })); setDirty(true)
@@ -390,6 +391,12 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
                 value={addr.name ?? ''} customers={customers.filter((c) => c.kind === 'customer' && !c.archived)}
                 onType={(v) => updateAddr({ name: v })} onPick={pickCustomer} />
               <div className="mt"><input placeholder="Adresszusatz" value={addr.supplement ?? ''} onChange={(e) => updateAddr({ supplement: e.target.value })} /></div>
+              {sup2 || addr.supplement2 ? (
+                <div className="mt email-row"><input placeholder="Adresszusatz 2" autoFocus={sup2 && !addr.supplement2} value={addr.supplement2 ?? ''} onChange={(e) => updateAddr({ supplement2: e.target.value })} />
+                  <button type="button" className="sm" title={L('Bỏ dòng này', 'Zeile entfernen')} onClick={() => { updateAddr({ supplement2: '' }); setSup2(false) }}>✕</button></div>
+              ) : (
+                <div className="mt"><button type="button" className="sm" onClick={() => setSup2(true)}>+ {L('Thêm dòng địa chỉ', 'Weitere Adresszeile')}</button></div>
+              )}
               <div className="mt"><input placeholder="Straße" value={addr.street ?? ''} onChange={(e) => updateAddr({ street: e.target.value })} /></div>
               <div className="frow mt" style={{ gap: 8 }}>
                 <div style={{ flex: '0 1 120px' }}><input placeholder="PLZ" value={addr.zip ?? ''} onChange={(e) => updateAddr({ zip: e.target.value })} /></div>

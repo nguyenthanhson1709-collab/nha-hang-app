@@ -5,7 +5,7 @@ import type { Customer } from '../types'
 import { COUNTRIES } from '../countries'
 import { EmailList, InvShell, useL } from '../ui'
 
-const blank: Partial<Customer> = { kind: 'customer', name: '', street: '', supplement: '', zip: '', city: '', country: 'DE', emails: '', phone: '', vat_id: '', note: '', archived: false }
+const blank: Partial<Customer> = { kind: 'customer', name: '', street: '', supplement: '', supplement2: '', zip: '', city: '', country: 'DE', emails: '', phone: '', vat_id: '', note: '', archived: false }
 
 export default function Customers() {
   const { rid } = useParams()
@@ -13,6 +13,8 @@ export default function Customers() {
   const [rows, setRows] = useState<Customer[]>([])
   const [q, setQ] = useState('')
   const [edit, setEdit] = useState<Partial<Customer> | null>(null)
+  const [sup2, setSup2] = useState(false)
+  useEffect(() => { if (!edit) setSup2(false) }, [edit])
   const [err, setErr] = useState('')
   const [showArchived, setShowArchived] = useState(false)
 
@@ -73,7 +75,10 @@ export default function Customers() {
               <div><span className="lbl">{L('Loại', 'Art')}</span><select {...f('kind')}><option value="customer">{L('Khách hàng', 'Kunde')}</option><option value="vendor">{L('Nhà cung cấp', 'Lieferant')}</option></select></div>
             </div>
             <div className="mt"><span className="lbl">{L('Tên công ty / người', 'Firma / Name')}</span><input {...f('name')} /></div>
-            <div className="mt"><span className="lbl">{L('Người nhận / phòng ban (Adresszusatz)', 'Adresszusatz')}</span><input {...f('supplement')} /></div>
+            <div className="mt"><span className="lbl">{L('Người nhận / phòng ban (Adresszusatz)', 'Adresszusatz')}</span><input {...f('supplement')} />
+              {edit.supplement2 || sup2
+                ? <div className="mt email-row"><input placeholder="Adresszusatz 2" {...f('supplement2')} /><button type="button" className="sm" onClick={() => { setEdit((x) => ({ ...x, supplement2: '' })); setSup2(false) }}>✕</button></div>
+                : <div className="mt"><button type="button" className="sm" onClick={() => setSup2(true)}>+ {L('Thêm dòng địa chỉ', 'Weitere Adresszeile')}</button></div>}</div>
             <div className="mt"><span className="lbl">{L('Đường, số nhà', 'Straße')}</span><input {...f('street')} /></div>
             <div className="frow mt">
               <div style={{ flex: '0 1 120px' }}><span className="lbl">PLZ</span><input {...f('zip')} /></div>
