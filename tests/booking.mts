@@ -17,6 +17,8 @@ grant execute on function auth.uid() to authenticated, anon;
 `)
 // PGlite không có pgcrypto: thay gen_random_bytes bằng bản đơn giản
 await db.exec(`create function extensions.gen_random_bytes(n int) returns bytea language sql as $$ select decode(md5(random()::text), 'hex') $$;
+create function extensions.gen_salt(t text, n int) returns text language sql as $$ select 'salt' $$;
+create function extensions.crypt(p text, s text) returns text language sql as $$ select 'h:' || md5(p) $$;
 grant execute on function extensions.gen_random_bytes(int) to anon, authenticated;`)
 const mig = (f: string) => readFileSync(`supabase/migrations/${f}`, 'utf8').replace(/create extension[^;]*;/g, '')
 for (const f of ['001_nh_schema.sql', '003_nh_hardening.sql', '021_nh_booking.sql', '021_nh_booking.sql']) await db.exec(mig(f))
@@ -150,6 +152,52 @@ ok(t999[0]?.active === false, 'Bàn không có ở app cũ chuyển sang ẩn')
 ok(msg(await save(M, 2, false, null, ['t41'], '20:00')).includes('mirror_readonly'), 'Đang chép: phụ trách không thêm đơn trong app được')
 ok(msg(await as(O, () => q(`update nh_bk_settings set duration_min = 60 where restaurant_id=$1`, [A]))).includes('mirror_readonly'), 'Đang chép: chủ không sửa cài đặt trong app được')
 ok(Number((await q(`select nh_bk_auto_arrive() n`))[0].n) === 0, 'Đang chép: không tự chuyển Đã đến ở app mới')
+
+// 025: app nhân viên PIN riêng trên DB này
+await db.exec(mig('025_nh_booking_staff_app.sql'))
+await db.exec(mig('025_nh_booking_staff_app.sql')) // chạy lại được
+const OS = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', PS = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+const p2 = { ...payload, staff: [{ id: OS, name: 'Chef', role: 'owner', active: true }, { id: PS, name: 'Mai', role: 'staff', active: true }],
+  pins: [{ staff_id: OS, pin_hash: 'h:' + (await q(`select md5('9999') m`))[0].m }, { staff_id: PS, pin_hash: 'h:' + (await q(`select md5('1234') m`))[0].m }] }
+await q(`select nh_bk_mirror_apply($1)`, [p2])
+const stc = await q(`select count(*)::int n from nh_bk_staff where restaurant_id=$1 and active`, [A])
+ok(stc[0].n === 2, 'Chép 2 nhân viên PIN từ app cũ')
+const pc = await q(`select nh_bk_pin_check('potsdamerplatz','1234','1.1.1.1') r`)
+ok((pc[0].r as { result: string; staff_id: string }).result === 'ok' && (pc[0].r as { staff_id: string }).staff_id === PS, 'Mã PIN cũ đăng nhập được')
+ok((await q(`select nh_bk_pin_check('potsdamerplatz','0000','1.1.1.1') r`))[0].r.result === 'pin', 'Mã PIN sai bị từ chối')
+for (let i = 0; i < 5; i++) await q(`select nh_bk_pin_check('potsdamerplatz','0001','6.6.6.6')`)
+ok((await q(`select nh_bk_pin_check('potsdamerplatz','1234','6.6.6.6') r`))[0].r.result === 'locked', '5 lần sai thì khoá IP 15 phút')
+ok(err(await as(M, () => q(`select nh_bk_pin_check('potsdamerplatz','1234','1.1.1.1')`))), 'Trình duyệt không gọi được hàm kiểm tra PIN')
+// tài khoản ẩn của nhân viên PIN
+const PU = '55555555-5555-4555-8555-555555555555', OU = '66666666-6666-4666-8666-666666666666'
+await db.exec(`insert into auth.users(id,email) values ('${PU}','staff-p@staff.invalid'),('${OU}','staff-o@staff.invalid')`)
+await q(`select nh_bk_set_staff_auth($1,$2)`, [PS, PU]); await q(`select nh_bk_set_staff_auth($1,$2)`, [OS, OU])
+ok(msg(await save(PU, 2, false, null, ['t41'], '20:00')).includes('mirror_readonly'), 'Đang chép: nhân viên PIN cũng chưa sửa được')
+await db.exec(`update nh_bk_settings set mirror_old = false where restaurant_id = '${A}'`)
+const ms = await as(PU, () => q(`select nh_bk_my_staff($1) r`, [A]))
+ok(Array.isArray(ms) && (ms[0].r as { role: string; name: string }).role === 'staff' && (ms[0].r as { name: string }).name === 'Mai', 'Nhân viên PIN: my_staff = Mai, vai trò staff')
+const pv = await as(PU, () => q(`select count(*)::int n from nh_bk_bookings where restaurant_id=$1`, [A]))
+ok(Array.isArray(pv) && pv[0].n >= 1, 'Nhân viên PIN xem được đơn')
+const pb = await save(PU, 2, false, null, ['t41'], '20:00')
+ok(!err(pb), 'Nhân viên PIN thêm đơn được')
+const cb = await q(`select created_by_name from nh_bk_bookings where id=$1`, [pb])
+ok(cb[0]?.created_by_name === 'Mai', 'Đơn ghi tên nhân viên PIN')
+ok(err(await as(PU, () => q(`select nh_bk_delete_booking($1)`, [pb]))), 'Nhân viên PIN không xoá hẳn đơn được')
+ok(err(await as(PU, () => q(`select nh_bk_staff_add($1,'X','5555')`, [A]))), 'Nhân viên PIN không thêm nhân viên được')
+const pd = await as(PU, () => q(`select count(*)::int n from nh_restaurants`))
+ok(err(pd) || (pd as { n: number }[])[0].n === 0, 'Nhân viên PIN không thấy dữ liệu app nhà hàng (quán)')
+const pdoc = await as(PU, () => q(`select count(*)::int n from nh_documents`))
+ok(err(pdoc) || (pdoc as { n: number }[])[0].n === 0, 'Nhân viên PIN không thấy hoá đơn của app nhà hàng')
+ok(!err(await as(OU, () => q(`select nh_bk_delete_booking($1)`, [pb]))), 'PIN vai trò chủ xoá đơn được')
+ok(msg(await as(OU, () => q(`select nh_bk_staff_add($1,'Lan','1234')`, [A]))).includes('pin_taken'), 'Không cho trùng mã PIN')
+const na = await as(OU, () => q(`select nh_bk_staff_add($1,'Lan','4321') id`, [A]))
+ok(!err(na), 'PIN vai trò chủ thêm nhân viên')
+ok(!err(await as(PU, () => q(`select nh_bk_staff_set_pin($1,'2468')`, [PS]))), 'Nhân viên tự đổi mã PIN của mình')
+ok(err(await as(PU, () => q(`select nh_bk_staff_set_pin($1,'1357')`, [OS]))), 'Nhân viên không đổi mã PIN người khác')
+// chủ app nhà hàng đăng nhập bằng email vào app đặt bàn
+const mo2 = await as(O, () => q(`select nh_bk_my_staff($1) r`, [A]))
+ok(Array.isArray(mo2) && (mo2[0].r as { role: string }).role === 'owner', 'Chủ app nhà hàng vào app đặt bàn với vai trò chủ')
+ok((await as(X, () => q(`select nh_bk_my_staff($1) r`, [A])) as { r: unknown }[])[0].r === null, 'Phụ trách quán khác không vào được app đặt bàn của quán A')
 
 console.log(fails ? `\n${fails} lỗi` : '\nTất cả đạt')
 process.exit(fails ? 1 : 0)
