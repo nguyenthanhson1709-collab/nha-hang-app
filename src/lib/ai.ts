@@ -128,8 +128,8 @@ export async function fillUnits(d: { restaurant_id: string; files: string[]; nh_
   return n
 }
 
-export type KasseLine = { qty: number; number: string | null; name: string; unit_price: number; total: number; rate: number }
-export type KasseReceipt = { doc_date: string | null; receipt_no: string | null; table: string | null; gross: number; tip: number; taxes: { rate: number; net: number; tax: number; gross: number }[]; lines: KasseLine[] }
+export type KasseLine = { qty: number; number: string | null; name: string; unit_price: number | null; total: number | null; rate: number | null }
+export type KasseReceipt = { doc_date: string | null; receipt_no: string | null; table: string | null; gross: number | null; tip: number; taxes: { rate: number; net: number; tax: number; gross: number }[]; lines: KasseLine[] }
 /** Đọc hoá đơn in từ máy Kasse của quán (để viết lại thành Rechnung). null khi lỗi. */
 export async function aiReadKasse(rid: string, files: { blob: Blob; type: string }[]): Promise<KasseReceipt | null> {
   return call<KasseReceipt>('kasse', rid, files)

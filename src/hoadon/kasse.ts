@@ -5,21 +5,34 @@ import { round2 } from './money'
 
 const cleanName = (n: string, nr: string | null) => {
   const t = n.trim()
+  if (!t) return nr ?? ''
   return nr && !t.startsWith(`${nr} `) ? `${nr} ${t}` : t
 }
 
 /** Mỗi dòng Kasse -> một dòng hoá đơn. Giá và thuế lấy đúng như in trên Kasse; tên lấy từ danh sách món nếu khớp số món.
+ *  Dòng không có giá (vd. giấy viết tay chỉ có số món và số lượng): lấy giá + thuế từ danh mục, ưu tiên giá trưa khi `lunch`.
  *  Các dòng giống hệt nhau (cùng món, cùng giá, cùng thuế) được gộp và cộng số lượng. */
-export function kasseToItems(lines: KasseLine[], articles: Article[]): InvoiceItem[] {
+export function kasseToItems(lines: KasseLine[], articles: Article[], lunch = false): InvoiceItem[] {
   const out: InvoiceItem[] = []
   for (const l of lines) {
     const qty = Number(l.qty) || 1
-    const price = round2(l.unit_price || (l.total || 0) / qty)
-    const rate = [0, 7, 19].includes(Number(l.rate)) ? Number(l.rate) : 7
+    const printed = Number(l.unit_price) > 0 ? Number(l.unit_price) : Number(l.total) > 0 ? Number(l.total) / qty : null
     const nr = l.number ? String(l.number).trim() : null
     const cands = nr ? articles.filter((a) => a.number === nr && !a.archived) : []
-    const art = cands.find((a) => Math.abs(a.price_gross - price) < 0.005 && a.tax_rate === rate) || (cands.length === 1 ? cands[0] : undefined)
-    const name = art ? (art.number ? `${art.number} ${art.name}` : art.name) : cleanName(l.name, nr)
+    let art: Article | undefined, price: number, rate: number
+    if (printed != null) {
+      price = round2(printed)
+      rate = l.rate != null && [0, 7, 19].includes(Number(l.rate)) ? Number(l.rate) : 7
+      art = cands.find((a) => Math.abs(a.price_gross - price) < 0.005 && a.tax_rate === rate && a.is_lunch === lunch)
+        || cands.find((a) => Math.abs(a.price_gross - price) < 0.005 && a.tax_rate === rate)
+        || (cands.length === 1 ? cands[0] : cands.find((a) => a.is_lunch === lunch))
+      if (l.rate == null && art) rate = art.tax_rate
+    } else {
+      art = cands.find((a) => a.is_lunch === lunch) || cands[0]
+      price = art ? art.price_gross : 0
+      rate = art ? art.tax_rate : l.rate != null && [0, 7, 19].includes(Number(l.rate)) ? Number(l.rate) : 7
+    }
+    const name = art ? (art.number ? `${art.number} ${art.name}` : art.name) : cleanName(l.name || '', nr)
     const same = out.find((it) => it.name === name && it.unit_price_gross === price && it.tax_rate === rate)
     if (same) { same.quantity = round2(same.quantity + qty); same.line_total_gross = round2(same.quantity * price); continue }
     out.push({

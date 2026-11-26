@@ -57,16 +57,16 @@ const KASSE = obj({
   doc_date: { ...nStr, description: "Datum des Bons YYYY-MM-DD" },
   receipt_no: { ...nStr, description: "Rechnungs-/Bonnummer der Kasse" },
   table: { ...nStr, description: "Tischnummer, falls gedruckt" },
-  gross: { ...num, description: "Endbetrag brutto (Total/Summe), OHNE Trinkgeld" },
+  gross: { ...nNum, description: "Endbetrag brutto (Total/Summe), OHNE Trinkgeld; null wenn keiner gedruckt/geschrieben ist" },
   tip: { ...num, description: "Trinkgeld, 0 wenn nicht vorhanden" },
   taxes: { type: "array", items: obj({ rate: { type: "number", enum: [0, 7, 19] }, net: num, tax: num, gross: num }) },
   lines: { type: "array", items: obj({
     qty: { ...num, description: "Menge vor dem x, z.B. 4 bei '4x'" },
     number: { ...nStr, description: "Artikelnummer der Kasse in Klammern, z.B. '467' bei '(467) Bier Klein'; null wenn keine" },
     name: { type: "string", description: "Artikelname ohne Menge und ohne die Nummer in Klammern" },
-    unit_price: { ...num, description: "Preis pro Stück brutto ('Preis pro Stück'), sonst Zeilenbetrag / Menge" },
-    total: { ...num, description: "Zeilenbetrag brutto" },
-    rate: { type: "number", enum: [0, 7, 19], description: "Steuersatz über den Buchstaben am Zeilenende (A/B) und die MwSt-Legende" },
+    unit_price: { ...nNum, description: "Preis pro Stück brutto ('Preis pro Stück'), sonst Zeilenbetrag / Menge; null wenn auf dem Beleg kein Preis steht" },
+    total: { ...nNum, description: "Zeilenbetrag brutto; null wenn kein Betrag auf dem Beleg steht" },
+    rate: { anyOf: [{ type: "number", enum: [0, 7, 19] }, { type: "null" }], description: "Steuersatz über den Buchstaben am Zeilenende (A/B) und die MwSt-Legende; null wenn nicht angegeben" },
   }) },
 });
 
@@ -77,7 +77,8 @@ Daraus wird eine ordentliche Rechnung geschrieben, deshalb müssen ALLE Position
 - rate: Buchstaben über die MwSt-Legende zuordnen (z.B. "MwSt. A 7%", "MwSt. B 19%").
 - gross = Total/Summe des Bons. Trinkgeld, TSE-Daten, QR-Code und den Bewirtungsbeleg ignorieren (Trinkgeld nur in tip).
 - Prüfe: Summe aller Zeilenbeträge = gross. Wenn nicht, suche die falsch gelesene Zeile (meist eine verblasste Ziffer: 4/9, 6/8, 3/8, 1/7, 5/6) und lies sie noch einmal.
-- Datum im deutschen Format TT.MM.JJJJ.`;
+- Datum im deutschen Format TT.MM.JJJJ.
+- Auch handgeschriebene Zettel/Listen sind möglich, z.B. nur "Nr" und Menge ("442 x 2", "4 x 1"): jede Zeile ist eine Position mit number und qty. Steht dort kein Preis, dann unit_price, total, rate und gross = null und name = "" (der Preis wird später aus der Artikelliste genommen). Handschriftliche Ziffern sorgfältig lesen (1/7, 4/9, 2/7).`;
 
 const fmtPrice = (n: number) => Number(n).toFixed(2).replace(".", ",");
 const MENU_HINT = (menu: string) => `
@@ -86,7 +87,8 @@ ${menu}
 - Nummer, Name und Preis einer Bonzeile müssen zusammenpassen. Beispiel: steht "(46?) Strawberry ..." auf dem Bon, ist es die Nummer der Karte, deren Name passt, nicht eine ähnliche Nummer mit anderem Namen.
 - Ein Artikel kann mehrere Preise haben (z.B. Mittag/Abend); der Preis muss trotzdem einer der Kartenpreise sein, wenn die Ziffern unklar sind.
 - Was auf dem Bon klar lesbar ist, gilt immer, auch wenn es von der Karte abweicht (Preisänderung, Sonderpreis). Artikel, die nicht auf der Karte stehen, genau wie gedruckt übernehmen.
-- Für number die Nummer wie auf dem Bon; für name den Namen wie auf dem Bon.`;
+- Für number die Nummer wie auf dem Bon; für name den Namen wie auf dem Bon.
+- Preise NIE aus der Karte übernehmen, wenn auf dem Beleg kein Preis steht (dann null). Die Karte dient nur dazu, unklare Ziffern richtig zu lesen.`;
 
 const PROMPT_SEG = (n: number) => `Dieses PDF hat ${n} Seiten und enthält einen oder mehrere Belege hintereinander (Eingangsrechnungen, Kassenbons oder Z-Berichte/Tagesabschlüsse einer Kasse; bei Z-Berichten zählt jeder Geschäftstag als ein Beleg).
 Bestimme, welche Seiten zu welcher Rechnung gehören. WICHTIG: Eine Rechnung kann mehrere Seiten haben ("Seite 2 von 3", "Übertrag", gleiche Rechnungsnummer, Endsumme erst auf der letzten Seite, Folgeseite ohne Kopf). Folgeseiten gehören zur selben Rechnung, nicht jede Seite ist eine eigene Rechnung.
@@ -137,9 +139,9 @@ Deno.serve(async (req) => {
 
     let menu = "";
     if (kind === "kasse") {
-      const { data: arts } = await admin.from("nh_inv_articles").select("number, name, price_gross, tax_rate").eq("restaurant_id", restaurant_id).eq("archived", false).order("number").limit(1500);
+      const { data: arts } = await admin.from("nh_inv_articles").select("number, name, price_gross, tax_rate, is_lunch").eq("restaurant_id", restaurant_id).eq("archived", false).order("number").limit(1500);
       const seen = new Set<string>();
-      menu = (arts || []).filter((a) => a.name).map((a) => `${a.number ?? "-"} | ${a.name} | ${fmtPrice(a.price_gross)} | ${Number(a.tax_rate)}%`)
+      menu = (arts || []).filter((a) => a.name).map((a) => `${a.number ?? "-"} | ${a.name}${a.is_lunch ? " (Mittag)" : ""} | ${fmtPrice(a.price_gross)} | ${Number(a.tax_rate)}%`)
         .filter((l) => (seen.has(l) ? false : (seen.add(l), true))).join("\n");
     }
 
