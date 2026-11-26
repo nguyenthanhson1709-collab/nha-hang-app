@@ -119,7 +119,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
   const [articles, setArticles] = useState<Article[]>([])
   const [invoice, setInvoice] = useState<Partial<Invoice>>(() => docType === 'quote'
     ? { doc_type: 'quote', invoice_date: todayIso(), due_date: addDays(todayIso(), 14), status: 'draft', customer_snapshot: {}, delivery_type: 'none', delivery_date: null }
-    : { doc_type: 'invoice', invoice_date: todayIso(), status: 'draft', customer_snapshot: {}, delivery_type: 'delivery_date', delivery_date: todayIso() })
+    : { doc_type: 'invoice', invoice_date: todayIso(), status: 'draft', customer_snapshot: {}, delivery_type: 'service_date', delivery_date: todayIso() })
   const [items, setItems] = useState<InvoiceItem[]>([])
   const [lunch, setLunch] = useState(false)
   const [err, setErr] = useState('')
@@ -296,7 +296,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     try {
       const newId = await saveDraft(rid!, {
         doc_type: 'invoice', source_quote_id: invoice.id, customer_id: invoice.customer_id, customer_snapshot: invoice.customer_snapshot,
-        invoice_date: todayIso(), language: invoice.language, price_mode: invoice.price_mode, delivery_type: 'delivery_date', delivery_date: todayIso(), intro_text: '', closing_text: '',
+        invoice_date: todayIso(), language: invoice.language, price_mode: invoice.price_mode, delivery_type: 'service_date', delivery_date: todayIso(), intro_text: '', closing_text: '',
       }, items)
       await setInvoiceStatus(invoice.id, 'accepted')
       nav(`/r/${rid}/inv/${newId}`)

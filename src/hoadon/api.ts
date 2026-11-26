@@ -9,7 +9,7 @@ function check<T>(res: { data: T; error: { message: string } | null }): T {
 }
 
 const EMPTY_COMPANY: Omit<Company, 'intro_text' | 'closing_text' | 'email_subject' | 'email_body' | 'intro_text_en' | 'closing_text_en' | 'email_subject_en' | 'email_body_en'> = {
-  name: '', street: '', zip: '', city: '', phone: '', email: '', website: '', vat_id: '', tax_number: '', managing_director: '',
+  name: '', street: '', zip: '', city: '', phone: '', email: '', website: '', vat_id: '', tax_number: '', managing_director: '', register_court: '', register_number: '',
   bank_name: '', account_holder: '', iban: '', bic: '', payment_days: 7, logo_url: null,
 }
 
