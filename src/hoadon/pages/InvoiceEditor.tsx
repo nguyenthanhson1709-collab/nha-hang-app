@@ -462,7 +462,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
       <div className="sticky-actions">
         {!locked && invoice.id && <button className="danger" onClick={removeDraft} disabled={busy}>{L('Xoá nháp', 'Entwurf löschen')}</button>}
         <button onClick={previewPdf} disabled={busy || !items.length}>{L('Xem / In PDF', 'PDF ansehen / drucken')}</button>
-        {!locked && <button onClick={save} disabled={busy || (!dirty && Boolean(invoice.id))}>{L('Lưu nháp', 'Entwurf speichern')}</button>}
+        {!locked && <button onClick={() => save()} disabled={busy || (!dirty && Boolean(invoice.id))}>{L('Lưu nháp', 'Entwurf speichern')}</button>}
         {!locked && <button className="primary" onClick={finalize} disabled={busy}>{isQuote ? L('Hoàn tất Angebot', 'Angebot abschließen') : L('Hoàn tất hoá đơn', 'Rechnung abschließen')}</button>}
         {locked && invoice.status !== 'cancelled' && <button onClick={share} disabled={busy}>{L('Chia sẻ', 'Teilen')}</button>}
         {locked && invoice.status !== 'cancelled' && <button onClick={openMail} disabled={busy}>{L('Gửi email', 'Per E-Mail senden')}</button>}
