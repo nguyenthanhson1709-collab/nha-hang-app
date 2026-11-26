@@ -1,15 +1,30 @@
-// Nhân sự: danh sách nhân viên (Đang làm / Đã nghỉ), thêm nhân viên mới, tên công ty (Firma) của quán
-import { useEffect, useState } from 'react'
+// Nhân sự: thống kê (Tổng / Đang làm / Đã nghỉ, bấm để lọc), tìm kiếm, lọc loại hợp đồng, sắp xếp, bảng nhân viên
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase, errMsg } from '../lib/supabase'
 import { canManage, useRole } from '../lib/app'
 import { useLang } from '../lib/i18n'
 import { dmy } from '../lib/format'
-import { EMP_TYPES, fullName, jobInfo, isActive, permitDaysLeft, PERMIT_WARN_DAYS, POSITIONS, type Employee, type HrSettings } from '../lib/hr'
+import { EMP_TYPES, fullName, HR_BUCKET, isActive, permitDaysLeft, PERMIT_WARN_DAYS, type EmpType, type Employee, type HrSettings } from '../lib/hr'
 import { Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
-import { TileIcon } from '../components/Icons'
 
 type Row = Employee & { id: string }
+type Filter = 'all' | 'active' | 'left'
+type Sort = 'pnr' | 'name' | 'entry'
+
+const SI = {
+  users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c0-3.6 3-5.5 6.5-5.5s6.5 1.9 6.5 5.5" /><circle cx="17" cy="9" r="2.8" /><path d="M16.5 14.6c2.8.2 5 1.9 5 5" /></>,
+  active: <><circle cx="10" cy="8" r="4" /><path d="M3 20c0-3.8 3.2-6 7-6 1.4 0 2.7.3 3.8.8M15.5 18l2 2 4-4.5" /></>,
+  left: <><circle cx="10" cy="8" r="4" /><path d="M3 20c0-3.8 3.2-6 7-6 1.4 0 2.7.3 3.8.8M16 18h6" /></>,
+  plus: <path d="M12 5v14M5 12h14" />,
+  calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></>,
+  gear: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></>,
+  search: <><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></>,
+  chev: <path d="M9 6l6 6-6 6" />,
+}
+function SIcon({ k }: { k: keyof typeof SI }) {
+  return <svg className="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{SI[k]}</svg>
+}
 
 export default function Staff() {
   const { rid } = useParams()
@@ -18,29 +33,64 @@ export default function Staff() {
   const role = useRole(rid)
   const de = useLang().lang === 'de'
   const li = de ? 1 : 0
+  const T = (vi: string, g: string) => (de ? g : vi)
   const [list, setList] = useState<Row[] | null>(null)
   const [hs, setHs] = useState<HrSettings | null>(null)
-  const [tab, setTab] = useState<'active' | 'left'>('active')
+  const [photos, setPhotos] = useState<Record<string, string>>({})
+  const [filter, setFilter] = useState<Filter>('active')
+  const [ctype, setCtype] = useState<'' | EmpType>('')
+  const [sort, setSort] = useState<Sort>('pnr')
   const [q, setQ] = useState('')
   const [editCo, setEditCo] = useState<string | null>(null)
+  const [stickTop, setStickTop] = useState(0)
 
   const load = () => {
     supabase.from('nh_employees').select('*').eq('restaurant_id', rid).order('last_name').order('first_name')
-      .then(({ data, error }) => { if (error) toast(errMsg(error)); setList((data || []) as Row[]) })
+      .then(async ({ data, error }) => {
+        if (error) toast(errMsg(error))
+        const rows = (data || []) as Row[]
+        setList(rows)
+        // Ảnh chân dung nằm trong bucket riêng tư: lấy link tạm cho cả danh sách một lần
+        const withPhoto = rows.filter((e) => e.photo)
+        if (withPhoto.length) {
+          const { data: s } = await supabase.storage.from(HR_BUCKET).createSignedUrls(withPhoto.map((e) => e.photo!), 3600)
+          const m: Record<string, string> = {}
+          withPhoto.forEach((e, i) => { const u = s?.[i]?.signedUrl; if (u) m[e.id] = u })
+          setPhotos(m)
+        }
+      })
     supabase.from('nh_hr_settings').select('*').eq('restaurant_id', rid).maybeSingle().then(({ data }) => setHs(data as HrSettings | null))
   }
   useEffect(() => { if (rid) load() }, [rid]) // eslint-disable-line
+  useEffect(() => { const el = document.getElementById('root'); el?.classList.add('xwide'); return () => el?.classList.remove('xwide') }, [])
+  // Thanh tìm kiếm dính ngay dưới thanh tiêu đề khi cuộn
+  useLayoutEffect(() => {
+    const top = document.querySelector('.top') as HTMLElement | null
+    if (!top) return
+    const upd = () => setStickTop(top.offsetHeight)
+    upd()
+    const ro = new ResizeObserver(upd); ro.observe(top)
+    return () => ro.disconnect()
+  }, [r])
 
+  const all = useMemo(() => list || [], [list])
+  const active = useMemo(() => all.filter((e) => isActive(e)), [all])
+  const left = all.length - active.length
+  const pnrNum = (e: Row) => (e.personnel_no && /^\d+$/.test(e.personnel_no) ? Number(e.personnel_no) : -1)
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    return all
+      .filter((e) => (filter === 'all' ? true : filter === 'active' ? isActive(e) : !isActive(e)))
+      .filter((e) => !ctype || e.employment_type === ctype)
+      .filter((e) => !s || fullName(e).toLowerCase().includes(s) || `${e.first_name} ${e.last_name}`.toLowerCase().includes(s) || (e.personnel_no || '').includes(s))
+      .sort((a, b) => sort === 'pnr' ? pnrNum(b) - pnrNum(a)
+        : sort === 'entry' ? (b.entry_date || '').localeCompare(a.entry_date || '')
+        : fullName(a).localeCompare(fullName(b), 'de'))
+  }, [all, filter, ctype, sort, q])
+  const base = filter === 'all' ? all.length : filter === 'active' ? active.length : left
+  const expiring = active.filter((e) => { const d = permitDaysLeft(e.residence_permit_until); return d != null && d <= PERMIT_WARN_DAYS })
 
   if (!r || !canManage(role)) return null
-  const active = (list || []).filter((e) => isActive(e))
-  const left = (list || []).filter((e) => !isActive(e))
-  // Xếp theo số nhân viên (Pers.-Nr.), số lớn nhất lên đầu; người chưa có số xếp cuối theo tên
-  const pnr = (e: Row) => (e.personnel_no && /^\d+$/.test(e.personnel_no) ? Number(e.personnel_no) : -1)
-  const shown = (tab === 'active' ? active : left)
-    .filter((e) => !q.trim() || fullName(e).toLowerCase().includes(q.trim().toLowerCase()) || (e.personnel_no || '').includes(q.trim()))
-    .sort((a, b) => pnr(b) - pnr(a))
-  const expiring = active.filter((e) => { const d = permitDaysLeft(e.residence_permit_until); return d != null && d <= PERMIT_WARN_DAYS })
 
   async function saveCompany() {
     const { data, error } = await supabase.from('nh_hr_settings').upsert({ restaurant_id: rid, company_name: (editCo || '').trim() || null }).select().single()
@@ -48,61 +98,102 @@ export default function Staff() {
     setHs(data as HrSettings); setEditCo(null); toast(de ? 'Gespeichert' : 'Đã lưu')
   }
 
+  const initials = (e: Row) => [e.first_name, e.last_name].map((x) => (x || '').trim()[0] || '').join('').toUpperCase() || '?'
+  const stat = (k: Filter, icon: keyof typeof SI, n: number, l: string) => (
+    <button className={`st-stat ${k}${filter === k ? ' on' : ''}`} onClick={() => setFilter(k)} aria-pressed={filter === k}>
+      <SIcon k={icon} /><b>{list ? n : '–'}</b><span>{l}</span>
+    </button>
+  )
+
   return (
     <>
-      <Top title={de ? 'Personal' : 'Nhân sự'} sub={hs?.company_name && hs.company_name !== r.name ? `${r.name} · ${hs.company_name}` : r.name} back={`/r/${rid}`}
-        right={<button className="btn" onClick={() => setEditCo(hs?.company_name || '')} aria-label="Firma">⚙︎</button>} />
-      <div className="page">
-        <div className="tiles">
-          <button className="tile" onClick={() => nav(`/r/${rid}/hr/new`)}><TileIcon name="userAdd" /><span>{de ? 'Neuer Mitarbeiter' : 'Nhân viên mới'}</span></button>
-          <button className="tile" onClick={() => toast(de ? 'Dienstplan kommt im nächsten Schritt' : 'Xếp lịch sẽ có ở bước tiếp theo')} style={{ opacity: 0.55 }}>
-            <TileIcon name="calendar" /><span>{de ? 'Dienstplan' : 'Xếp lịch'}</span><span className="small muted">{de ? 'bald' : 'sắp có'}</span>
-          </button>
+      <Top title={T('Nhân sự', 'Personal')} sub={hs?.company_name || r.name} back={`/r/${rid}`}
+        right={<button className="btn st-gear" onClick={() => setEditCo(hs?.company_name || '')} aria-label={T('Cài đặt', 'Einstellungen')} title={T('Cài đặt', 'Einstellungen')}><SIcon k="gear" /></button>} />
+      <div className="page st">
+        <div className="st-stats">
+          {stat('all', 'users', all.length, T('Tổng nhân viên', 'Mitarbeiter gesamt'))}
+          {stat('active', 'active', active.length, T('Đang làm', 'Aktiv'))}
+          {stat('left', 'left', left, T('Đã nghỉ', 'Ausgeschieden'))}
         </div>
 
         {expiring.length > 0 && (
-          <div className="alert warn">
-            {de ? 'Aufenthaltstitel läuft bald ab:' : 'Giấy phép cư trú sắp hết hạn:'}{' '}
-            {expiring.map((e, i) => { const d = permitDaysLeft(e.residence_permit_until)!; return <span key={e.id}>{i > 0 && ', '}<b>{fullName(e)}</b> ({dmy(e.residence_permit_until)}{d < 0 ? (de ? ', abgelaufen' : ', đã hết hạn') : ''})</span> })}
+          <div className="alert warn" style={{ margin: 0 }}>
+            {T('Giấy phép cư trú sắp hết hạn:', 'Aufenthaltstitel läuft bald ab:')}{' '}
+            {expiring.map((e, i) => { const d = permitDaysLeft(e.residence_permit_until)!; return <span key={e.id}>{i > 0 && ', '}<b>{fullName(e)}</b> ({dmy(e.residence_permit_until)}{d < 0 ? T(', đã hết hạn', ', abgelaufen') : ''})</span> })}
           </div>
         )}
 
-        <h2>{de ? 'Personalakten' : 'Hồ sơ nhân viên'}</h2>
-        <div className="seg" style={{ marginBottom: 8 }}>
-          <button className={tab === 'active' ? 'sel' : ''} onClick={() => setTab('active')}>{de ? 'Aktiv' : 'Đang làm'} ({active.length})</button>
-          <button className={tab === 'left' ? 'sel' : ''} onClick={() => setTab('left')}>{de ? 'Ausgeschieden' : 'Đã nghỉ'} ({left.length})</button>
+        <div className="st-ctrl" style={{ top: stickTop }}>
+          <div className="st-head">
+            <h2>{T('Hồ sơ nhân viên', 'Personalakten')}</h2>
+            <button className="st-btn" disabled title={T('Xếp lịch sẽ có ở bước tiếp theo', 'Dienstplan folgt im nächsten Schritt')}>
+              <SIcon k="calendar" /><span>{T('Xếp lịch', 'Dienstplan')}</span><em>{T('sắp có', 'bald')}</em>
+            </button>
+            <button className="st-btn primary" onClick={() => nav(`/r/${rid}/hr/new`)}><SIcon k="plus" /><span>{T('Thêm nhân viên', 'Neuer Mitarbeiter')}</span></button>
+          </div>
+          <div className="st-search">
+            <SIcon k="search" />
+            <input type="search" placeholder={T('Tìm họ tên hoặc mã nhân viên…', 'Name oder Personal-Nr. suchen…')} value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <div className="st-filters">
+            <select value={ctype} onChange={(e) => setCtype(e.target.value as '' | EmpType)} aria-label={T('Loại hợp đồng', 'Beschäftigungsart')}>
+              <option value="">{T('Tất cả hợp đồng', 'Alle Beschäftigungsarten')}</option>
+              {(Object.keys(EMP_TYPES) as EmpType[]).map((k) => <option key={k} value={k}>{EMP_TYPES[k][li]}</option>)}
+            </select>
+            <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label={T('Sắp xếp', 'Sortierung')}>
+              <option value="pnr">{T('Theo mã nhân viên', 'Nach Personal-Nr.')}</option>
+              <option value="name">{T('Theo họ tên (A–Z)', 'Nach Name (A–Z)')}</option>
+              <option value="entry">{T('Theo ngày vào làm (mới nhất)', 'Nach Eintritt (neueste)')}</option>
+            </select>
+          </div>
         </div>
-        {(list?.length || 0) > 8 && <input placeholder={de ? 'Name / Pers.-Nr. suchen…' : 'Tìm tên / số NV…'} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 8 }} />}
+
         {!list ? <Spinner /> : (
-          <div className="list">
+          <div className="st-table" role="table">
+            <div className="st-tr st-th" role="row">
+              <span role="columnheader">{T('Mã NV', 'Pers.-Nr.')}</span>
+              <span role="columnheader">{T('Họ và tên', 'Name')}</span>
+              <span role="columnheader">{T('Hợp đồng', 'Beschäftigung')}</span>
+              <span role="columnheader">{filter === 'left' ? T('Ngày nghỉ', 'Austritt') : T('Ngày vào làm', 'Eintritt')}</span>
+              <span />
+            </div>
             {shown.map((e) => {
+              const on = isActive(e)
               const d = permitDaysLeft(e.residence_permit_until)
+              const ct = e.employment_type
+              const date = filter === 'left' ? e.exit_date : e.entry_date
               return (
-                <button key={e.id} className="it" style={{ width: '100%', textAlign: 'left' }} onClick={() => nav(`/r/${rid}/hr/${e.id}`)}>
-                  <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="t">{e.personnel_no && <span className="muted" style={{ fontVariantNumeric: 'tabular-nums', marginRight: 8 }}>{e.personnel_no}</span>}{fullName(e) || '—'}</div>
-                    <div className="small muted">
-                      {[e.job_title ? (de ? e.job_title : jobInfo(e.job_title)?.[1] || e.job_title) : e.position && POSITIONS[e.position][li], e.employment_type && EMP_TYPES[e.employment_type][li]].filter(Boolean).join(' · ') || '—'}
-                    </div>
-                  </div>
-                  <div className="right small">
-                    {tab === 'active'
-                      ? <>{e.entry_date && <div className="muted">{de ? 'seit' : 'từ'} {dmy(e.entry_date)}</div>}
-                          {d != null && d <= PERMIT_WARN_DAYS && <span className={`tag ${d < 0 ? 'err' : 'warn'}`}>{de ? 'Aufenthalt' : 'Cư trú'} {dmy(e.residence_permit_until)}</span>}</>
-                      : <div className="muted">{de ? 'bis' : 'đến'} {dmy(e.exit_date)}</div>}
-                  </div>
+                <button key={e.id} className="st-tr" role="row" onClick={() => nav(`/r/${rid}/hr/${e.id}`)}>
+                  <span className="st-pnr">{e.personnel_no || '—'}</span>
+                  <span className="st-name">
+                    <span className="st-av">{photos[e.id] ? <img src={photos[e.id]} alt="" /> : initials(e)}</span>
+                    <span className="st-nm">
+                      <b>{fullName(e) || '—'}</b>
+                      {!on && filter !== 'left' && <span className="tag err">{T('Đã nghỉ', 'Ausgeschieden')}</span>}
+                      {on && d != null && d <= PERMIT_WARN_DAYS && <span className={`tag ${d < 0 ? 'err' : 'warn'}`}>{T('Cư trú', 'Aufenthalt')} {dmy(e.residence_permit_until)}</span>}
+                      <span className="st-m">
+                        {e.personnel_no && <span className="st-pnr">{e.personnel_no}</span>}
+                        <span className={`ct ct-${ct || 'none'}`}>{ct ? EMP_TYPES[ct][li] : T('Chưa rõ hợp đồng', 'Ohne Angabe')}</span>
+                        {date && <span>{filter === 'left' ? T('nghỉ', 'bis') : T('vào', 'seit')} {dmy(date)}</span>}
+                      </span>
+                    </span>
+                  </span>
+                  <span className={`st-ct ct ct-${ct || 'none'}`}>{ct ? EMP_TYPES[ct][li] : '—'}</span>
+                  <span className="st-date">{date ? dmy(date) : '—'}</span>
+                  <span className="st-chev"><SIcon k="chev" /></span>
                 </button>
               )
             })}
-            {!shown.length && <div className="it muted">{de ? 'Keine Einträge' : 'Chưa có nhân viên'}</div>}
+            {!shown.length && <div className="st-empty">{all.length ? T('Không có nhân viên phù hợp', 'Keine passenden Einträge') : T('Chưa có nhân viên', 'Noch keine Mitarbeiter')}</div>}
           </div>
         )}
+        {list && <div className="st-foot">{T('Hiển thị', 'Angezeigt:')} {shown.length} / {base} {T('nhân viên', 'Mitarbeiter')}</div>}
       </div>
 
-      <Sheet open={editCo != null} onClose={() => setEditCo(null)} title={de ? 'Firma des Restaurants' : 'Công ty của nhà hàng'}>
-        <label className="f"><span>{de ? 'Firma (erscheint im Personalbogen)' : 'Tên công ty (Firma), in trên giấy tờ nhân viên'}</span>
+      <Sheet open={editCo != null} onClose={() => setEditCo(null)} title={T('Công ty của nhà hàng', 'Firma des Restaurants')}>
+        <label className="f"><span>{T('Tên công ty (Firma), in trên giấy tờ nhân viên', 'Firma (erscheint im Personalbogen)')}</span>
           <input value={editCo || ''} onChange={(e) => setEditCo(e.target.value)} placeholder="Vietbowl Mitte GmbH" /></label>
-        <button className="primary block" onClick={saveCompany}>{de ? 'Speichern' : 'Lưu'}</button>
+        <button className="primary block" onClick={saveCompany}>{T('Lưu', 'Speichern')}</button>
       </Sheet>
     </>
   )

@@ -1,14 +1,28 @@
 import { useEffect, useState } from 'react'
-import { Clock } from '../components/Clock'
+import { ClockShort } from '../components/Clock'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase, type Doc } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
-import { useT } from '../lib/i18n'
+import { useLang, useT } from '../lib/i18n'
 import { daysOfMonth, dmy, eur, monthRange, thisMonth, todayIso } from '../lib/format'
 import { currentBalance, docsInRange, DOC_SELECT, zbonsInRange } from '../lib/data'
 import { PayTag, Top, useRestaurant } from '../components/ui'
 import { QuickReview } from '../components/QuickReview'
-import { TileIcon } from '../components/Icons'
+
+/** Biểu tượng theo bộ Lucide (nét 2px), vẽ trực tiếp để không thêm thư viện */
+const LU: Record<string, React.ReactNode> = {
+  scan: <><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><path d="M7 12h10" /></>,
+  review: <><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><path d="m9 14 2 2 4-4" /></>,
+  archive: <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />,
+  book: <><path d="M12 7v14" /><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" /></>,
+  chart: <><path d="M3 3v16a2 2 0 0 0 2 2h16" /><path d="m19 9-5 5-4-4-3 3" /></>,
+  people: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
+  arrow: <><path d="M7 7h10v10" /><path d="M7 17 17 7" /></>,
+  settings: <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></>,
+}
+export const Lucide = ({ k }: { k: string }) => (
+  <svg className="lu" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{LU[k]}</svg>
+)
 
 export default function Home() {
   const { rid } = useParams()
@@ -17,6 +31,9 @@ export default function Home() {
   const r = useRestaurant(rid)
   const role = useRole(rid)
   const { profile } = useApp()
+  const { lang } = useLang()
+  // Dashboard rộng tối đa 1200px
+  useEffect(() => { const el = document.getElementById('root'); el?.classList.add('xwide'); return () => el?.classList.remove('xwide') }, [])
   const m = canManage(role)
   const [sp] = useSearchParams()
   const view = sp.get('v')
@@ -56,25 +73,31 @@ export default function Home() {
       <div className="page">{s ? <QuickReview docs={s.review} rid={rid!} onDone={() => setTick((x) => x + 1)} /> : <div className="center"><div className="spinner" /></div>}</div>
     </>
   )
-  const tiles = [
-    { icon: 'scan', label: t('scanTile'), to: `/r/${rid}/scan` },
-    ...(m ? [{ icon: 'review', label: t('toReview'), to: `/r/${rid}?v=review`, badge: s?.review.length }] : []),
-    ...(m ? [{ icon: 'archive', label: t('archive'), to: `/r/${rid}/archive` }] : []),
-    ...(m ? [{ icon: 'book', label: t('kassenbuch'), to: `/r/${rid}/kb` }] : []),
-    ...(m ? [{ icon: 'chart', label: t('reports'), to: `/r/${rid}/reports` }] : []),
-    ...(m ? [{ icon: 'people', label: t('hr'), to: `/r/${rid}/hr` }] : []),
+  const de = lang === 'de'
+  const tiles: { icon: string; label: string; desc: string; to: string; badge?: number; main?: boolean }[] = [
+    { icon: 'scan', label: t('scanTile'), desc: de ? 'Belege scannen und erfassen' : 'Quét và nhập hoá đơn', to: `/r/${rid}/scan`, main: true },
+    ...(m ? [
+      { icon: 'review', label: t('toReview'), desc: de ? 'Prüfen und bestätigen' : 'Kiểm tra và xác nhận', to: `/r/${rid}?v=review`, badge: s?.review.length },
+      { icon: 'archive', label: t('archive'), desc: de ? 'Buchhaltungsunterlagen' : 'Tài liệu kế toán', to: `/r/${rid}/archive` },
+      { icon: 'book', label: t('kassenbuch'), desc: de ? 'Kassenbuch führen' : 'Sổ quỹ tiền mặt', to: `/r/${rid}/kb` },
+      { icon: 'chart', label: t('reports'), desc: de ? 'Auswertungen und Statistik' : 'Thống kê và phân tích', to: `/r/${rid}/reports` },
+      { icon: 'people', label: t('hr'), desc: de ? 'Personalakten verwalten' : 'Quản lý hồ sơ nhân viên', to: `/r/${rid}/hr` },
+    ] : []),
   ]
   return (
     <>
-      <Top title={r.name} sub={<Clock />} back={profile.is_owner ? '/restaurants' : undefined}
-        right={<Link className="btn" to={m ? `/r/${rid}/settings` : '/settings'}>⚙︎</Link>} />
-      <div className="page">
-        <div className="tiles">
+      <Top title={r.name} back={profile.is_owner ? '/restaurants' : undefined}
+        right={<div className="hd-right"><ClockShort /><Link className="btn hd-gear" to={m ? `/r/${rid}/settings` : '/settings'} aria-label={t('settings')} title={t('settings')}><Lucide k="settings" /></Link></div>} />
+      <div className="page dash">
+        <div className="dash-grid">
           {tiles.map((x) => (
-            <button key={x.to} className="tile" onClick={() => nav(x.to)}>
-              <TileIcon name={x.icon} />
-              <span>{x.label}</span>
-              {!!('badge' in x && x.badge) && <span className="badge">{x.badge}</span>}
+            <button key={x.to} className={`dcard${x.main ? ' main' : ''}`} onClick={() => nav(x.to)}>
+              <span className="dcard-top">
+                <span className="dcard-ic"><Lucide k={x.icon} /></span>
+                {x.badge ? <span className="dcard-badge" title={de ? 'offen' : 'đang chờ'}>{x.badge}</span> : <span className="dcard-go"><Lucide k="arrow" /></span>}
+              </span>
+              <span className="dcard-t">{x.label}</span>
+              <span className="dcard-d">{x.badge ? `${x.badge} ${de ? 'Belege offen' : 'hoá đơn đang chờ'}` : x.desc}</span>
             </button>
           ))}
         </div>
