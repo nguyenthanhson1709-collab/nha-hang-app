@@ -6,6 +6,7 @@ import { eur, r2, todayIso } from '../lib/format'
 import { useLang } from '../lib/i18n'
 import { Money, Sheet, Spinner, toast } from './ui'
 import { WeekBar, mondayOf, weekDays } from './PeriodBar'
+import { useApp } from '../lib/app'
 
 const WD_VI = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'], WD_DE = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
 
@@ -18,6 +19,17 @@ export function VivaWeek({ rid, start, vivaMode, open, onClose, onSaved }: { rid
   const [locked, setLocked] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const days = weekDays(mon)
+  const { profile, reload } = useApp()
+  const [modeBusy, setModeBusy] = useState(false)
+  // Nút chuyển cách tính thẻ của quán ngay trong ô Viva Wallet (chỉ chủ đổi được; cài đặt quán cũng có)
+  async function setMode(m: 'zbon' | 'viva') {
+    if (modeBusy || (m === 'viva') === vivaMode) return
+    setModeBusy(true)
+    const { error } = await supabase.from('nh_restaurants').update({ card_source: m }).eq('id', rid)
+    setModeBusy(false)
+    if (error) { toast(errMsg(error)); return }
+    await reload(); onSaved()
+  }
 
   useEffect(() => { if (open) setMon(mondayOf(start)) }, [open, start])
   useEffect(() => {
@@ -65,6 +77,13 @@ export function VivaWeek({ rid, start, vivaMode, open, onClose, onSaved }: { rid
   const now = todayIso()
   return (
     <Sheet open={open} onClose={onClose} title="Viva Wallet (Kartenzahlung)">
+      <div className="seg" style={{ marginBottom: 6 }}>
+        <button className={!vivaMode ? 'sel' : ''} disabled={!profile.is_owner || modeBusy} onClick={() => setMode('zbon')}>{lang === 'de' ? 'lt. Z-Bon' : 'Theo Z-Bon'}</button>
+        <button className={vivaMode ? 'sel' : ''} disabled={!profile.is_owner || modeBusy} onClick={() => setMode('viva')}>{lang === 'de' ? 'lt. Viva Wallet' : 'Theo Viva Wallet'}</button>
+      </div>
+      <div className={`small ${vivaMode ? 'muted' : 'alert warn'}`} style={{ marginBottom: 10 }}>{vivaMode
+        ? (lang === 'de' ? 'Kassenbuch: Kartenzahlung lt. Z-Bon, Trinkgeld = Viva Wallet − Kreditzahlung Z-Bon.' : 'Kassenbuch: Kartenzahlung theo Z-Bon, Trinkgeld = Viva Wallet − thẻ trên Z-Bon.')
+        : (lang === 'de' ? 'Das Kassenbuch rechnet gerade lt. Z-Bon: Viva-Beträge werden gespeichert, aber nicht verwendet.' : 'Kassenbuch đang tính theo Z-Bon: số Viva vẫn được lưu nhưng chưa được dùng. Bấm "Theo Viva Wallet" để áp dụng.')}</div>
       <WeekBar value={mon} onChange={setMon} />
       {!orig ? <Spinner /> : <>
         <div className="viva-week">
