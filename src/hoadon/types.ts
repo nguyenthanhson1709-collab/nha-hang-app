@@ -60,6 +60,8 @@ export interface Invoice {
   id: string
   restaurant_id: string
   invoice_number: string | null
+  /** Số nhập tay cho bản nháp; được gán khi hoàn tất (để trống = số tự động) */
+  desired_number?: string | null
   status: InvoiceStatus
   doc_type: DocType
   source_quote_id: string | null
