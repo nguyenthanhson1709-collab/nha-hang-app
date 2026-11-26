@@ -228,7 +228,6 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
 
   async function save(go = true): Promise<string | null> {
     setErr(''); setOk('')
-    if (!invoice.customer_snapshot?.name?.trim()) { setErr(L('Hãy nhập tên khách hàng.', 'Bitte Kundennamen eingeben.')); return null }
     if (!items.length) { setErr(L('Hãy thêm ít nhất một món.', 'Bitte mindestens eine Position hinzufügen.')); return null }
     if (items.some((i) => !i.name.trim())) { setErr(L('Mỗi dòng cần có tên.', 'Jede Position braucht eine Bezeichnung.')); return null }
     setBusy(true)
@@ -244,6 +243,9 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
   }
 
   async function finalize() {
+    if (!invoice.customer_snapshot?.name?.trim() && !confirm(L(
+      `Chưa có thông tin khách hàng (tên, địa chỉ).\nHoá đơn trên 250 € theo luật phải ghi tên và địa chỉ khách; sau khi hoàn tất sẽ không sửa được nữa.\n\nVẫn hoàn tất không có thông tin khách hàng?`,
+      `Keine Kundendaten (Name, Anschrift).\nRechnungen über 250 € müssen Name und Anschrift des Kunden enthalten; nach dem Abschluss ist keine Änderung mehr möglich.\n\nTrotzdem ohne Kundendaten abschließen?`))) return
     if (!confirm(isQuote
       ? L('Hoàn tất Angebot? Sau khi hoàn tất sẽ có số Angebot và không sửa được nữa.', 'Angebot abschließen? Danach erhält es eine Nummer und kann nicht mehr geändert werden.')
       : L('Hoàn tất hoá đơn? Sau khi hoàn tất sẽ có số hoá đơn và không sửa được nữa.', 'Rechnung abschließen? Danach erhält sie eine Nummer und kann nicht mehr geändert werden.'))) return

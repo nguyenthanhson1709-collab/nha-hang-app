@@ -84,7 +84,7 @@ export default function Invoices({ docType = 'invoice' }: { docType?: 'invoice' 
                 <tr key={r.id} className="click" onClick={() => nav(`${base}/${quote ? 'quotes/' : ''}${r.id}`)}>
                   <td>{r.invoice_number ?? <span className="muted">—</span>}</td>
                   <td className="hide-m">{fmtDate(r.invoice_date)}</td>
-                  <td>{r.customer_snapshot?.name}</td>
+                  <td>{r.customer_snapshot?.name || <span className="muted">{L('(chưa có khách)', '(ohne Kunde)')}</span>}</td>
                   <td><StatusBadge inv={r} /></td>
                   <td className="n">{fmtEur(r.total_gross)}</td>
                   {!quote && <td className="n" onClick={(e) => e.stopPropagation()}>
