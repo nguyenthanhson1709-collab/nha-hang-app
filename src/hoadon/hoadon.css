@@ -71,3 +71,6 @@
 .inv-modal { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; width: 100%; max-width: 620px; }
 .inv-modal h2 { margin-top: 0; }
 @media (max-width: 720px) { .inv .paid-toggle span { display: none; } .inv .paid-toggle { padding: 6px; } }
+.inv-presets { display: flex; gap: 8px; align-items: center; margin: 4px 0 6px; }
+.inv-presets select { flex: 1 1 auto; min-width: 0; }
+.inv-presets button { flex: 0 0 auto; white-space: nowrap; }

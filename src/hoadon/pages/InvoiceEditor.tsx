@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   deleteDraft, finalizeInvoice, listArticles, listCustomers, loadCompany, loadInvoice,
-  findInvoiceFromQuote, markSent, saveCustomer, saveDraft, sendInvoiceEmail, setInvoiceStatus, snapshotOf,
+  findInvoiceFromQuote, markSent, saveCustomer, saveDraft, saveTextPresets, sendInvoiceEmail, setInvoiceStatus, snapshotOf,
 } from '../api'
 import { DELIVERY_LABEL, isPeriod } from '../types'
-import type { Article, Company, Customer, CustomerSnapshot, DeliveryType, Invoice, InvoiceItem } from '../types'
+import type { Article, Company, TextPresets, Customer, CustomerSnapshot, DeliveryType, Invoice, InvoiceItem } from '../types'
 import { COUNTRIES } from '../countries'
 import { addDays, computeTotals, fmt, fmtDate, fmtEur, grossOf, netOf, parseNum, round2, todayIso } from '../money'
 import { fillTemplate } from '../template'
@@ -162,6 +162,12 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
   const totals = computeTotals(items, invoice.price_mode ?? 'gross')
   const articleList = useMemo(() => articles.filter((a) => a.is_lunch === lunch || !articles.some((b) => b.is_lunch !== a.is_lunch && b.number === a.number && b.number !== '' && b.name === a.name)), [articles, lunch])
 
+  const presets: TextPresets = { intro: company?.text_presets?.intro ?? [], closing: company?.text_presets?.closing ?? [] }
+  async function savePresets(next: TextPresets) {
+    const prev = company
+    setCompany((c) => (c ? { ...c, text_presets: next } : c))
+    try { await saveTextPresets(rid!, next) } catch (e) { setCompany(prev); setErr((e as Error).message) }
+  }
   function update<K extends keyof Invoice>(k: K, v: Invoice[K]) { setInvoice((i) => ({ ...i, [k]: v })); setDirty(true) }
   function updateItem(i: number, patch: Partial<InvoiceItem>) {
     setItems((list) => list.map((it, j) => j === i ? { ...it, ...patch } : it)); setDirty(true)
@@ -410,6 +416,15 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
         </p>}
       </div>
 
+      {!locked && (
+        <div className="card">
+          <h2 style={{ marginTop: 0 }}>{L('Lời mở đầu (tuỳ chọn)', 'Einleitung (optional)')}</h2>
+          <span className="lbl">{L('Để trống = dùng câu mặc định', 'Leer = Standardtext')}</span>
+          <PresetPicker kind="intro" text={invoice.intro_text ?? ''} presets={presets} onPick={(t) => update('intro_text', t)} onChange={savePresets} />
+          <textarea value={invoice.intro_text ?? ''} placeholder={companyText(company, invoice.language, 'intro_text', invoice.doc_type)} onChange={(e) => update('intro_text', e.target.value)} />
+        </div>
+      )}
+
       <div className="card">
         <h2 style={{ marginTop: 0 }}>{L('Món / dịch vụ', 'Positionen')}</h2>
         {!locked && (
@@ -461,10 +476,9 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
 
       {!locked && (
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>{L('Lời mở đầu và kết thúc (tuỳ chọn)', 'Einleitung und Schlusstext (optional)')}</h2>
-          <span className="lbl">{L('Lời mở đầu (để trống = mặc định)', 'Einleitung (leer = Standard)')}</span>
-          <textarea value={invoice.intro_text ?? ''} placeholder={companyText(company, invoice.language, 'intro_text', invoice.doc_type)} onChange={(e) => update('intro_text', e.target.value)} />
-          <div className="mt"><span className="lbl">{L('Lời kết (để trống = mặc định)', 'Schlusstext (leer = Standard)')}</span>
+          <h2 style={{ marginTop: 0 }}>{L('Lời kết (tuỳ chọn)', 'Schlusstext (optional)')}</h2>
+          <div><span className="lbl">{L('Lời kết (để trống = mặc định)', 'Schlusstext (leer = Standard)')}</span>
+            <PresetPicker kind="closing" text={invoice.closing_text ?? ''} presets={presets} onPick={(t) => update('closing_text', t)} onChange={savePresets} />
             <textarea value={invoice.closing_text ?? ''} placeholder={companyText(company, invoice.language, 'closing_text', invoice.doc_type)} onChange={(e) => update('closing_text', e.target.value)} /></div>
         </div>
       )}
@@ -510,5 +524,28 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
         </div>
       )}
     </InvShell>
+  )
+}
+
+/** Danh sách câu đã lưu: chọn để điền vào ô, lưu câu đang viết, hoặc xoá câu đã lưu */
+function PresetPicker({ kind, text, presets, onPick, onChange }: {
+  kind: keyof TextPresets; text: string; presets: TextPresets
+  onPick: (t: string) => void; onChange: (p: TextPresets) => void
+}) {
+  const L = useL()
+  const list = presets[kind]
+  const cur = text.trim()
+  const idx = cur ? list.indexOf(cur) : -1
+  const set = (next: string[]) => onChange({ ...presets, [kind]: next })
+  return (
+    <div className="inv-presets">
+      <select value={idx >= 0 ? String(idx) : ''} onChange={(e) => { if (e.target.value !== '') onPick(list[Number(e.target.value)]) }} disabled={!list.length}>
+        <option value="">{list.length ? L(`Chọn câu đã lưu (${list.length})…`, `Gespeicherten Text wählen (${list.length})…`) : L('Chưa có câu nào được lưu', 'Noch keine gespeicherten Texte')}</option>
+        {list.map((t, i) => <option key={i} value={i}>{t.length > 90 ? `${t.slice(0, 90)}…` : t}</option>)}
+      </select>
+      {idx >= 0
+        ? <button type="button" className="sm" onClick={() => set(list.filter((_, i) => i !== idx))}>{L('Xoá khỏi danh sách', 'Aus Liste entfernen')}</button>
+        : <button type="button" className="sm" disabled={!cur} onClick={() => set([cur, ...list].slice(0, 50))}>+ {L('Lưu câu này', 'Text speichern')}</button>}
+    </div>
   )
 }
