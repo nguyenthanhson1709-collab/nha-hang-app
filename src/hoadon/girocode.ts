@@ -1,5 +1,8 @@
 import QRCode from 'qrcode'
 
+/** Verwendungszweck der Überweisung (QR-Code und Text auf der Rechnung) */
+export const qrReference = (nr: string) => `Rechnung ${nr}`
+
 /** EPC QR code ("GiroCode") so customers can pay by scanning with their banking app. */
 export function girocodePayload(opts: { name: string; iban: string; bic: string; amount: number; reference: string }) {
   return [

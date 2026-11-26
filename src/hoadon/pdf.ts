@@ -2,7 +2,7 @@ import { pdf } from '@react-pdf/renderer'
 import { createElement } from 'react'
 import { InvoicePdf } from './InvoicePdf'
 import type { Company, Invoice, InvoiceItem } from './types'
-import { girocodeDataUrl } from './girocode'
+import { girocodeDataUrl, qrReference } from './girocode'
 import { computeTotals } from './money'
 
 export async function renderInvoicePdf(company: Company, invoice: Invoice, items: InvoiceItem[]): Promise<Blob> {
@@ -11,7 +11,7 @@ export async function renderInvoicePdf(company: Company, invoice: Invoice, items
   if (invoice.doc_type !== 'quote' && company.iban && company.bic && total > 0 && invoice.invoice_number) {
     qr = await girocodeDataUrl({
       name: company.account_holder || company.name, iban: company.iban, bic: company.bic,
-      amount: total, reference: `Rechnung ${invoice.invoice_number}`,
+      amount: total, reference: qrReference(invoice.invoice_number),
     })
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
