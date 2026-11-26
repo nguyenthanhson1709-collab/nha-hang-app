@@ -12,7 +12,7 @@ import { fillTemplate } from '../template'
 import { LANGS, companyText, type Lang } from '../pdfText'
 import { pdfFilename } from '../docname'
 import { EmailList, InvShell, StatusBadge, splitEmails, useL } from '../ui'
-import { kasseImages, kasseToItems } from '../kasse'
+import { kasseDoubts, kasseImages, kasseToItems } from '../kasse'
 import { aiReadKasse, lastAiError } from '../../lib/ai'
 import PdfSheet from '../../components/PdfSheet'
 
@@ -204,7 +204,14 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
       const head = L(`Đã đọc ${r.lines.length} dòng từ hoá đơn Kasse${r.receipt_no ? ` ${r.receipt_no}` : ''}${r.doc_date ? ` (${fmtDate(r.doc_date)})` : ''}, gộp thành ${got.length} món.`,
         `${r.lines.length} Positionen vom Kassenbon${r.receipt_no ? ` ${r.receipt_no}` : ''}${r.doc_date ? ` (${fmtDate(r.doc_date)})` : ''} übernommen, zusammengefasst zu ${got.length}.`)
       if (match) setOk(`${head} ${L(`Tổng ${fmtEur(sum)} khớp với Kasse.`, `Summe ${fmtEur(sum)} stimmt mit der Kasse überein.`)}`)
-      else setErr(`${head} ${L(`Tổng các món ${fmtEur(sum)} KHÁC tổng trên Kasse ${fmtEur(r.gross)}: hãy so lại từng dòng.`, `Summe ${fmtEur(sum)} weicht vom Kassenbon ${fmtEur(r.gross)} ab: bitte Positionen prüfen.`)}`)
+      else {
+        const base = items.length
+        const doubt = kasseDoubts(got, articles).map(({ item, prices }) => L(
+          `dòng ${base + item.position} "${item.name}" giá ${fmtEur(item.unit_price_gross)} (danh mục: ${prices.map(fmtEur).join(' / ')})`,
+          `Pos. ${base + item.position} „${item.name}" ${fmtEur(item.unit_price_gross)} (Artikel: ${prices.map(fmtEur).join(' / ')})`))
+        setErr(`${head} ${L(`Tổng các món ${fmtEur(sum)} KHÁC tổng trên Kasse ${fmtEur(r.gross)} (lệch ${fmtEur(round2((r.gross || 0) - sum))}): hãy so lại từng dòng.`, `Summe ${fmtEur(sum)} weicht vom Kassenbon ${fmtEur(r.gross)} ab (Differenz ${fmtEur(round2((r.gross || 0) - sum))}): bitte Positionen prüfen.`)}`
+          + (doubt.length ? ` ${L('Nên xem trước: ', 'Zuerst prüfen: ')}${doubt.join('; ')}.` : ''))
+      }
     } catch (e) { setErr((e as Error).message) } finally { setReading(false) }
   }
   function pickCustomer(c: Customer) {
