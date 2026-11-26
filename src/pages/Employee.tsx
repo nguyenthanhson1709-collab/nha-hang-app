@@ -115,7 +115,7 @@ export default function EmployeePage() {
   const [ab, setAb] = useState<{ anrede: Anrede; job: string; date: string } | null>(null)
   // Bản xem trước: chưa lưu gì cho tới khi bấm Lưu
   const [pv, setPv] = useState<{ title: string; pdf: Blob; docx?: Blob; base: string; kind: 'contract' | 'certificate'; miss?: string; saved?: boolean } | null>(null)
-  const [fv, setFv] = useState<{ title: string; blob: Blob; name: string } | null>(null)
+  const [fv, setFv] = useState<{ title: string; blob: Blob; name: string; slip?: boolean } | null>(null)
   const [exitF, setExitF] = useState<{ date: string | null; reason: string } | null>(null)
 
   async function loadChildren() {
@@ -447,22 +447,37 @@ export default function EmployeePage() {
   const slips = docs.filter((d) => d.kind === 'payslip').sort((a, b) => (b.period || b.created_at).localeCompare(a.period || a.created_at))
   const personalDocs = docs.filter((d) => d.kind !== 'payslip')
   const docTitle = (d: EmpDoc) => d.kind === 'payslip' && d.period ? `${T('Bảng lương', 'Lohnabrechnung')} ${d.period.slice(5, 7)}/${d.period.slice(0, 4)}` : d.kind === 'other' ? (d.title || '') : DOC_KINDS[d.kind][li]
-  const viewFile = async (path: string, title: string) => {
+  const viewFile = async (path: string, title: string, slip = false) => {
     setBusy(true)
     try {
       const { data, error } = await supabase.storage.from(HR_BUCKET).download(path)
       if (error || !data) throw error || new Error('download')
       const ext = (path.split('.').pop() || 'pdf').toLowerCase()
       const blob = data.type && data.type !== 'application/octet-stream' ? data : new Blob([data], { type: ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}` })
-      setFv({ title, blob, name: `${title.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '_')}.${ext}` })
+      setFv({ title, slip, blob, name: `${title.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '_')}.${ext}` })
     } catch { openHrFile(path) } finally { setBusy(false) }
+  }
+  /** Gửi bảng lương qua WhatsApp: điện thoại mở bảng chia sẻ kèm file PDF (chọn WhatsApp, chọn người);
+   *  máy tính không chia sẻ được file nên tải file về và mở WhatsApp tới số của nhân viên để đính kèm tay. */
+  const sendWhatsApp = async (f: { title: string; blob: Blob; name: string }) => {
+    const m = f.title.match(/(\d{2}\/\d{4})/)
+    const text = `Hallo ${e.first_name || ''}, anbei deine Lohnabrechnung${m ? ` ${m[1]}` : ''}. Viele Grüße, ${hs?.company_name || e.company || r.name}`.replace(/\s+/g, ' ')
+    const file = new File([f.blob], f.name, { type: f.blob.type || 'application/pdf' })
+    try {
+      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: f.title, text }); return }
+    } catch (x) { if ((x as Error)?.name === 'AbortError') return }
+    let ph = (e.phone || '').replace(/[^\d+]/g, '')
+    if (ph.startsWith('+')) ph = ph.slice(1); else if (ph.startsWith('00')) ph = ph.slice(2); else if (ph.startsWith('0')) ph = `49${ph.slice(1)}`
+    download(f.blob, f.name)
+    window.open(`https://wa.me/${ph}?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
+    toast(ph ? T('Đã tải file. Đính kèm file vào WhatsApp rồi gửi.', 'Datei geladen. In WhatsApp anhängen und senden.') : T('Hồ sơ chưa có số điện thoại. Đã tải file, chọn người nhận trong WhatsApp.', 'Keine Telefonnummer. Datei geladen, Empfänger in WhatsApp wählen.'))
   }
   const docRow = (d: EmpDoc) => {
     const dl = permitDaysLeft(d.valid_until)
     const slip = d.kind === 'payslip' && d.period
     return (
       <div key={d.id} className="it">
-        <button className="ghost grow" style={{ justifyContent: 'flex-start', textAlign: 'left', minWidth: 0, padding: 0 }} onClick={() => viewFile(d.path, docTitle(d))}>
+        <button className="ghost grow" style={{ justifyContent: 'flex-start', textAlign: 'left', minWidth: 0, padding: 0 }} onClick={() => viewFile(d.path, docTitle(d), d.kind === 'payslip')}>
           <span className="doc-ic"><GIcon k="file" /></span>
           <div style={{ minWidth: 0 }}>
             <div className="t">{docTitle(d)}</div>
@@ -928,6 +943,7 @@ export default function EmployeePage() {
         { label: pv.saved ? T('Đã lưu ✓', 'Gespeichert ✓') : T('Lưu vào hồ sơ', 'In Akte speichern'), primary: true, disabled: busy || pv.saved, onClick: savePreview },
       ]} />}
       {fv && <PdfSheet pdf={fv.blob} title={fv.title} onClose={() => setFv(null)} actions={[
+        ...(fv.slip ? [{ label: T('Gửi qua WhatsApp', 'Per WhatsApp senden'), onClick: () => sendWhatsApp(fv) }] : []),
         { label: T('Tải về', 'Herunterladen'), primary: true, onClick: () => download(fv.blob, fv.name) },
       ]} />}
       {pv?.miss && <div className="pv-miss">{T(`Hồ sơ còn thiếu: ${pv.miss}. Các chỗ này để dòng chấm để điền tay.`, `Fehlt: ${pv.miss}. Diese Stellen bleiben zum Ausfüllen frei.`)}</div>}
