@@ -76,8 +76,17 @@ Daraus wird eine ordentliche Rechnung geschrieben, deshalb müssen ALLE Position
 - "(Preis pro Stück = 4,20 EUR)" gehört zur Zeile darüber und ist deren unit_price.
 - rate: Buchstaben über die MwSt-Legende zuordnen (z.B. "MwSt. A 7%", "MwSt. B 19%").
 - gross = Total/Summe des Bons. Trinkgeld, TSE-Daten, QR-Code und den Bewirtungsbeleg ignorieren (Trinkgeld nur in tip).
-- Prüfe: Summe aller Zeilenbeträge = gross. Wenn nicht, lies die Zeilen noch einmal.
+- Prüfe: Summe aller Zeilenbeträge = gross. Wenn nicht, suche die falsch gelesene Zeile (meist eine verblasste Ziffer: 4/9, 6/8, 3/8, 1/7, 5/6) und lies sie noch einmal.
 - Datum im deutschen Format TT.MM.JJJJ.`;
+
+const fmtPrice = (n: number) => Number(n).toFixed(2).replace(".", ",");
+const MENU_HINT = (menu: string) => `
+Speisekarte dieses Restaurants (Nummer | Name | Preis brutto | MwSt), NUR als Lesehilfe für verblasste oder unklare Ziffern:
+${menu}
+- Nummer, Name und Preis einer Bonzeile müssen zusammenpassen. Beispiel: steht "(46?) Strawberry ..." auf dem Bon, ist es die Nummer der Karte, deren Name passt, nicht eine ähnliche Nummer mit anderem Namen.
+- Ein Artikel kann mehrere Preise haben (z.B. Mittag/Abend); der Preis muss trotzdem einer der Kartenpreise sein, wenn die Ziffern unklar sind.
+- Was auf dem Bon klar lesbar ist, gilt immer, auch wenn es von der Karte abweicht (Preisänderung, Sonderpreis). Artikel, die nicht auf der Karte stehen, genau wie gedruckt übernehmen.
+- Für number die Nummer wie auf dem Bon; für name den Namen wie auf dem Bon.`;
 
 const PROMPT_SEG = (n: number) => `Dieses PDF hat ${n} Seiten und enthält einen oder mehrere Belege hintereinander (Eingangsrechnungen, Kassenbons oder Z-Berichte/Tagesabschlüsse einer Kasse; bei Z-Berichten zählt jeder Geschäftstag als ein Beleg).
 Bestimme, welche Seiten zu welcher Rechnung gehören. WICHTIG: Eine Rechnung kann mehrere Seiten haben ("Seite 2 von 3", "Übertrag", gleiche Rechnungsnummer, Endsumme erst auf der letzten Seite, Folgeseite ohne Kopf). Folgeseiten gehören zur selben Rechnung, nicht jede Seite ist eine eigene Rechnung.
@@ -126,18 +135,26 @@ Deno.serve(async (req) => {
       map = r?.pos_payment_map || {};
     }
 
+    let menu = "";
+    if (kind === "kasse") {
+      const { data: arts } = await admin.from("nh_inv_articles").select("number, name, price_gross, tax_rate").eq("restaurant_id", restaurant_id).eq("archived", false).order("number").limit(1500);
+      const seen = new Set<string>();
+      menu = (arts || []).filter((a) => a.name).map((a) => `${a.number ?? "-"} | ${a.name} | ${fmtPrice(a.price_gross)} | ${Number(a.tax_rate)}%`)
+        .filter((l) => (seen.has(l) ? false : (seen.add(l), true))).join("\n");
+    }
+
     const content: Anthropic.ContentBlockParam[] = files.map((f) =>
       f.type === "application/pdf"
         ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: f.data } }
         : { type: "image", source: { type: "base64", media_type: (["image/png", "image/webp", "image/gif"].includes(f.type) ? f.type : "image/jpeg") as "image/jpeg", data: f.data } });
-    content.push({ type: "text", text: kind === "zbon" ? PROMPT_Z(map) : kind === "segment" ? PROMPT_SEG(pages || 0) : kind === "kasse" ? PROMPT_KASSE : PROMPT_INV });
+    content.push({ type: "text", text: kind === "zbon" ? PROMPT_Z(map) : kind === "segment" ? PROMPT_SEG(pages || 0) : kind === "kasse" ? PROMPT_KASSE + (menu ? MENU_HINT(menu) : "") : PROMPT_INV });
 
     const client = new Anthropic({ apiKey: key });
     const msg = await client.messages.create({
       model: MODEL,
       max_tokens: kind === "kasse" ? 16000 : 8000,
       thinking: { type: "between_tools" },
-      output_config: { effort: "medium", format: { type: "json_schema", schema: kind === "zbon" ? ZBON : kind === "segment" ? SEGMENT : kind === "kasse" ? KASSE : INVOICE } },
+      output_config: { effort: kind === "kasse" ? "high" : "medium", format: { type: "json_schema", schema: kind === "zbon" ? ZBON : kind === "segment" ? SEGMENT : kind === "kasse" ? KASSE : INVOICE } },
       messages: [{ role: "user", content }],
     } as never) as Anthropic.Message;
     if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") return json({ error: msg.stop_reason }, 502);

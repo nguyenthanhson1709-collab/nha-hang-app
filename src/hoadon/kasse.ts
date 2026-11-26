@@ -30,6 +30,17 @@ export function kasseToItems(lines: KasseLine[], articles: Article[]): InvoiceIt
   return out
 }
 
+/** Các dòng nên xem lại: số món có trong danh mục nhưng giá in trên Kasse không trùng giá nào của món đó */
+export function kasseDoubts(items: InvoiceItem[], articles: Article[]): { item: InvoiceItem; prices: number[] }[] {
+  const out: { item: InvoiceItem; prices: number[] }[] = []
+  for (const it of items) {
+    const nr = it.name.split(' ')[0]
+    const prices = [...new Set(articles.filter((a) => a.number === nr && !a.archived).map((a) => a.price_gross))]
+    if (prices.length && !prices.some((p) => Math.abs(p - it.unit_price_gross) < 0.005)) out.push({ item: it, prices })
+  }
+  return out
+}
+
 // ---------- Chuẩn bị ảnh gửi AI ----------
 // Bon Kasse rất dài và hẹp: gửi nguyên trang thì AI phải thu nhỏ đến mức không đọc được chữ.
 // Vì vậy vẽ lại với chiều rộng cố định rồi cắt thành nhiều ảnh, cắt ở khoảng trắng giữa hai dòng.
