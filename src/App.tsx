@@ -23,6 +23,11 @@ import Settings from './pages/Settings'
 import RestaurantSettings from './pages/RestaurantSettings'
 import Staff from './pages/Staff'
 import EmployeePage from './pages/Employee'
+import Invoices from './hoadon/pages/Invoices'
+import InvoiceEditor from './hoadon/pages/InvoiceEditor'
+import InvCustomers from './hoadon/pages/Customers'
+import InvArticles from './hoadon/pages/Articles'
+import InvSettings from './hoadon/pages/InvSettings'
 
 // Mở app mới (tab mới / mở lại từ màn hình chính) -> luôn về trang đầu, không quay lại trang cũ (vd. trang scan).
 // Tải lại trang trong cùng một tab thì vẫn giữ trang đang xem.
@@ -99,6 +104,15 @@ function Shell({ session }: { session: Session }) {
           <Route path="/r/:rid/plan" element={<RestLayout><Plan /></RestLayout>} />
           <Route path="/r/:rid/hr" element={<RestLayout><Staff /></RestLayout>} />
           <Route path="/r/:rid/hr/:eid" element={<RestLayout><EmployeePage /></RestLayout>} />
+          <Route path="/r/:rid/inv" element={<RestLayout><Invoices key="i" /></RestLayout>} />
+          <Route path="/r/:rid/inv/new" element={<RestLayout><InvoiceEditor key="in" /></RestLayout>} />
+          <Route path="/r/:rid/inv/quotes" element={<RestLayout><Invoices docType="quote" key="q" /></RestLayout>} />
+          <Route path="/r/:rid/inv/quotes/new" element={<RestLayout><InvoiceEditor docType="quote" key="qn" /></RestLayout>} />
+          <Route path="/r/:rid/inv/quotes/:id" element={<RestLayout><InvoiceEditor docType="quote" /></RestLayout>} />
+          <Route path="/r/:rid/inv/customers" element={<RestLayout><InvCustomers /></RestLayout>} />
+          <Route path="/r/:rid/inv/articles" element={<RestLayout><InvArticles /></RestLayout>} />
+          <Route path="/r/:rid/inv/settings" element={<RestLayout><InvSettings /></RestLayout>} />
+          <Route path="/r/:rid/inv/:id" element={<RestLayout><InvoiceEditor /></RestLayout>} />
           <Route path="/r/:rid/settings" element={<RestLayout><RestaurantSettings /></RestLayout>} />
           <Route path="*" element={<Navigate to={start} replace />} />
         </Routes>
