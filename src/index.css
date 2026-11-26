@@ -20,6 +20,7 @@ h3 { font-size: 1rem; margin: 12px 0 6px; }
 .top { position: sticky; top: 0; z-index: 10; background: var(--top); padding: 12px 16px 8px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
 .top .grow { flex: 1; min-width: 0; }
 .top .sub { color: var(--muted); font-size: .82rem; }
+.top .top-title { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; line-height: 1.2; overflow-wrap: anywhere; }
 .page { padding: 12px 16px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
 .row { display: flex; gap: 8px; align-items: center; }
