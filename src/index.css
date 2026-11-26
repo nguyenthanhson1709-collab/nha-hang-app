@@ -270,3 +270,13 @@ tr.no-cat-row td:first-child { color: var(--err); box-shadow: inset 3px 0 0 var(
 .sc-grid { z-index: 0; pointer-events: none; }
 .sc-bars { z-index: 1; }
 .sc-col > div { position: relative; z-index: 2; }
+
+.info { display: flex; flex-direction: column; }
+.info-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); min-height: 52px; }
+.info-row:last-child { border-bottom: 0; }
+.folder { margin-top: 10px; border: 1px solid var(--line, rgba(127,127,127,.25)); border-radius: 12px; overflow: hidden; }
+.folder > summary { cursor: pointer; padding: 10px 12px; font-weight: 600; list-style: none; }
+.folder > summary::-webkit-details-marker { display: none; }
+.folder > summary::after { content: '›'; float: right; transition: transform .15s; }
+.folder[open] > summary::after { transform: rotate(90deg); }
+.folder > .list { border: 0; border-radius: 0; border-top: 1px solid var(--line, rgba(127,127,127,.25)); }

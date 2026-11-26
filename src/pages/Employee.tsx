@@ -17,6 +17,19 @@ import { baseSalary, empTypeOf, hourlyOf, splitName } from '../lib/payslip'
 import { DateField } from '../components/PeriodBar'
 import { ComboInput, Money, Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
 
+/** Một dòng thông tin trong hồ sơ; có onEdit thì hiện nút ✎ */
+function InfoRow({ l, v, onEdit, add }: { l: string; v: string; onEdit?: () => void; add: string }) {
+  return (
+    <div className="info-row">
+      <div className="grow" style={{ minWidth: 0 }}>
+        <div className="small muted">{l}</div>
+        <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{v || <span className="muted">—</span>}</div>
+      </div>
+      {onEdit && <button className="ghost" onClick={onEdit} aria-label="edit" title={v ? '' : add} style={{ color: 'var(--brand)' }}>✎</button>}
+    </div>
+  )
+}
+
 /** Ô nhập có nhãn (khai báo ngoài component để ô không bị mất focus khi gõ) */
 function F({ l, children }: { l: string; children: ReactNode }) { return <div className="f"><span>{l}</span>{children}</div> }
 
@@ -47,6 +60,7 @@ export default function EmployeePage() {
   const [busy, setBusy] = useState(false)
   const [ct, setCt] = useState<EmpContract | null>(null)
   const [ctFiles, setCtFiles] = useState<File[]>([])
+  const [ed, setEd] = useState<{ keys: (keyof Employee)[]; draft: Partial<Employee> } | null>(null)
   const [exitF, setExitF] = useState<{ date: string | null; reason: string } | null>(null)
 
   async function loadChildren() {
@@ -234,6 +248,124 @@ export default function EmployeePage() {
   )
   const active = isActive(e)
 
+  // ===== Hồ sơ đã có: chỉ xem; mục thay đổi được có nút ✎ (mục cố định chỉ bổ sung khi còn trống)
+  type K = keyof Employee
+  const show = (k: K): string => {
+    const v = e[k]
+    if (v == null || v === '') return ''
+    if (k === 'birth_date' || k === 'entry_date' || k === 'residence_permit_until') return dmy(v as string)
+    if (k === 'gross_monthly' || k === 'hourly_wage') return eur(Number(v))
+    if (k === 'employment_type') return EMP_TYPES[v as EmpType][li]
+    if (k === 'work_permitted' || k === 'multiple_employment') return v ? T('Có', 'Ja') : T('Không', 'Nein')
+    if (k === 'job_title') return de ? String(v) : `${jobInfo(String(v))?.[1] || ''}${jobInfo(String(v)) ? ' · ' : ''}${v}`
+    if (k === 'weekly_hours') return `${String(v).replace('.', ',')} ${T('giờ', 'Std.')}`
+    return String(v)
+  }
+  const fixedRow = (l: string, k: K) => <InfoRow l={l} v={show(k)} onEdit={e[k] == null || e[k] === '' ? () => setEd({ keys: [k], draft: {} }) : undefined} add={T('Bổ sung', 'Ergänzen')} />
+  const editRow = (l: string, keys: K[], v?: string) => <InfoRow l={l} v={v ?? show(keys[0])} onEdit={() => setEd({ keys, draft: Object.fromEntries(keys.map((k) => [k, e[k]])) as Partial<Employee> })} add={T('Bổ sung', 'Ergänzen')} />
+  const profileView = () => (
+    <>
+      <div className="card">
+        <div className="row" style={{ marginBottom: 6 }}>
+          {photoUrl ? <img src={photoUrl} alt="" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover' }} /> : <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--brand-2)' }} />}
+          <label className="btn">{T('Ảnh chân dung', 'Foto')}<input type="file" accept="image/*" hidden onChange={(ev) => { uploadPhoto(ev.target.files?.[0]); ev.target.value = '' }} /></label>
+        </div>
+        <h3>{T('Cá nhân', 'Persönliche Angaben')}</h3>
+        <div className="info">
+          {fixedRow(L('Họ', 'Name'), 'last_name')}
+          {fixedRow(L('Tên', 'Vorname'), 'first_name')}
+          {fixedRow(L('Ngày sinh', 'Geburtsdatum'), 'birth_date')}
+          {fixedRow(L('Nơi sinh', 'Geburtsort'), 'birth_place')}
+          {fixedRow(L('Quốc tịch', 'Nationalität'), 'nationality')}
+          {editRow(L('Địa chỉ', 'Anschrift'), ['address'])}
+          {editRow(L('Điện thoại', 'Telefon'), ['phone'])}
+          {editRow('E-Mail', ['email'])}
+        </div>
+      </div>
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>{T('Cư trú và lao động', 'Aufenthalt und Erwerbstätigkeit')}</h3>
+        <div className="info">
+          {editRow(L('Giấy phép cư trú', 'Aufenthaltstitel'), ['residence_permit', 'residence_permit_until', 'work_permitted'], [e.residence_permit, e.residence_permit_until && `${T('đến', 'bis')} ${dmy(e.residence_permit_until)}`].filter(Boolean).join(' · '))}
+          {fixedRow(L('Được phép làm việc', 'Erwerbstätigkeit gestattet'), 'work_permitted')}
+        </div>
+      </div>
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>{T('Công việc', 'Beschäftigung')}</h3>
+        <div className="info">
+          {fixedRow(L('Công ty', 'Firma'), 'company')}
+          {fixedRow(L('Mã nhân viên', 'Personal-Nr.'), 'personnel_no')}
+          {fixedRow(L('Ngày bắt đầu làm', 'Eintrittsdatum'), 'entry_date')}
+          {editRow(L('Công việc', 'Tätigkeit'), ['job_title'])}
+          {editRow(L('Loại hợp đồng', 'Beschäftigungsart'), ['employment_type', 'weekly_hours', 'gross_monthly', 'hourly_wage', 'vacation_days'],
+            [show('employment_type'), show('weekly_hours') && `${show('weekly_hours')}/${T('tuần', 'Woche')}`, show('gross_monthly') && `${show('gross_monthly')}/${T('tháng', 'Monat')}`, show('hourly_wage') && `${show('hourly_wage')}/${T('giờ', 'Std.')}`, e.vacation_days != null && `${String(e.vacation_days).replace('.', ',')} ${T('ngày phép', 'Urlaubstage')}`].filter(Boolean).join(' · '))}
+          {editRow(L('Làm thêm nơi khác', 'Mehrfachbeschäftigung'), ['multiple_employment'])}
+        </div>
+      </div>
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>{T('Thuế và bảo hiểm', 'Steuer und Sozialversicherung')}</h3>
+        <div className="info">
+          {fixedRow(L('Số Steuer-ID', 'Steuer-ID'), 'tax_id')}
+          {fixedRow(L('Số bảo hiểm hưu trí', 'Rentenversicherungsnr.'), 'pension_no')}
+          {editRow(L('Bậc thuế lương', 'Steuerklasse'), ['tax_class'])}
+          {editRow(L('Hãng bảo hiểm y tế', 'Krankenkasse'), ['health_insurance'])}
+          {editRow(L('Ngân hàng', 'Bankverbindung'), ['iban', 'bic', 'bank_name'], [e.iban, e.bic, e.bank_name].filter(Boolean).join(' · '))}
+          {editRow(T('Ghi chú', 'Notiz'), ['note'])}
+        </div>
+      </div>
+    </>
+  )
+  async function saveEd() {
+    if (!ed) return
+    const patch = { ...ed.draft }
+    if ('iban' in patch && patch.iban) patch.iban = patch.iban.replace(/\s+/g, '').toUpperCase()
+    if ('iban' in patch && !validIban(patch.iban ?? null)) { toast(T('IBAN có vẻ sai', 'IBAN ungültig')); return }
+    if ('tax_id' in patch && !validTaxId(patch.tax_id ?? null)) { toast(T('Steuer-ID phải có 11 chữ số', 'Steuer-ID muss 11 Ziffern haben')); return }
+    if ('job_title' in patch) { const j = jobInfo(patch.job_title ?? null); if (j) patch.position = j[2] }
+    const { error } = await supabase.from('nh_employees').update(patch).eq('id', eid!)
+    if (error) { toast(/nh_employees_pnr|duplicate key/.test(errMsg(error)) ? T('Mã nhân viên này đã có ở hồ sơ khác', 'Personal-Nr. bereits vergeben') : errMsg(error)); return }
+    set(patch); setEd(null); toast(T('Đã lưu', 'Gespeichert'))
+  }
+  const labelOf: Partial<Record<K, string>> = {
+    last_name: L('Họ', 'Name'), first_name: L('Tên', 'Vorname'), birth_date: L('Ngày sinh', 'Geburtsdatum'), birth_place: L('Nơi sinh', 'Geburtsort'),
+    nationality: L('Quốc tịch', 'Nationalität'), address: L('Địa chỉ', 'Anschrift'), phone: L('Điện thoại', 'Telefon'), email: 'E-Mail',
+    residence_permit: L('Giấy phép cư trú', 'Aufenthaltstitel'), residence_permit_until: L('Hết hạn ngày', 'gültig bis'), work_permitted: L('Được phép làm việc?', 'Erwerbstätigkeit gestattet'),
+    company: L('Công ty', 'Firma'), personnel_no: L('Mã nhân viên', 'Personal-Nr.'), entry_date: L('Ngày bắt đầu làm', 'Eintrittsdatum'), job_title: L('Công việc', 'Tätigkeit'),
+    employment_type: L('Loại hợp đồng', 'Beschäftigungsart'), weekly_hours: L('Giờ / tuần', 'Std./Woche'), gross_monthly: L('Lương brutto / tháng', 'Monatl. Bruttolohn'),
+    hourly_wage: L('Lương / giờ', 'Stundenlohn'), vacation_days: L('Ngày phép / năm', 'Urlaubstage'), multiple_employment: L('Có làm việc ở nơi khác không?', 'Mehrfachbeschäftigung'),
+    tax_id: L('Số Steuer-ID', 'Steuer-ID'), pension_no: L('Số bảo hiểm hưu trí', 'Rentenversicherungsnr.'), tax_class: L('Bậc thuế lương', 'Steuerklasse'),
+    health_insurance: L('Hãng bảo hiểm y tế', 'Krankenkasse'), iban: 'IBAN', bic: 'BIC', bank_name: L('Ngân hàng', 'Bank'), note: T('Ghi chú', 'Notiz'),
+  }
+  const edInput = (k: K) => {
+    const d = ed!.draft, v = d[k]
+    const up = (x: Partial<Employee>) => setEd({ ...ed!, draft: { ...d, ...x } })
+    const sv = (x: string) => up({ [k]: x || null } as Partial<Employee>)
+    switch (k) {
+      case 'birth_date': return <input type="date" value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
+      case 'entry_date': case 'residence_permit_until': return <DateField allowEmpty value={(v as string) || null} onChange={(x) => up({ [k]: x } as Partial<Employee>)} />
+      case 'work_permitted': case 'multiple_employment': return (
+        <div className="seg">
+          <button className={v === true ? 'sel' : ''} onClick={() => up({ [k]: v === true ? null : true } as Partial<Employee>)}>{T('Có', 'Ja')}</button>
+          <button className={v === false ? 'sel' : ''} onClick={() => up({ [k]: v === false ? null : false } as Partial<Employee>)}>{T('Không', 'Nein')}</button>
+        </div>)
+      case 'residence_permit': return <ComboInput value={(v as string) || ''} options={PERMITS.map((p) => p[0])} onChange={(x) => { const pi = permitInfo(x); up({ residence_permit: x || null, ...(pi && pi[2] != null ? { work_permitted: pi[2] } : {}), ...(pi?.[3] ? { residence_permit_until: null } : {}) }) }} />
+      case 'job_title': return <ComboInput value={(v as string) || ''} options={JOBS.map((j) => j[0])} onChange={sv} />
+      case 'employment_type': return (
+        <select value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)}>
+          <option value="">—</option>
+          {(Object.keys(EMP_TYPES) as EmpType[]).map((x) => <option key={x} value={x}>{EMP_TYPES[x][li]}</option>)}
+        </select>)
+      case 'tax_class': return (
+        <select value={(v as number) ?? ''} onChange={(ev) => up({ tax_class: ev.target.value ? Number(ev.target.value) : null })}>
+          <option value="">—</option>
+          {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>)
+      case 'gross_monthly': case 'hourly_wage': return <Money value={(v as number) ?? null} onChange={(x) => up({ [k]: x || null } as Partial<Employee>)} />
+      case 'weekly_hours': case 'vacation_days': return <input inputMode="decimal" value={v == null ? '' : String(v).replace('.', ',')} onChange={(ev) => up({ [k]: ev.target.value.trim() ? parseNum(ev.target.value) : null } as Partial<Employee>)} />
+      case 'address': case 'note': return <textarea value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
+      default: return <input value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
+    }
+  }
+
   return (
     <>
       <Top title={isNew ? T('Nhân viên mới', 'Neuer Mitarbeiter') : fullName(e)} sub={isNew ? r.name : `${r.name}${active ? '' : ' · ' + T('Đã nghỉ', 'Ausgeschieden')}`} back={`/r/${rid}/hr`}
@@ -241,6 +373,7 @@ export default function EmployeePage() {
       <div className="page">
         {!active && <div className="alert warn">{T('Đã nghỉ việc từ', 'Ausgeschieden zum')} {dmy(e.exit_date)}{e.exit_reason && ` · ${e.exit_reason}`}</div>}
         {warns.map((w) => <div key={w} className="alert warn">{w}</div>)}
+        {isNew ? (<>
         <label className="btn block drop" style={{ marginBottom: 12 }} {...dropProps((fl) => fromPayslip(fl))}>
           🧾 {T('Tải bảng lương cũ lên để tự điền thông tin', 'Alte Lohnabrechnung hochladen und Daten übernehmen')}
           <span className="drop-hint">{busy ? T('Đang đọc…', 'Wird gelesen…') : T('Tên, địa chỉ, ngày sinh, Steuer-ID, số BH hưu trí, Krankenkasse, Steuerklasse… (PDF DATEV)', 'Name, Anschrift, Geburtsdatum, Steuer-ID, RV-Nr., Krankenkasse, Steuerklasse… (DATEV-PDF)')}</span>
@@ -331,6 +464,7 @@ export default function EmployeePage() {
           </div>
           <F l={T('Ghi chú', 'Notiz')}><textarea {...txt('note')} /></F>
         </div>
+        </>) : profileView()}
 
         <div className="card">
           <h3 style={{ marginTop: 0 }}>{T('Giấy tờ', 'Dokumente')}</h3>
@@ -347,30 +481,41 @@ export default function EmployeePage() {
               ))}
             </div>
           )}
-          {docs.length > 0 && (
-            <div className="list" style={{ marginTop: 8 }}>
-              {docs.map((d) => {
-                const dl = permitDaysLeft(d.valid_until)
-                return (
-                  <div key={d.id} className="it">
-                    <button className="ghost grow" style={{ justifyContent: 'flex-start', textAlign: 'left', minWidth: 0, padding: 0 }} onClick={() => openHrFile(d.path)}>
-                      <div style={{ minWidth: 0 }}>
-                        <div className="t">📎 {d.kind === 'other' ? d.title : DOC_KINDS[d.kind][li]}</div>
-                        <div className="small muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title} · {dmy(d.created_at)}</div>
-                      </div>
-                    </button>
-                    {!['payslip', 'contract', 'tax', 'certificate'].includes(d.kind) && (
-                      <div style={{ width: 130 }} title={T('Hết hạn', 'gültig bis')}>
-                        <DateField allowEmpty value={d.valid_until} onChange={(v) => setDocValid(d, v)} />
-                        {dl != null && dl <= PERMIT_WARN_DAYS && <span className={`tag ${dl < 0 ? 'err' : 'warn'}`}>{dl < 0 ? T('hết hạn', 'abgelaufen') : `${dl} ${T('ngày', 'Tage')}`}</span>}
-                      </div>
-                    )}
-                    <button className="ghost" onClick={() => delDoc(d)} aria-label="delete">✕</button>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          {(() => {
+            const slips = docs.filter((d) => d.kind === 'payslip').sort((a, b) => (b.period || b.created_at).localeCompare(a.period || a.created_at))
+            const personal = docs.filter((d) => d.kind !== 'payslip')
+            const row = (d: EmpDoc) => {
+              const dl = permitDaysLeft(d.valid_until)
+              const slip = d.kind === 'payslip' && d.period
+              return (
+                <div key={d.id} className="it">
+                  <button className="ghost grow" style={{ justifyContent: 'flex-start', textAlign: 'left', minWidth: 0, padding: 0 }} onClick={() => openHrFile(d.path)}>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="t">📎 {slip ? `${T('Bảng lương', 'Lohnabrechnung')} ${d.period!.slice(5, 7)}/${d.period!.slice(0, 4)}` : d.kind === 'other' ? d.title : DOC_KINDS[d.kind][li]}</div>
+                      <div className="small muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{slip ? '' : `${d.title} · `}{T('tải lên', 'hochgeladen')} {dmy(d.created_at)}</div>
+                    </div>
+                  </button>
+                  {!['payslip', 'contract', 'tax', 'certificate'].includes(d.kind) && (
+                    <div style={{ width: 130 }} title={T('Hết hạn', 'gültig bis')}>
+                      <DateField allowEmpty value={d.valid_until} onChange={(v) => setDocValid(d, v)} />
+                      {dl != null && dl <= PERMIT_WARN_DAYS && <span className={`tag ${dl < 0 ? 'err' : 'warn'}`}>{dl < 0 ? T('hết hạn', 'abgelaufen') : `${dl} ${T('ngày', 'Tage')}`}</span>}
+                    </div>
+                  )}
+                  <button className="ghost" onClick={() => delDoc(d)} aria-label="delete">✕</button>
+                </div>
+              )
+            }
+            const folder = (title: string, list: EmpDoc[], open: boolean) => (
+              <details className="folder" open={open}>
+                <summary>📁 {title} <span className="muted">({list.length})</span></summary>
+                {list.length ? <div className="list">{list.map(row)}</div> : <div className="small muted" style={{ padding: '6px 4px' }}>{T('Chưa có', 'Leer')}</div>}
+              </details>
+            )
+            return docs.length > 0 && <>
+              {folder(T('Giấy tờ cá nhân', 'Persönliche Dokumente'), personal, true)}
+              {folder(T('Bảng lương', 'Lohnabrechnungen'), slips, false)}
+            </>
+          })()}
         </div>
 
         {!isNew && (
@@ -395,7 +540,7 @@ export default function EmployeePage() {
           </div>
         )}
 
-        <button className="primary block" disabled={busy} onClick={save}>{busy ? '…' : T('Lưu', 'Speichern')}</button>
+        {isNew && <button className="primary block" disabled={busy} onClick={save}>{busy ? '…' : T('Lưu', 'Speichern')}</button>}
         {!isNew && (
           <div className="row" style={{ marginTop: 10 }}>
             {active
@@ -443,6 +588,13 @@ export default function EmployeePage() {
           </div>
           <button className="primary block" disabled={busy} onClick={saveContract}>{busy ? '…' : T('Lưu', 'Speichern')}</button>
           {ct.id && <button className="danger block" style={{ marginTop: 8 }} onClick={delContract}>{T('Xoá', 'Löschen')}</button>}
+        </>}
+      </Sheet>
+
+      <Sheet open={!!ed} onClose={() => setEd(null)} title={ed ? labelOf[ed.keys[0]] : ''}>
+        {ed && <>
+          {ed.keys.map((k) => (k !== 'residence_permit_until' || !permitInfo(ed.draft.residence_permit ?? null)?.[3]) && <F key={k} l={labelOf[k] || k}>{edInput(k)}</F>)}
+          <button className="primary block" onClick={saveEd}>{T('Lưu', 'Speichern')}</button>
         </>}
       </Sheet>
 
