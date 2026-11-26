@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Navigate, NavLink, useParams } from 'react-router-dom'
 import { canManage, useRole } from '../lib/app'
 import { Top, useRestaurant } from '../components/ui'
 import { useL } from '../hoadon/ui'
 import type { Status } from './api'
+import { supabase } from '../lib/supabase'
 import './datban.css'
 
 export { useL }
@@ -25,6 +26,7 @@ export const LOCALE = { vi: 'vi-VN', de: 'de-DE' }
 
 export function errText(e: unknown, L: ReturnType<typeof useL>) {
   const m = String((e as Error)?.message || e)
+  if (/mirror_readonly/.test(m)) return L('Đang dùng dữ liệu chép từ hệ thống cũ: hãy sửa ở trang nhân viên cũ.', 'Daten werden aus dem alten System übernommen: bitte dort bearbeiten.')
   if (/full/.test(m)) return L('Vượt giới hạn khách giờ cao điểm.', 'Spitzenzeit-Limit überschritten.')
   if (/forbidden/.test(m)) return L('Bạn không có quyền làm việc này.', 'Keine Berechtigung.')
   if (/cancelled/.test(m)) return L('Đơn đã huỷ / từ chối, không đổi được.', 'Storniert / abgelehnt, nicht änderbar.')
@@ -43,7 +45,14 @@ export function BkShell({ children, wide }: { children: ReactNode; wide?: boolea
     [base, L('Đặt bàn', 'Reservierungen')], [`${base}/floor`, L('Sơ đồ bàn', 'Tischplan')],
     [`${base}/reviews`, L('Đánh giá', 'Bewertungen')], [`${base}/settings`, L('Cài đặt', 'Einstellungen')],
   ]
-  if (!canManage(role)) return <Navigate to={`/r/${rid}`} replace />
+  // chỉ quán đã có cài đặt đặt bàn (hiện chỉ Vietbowl Mitte) mới dùng module này
+  const [has, setHas] = useState<boolean | null>(null)
+  useEffect(() => {
+    let live = true
+    supabase.from('nh_bk_settings').select('restaurant_id').eq('restaurant_id', rid!).maybeSingle().then(({ data }) => { if (live) setHas(!!data) })
+    return () => { live = false }
+  }, [rid])
+  if (!canManage(role) || has === false) return <Navigate to={`/r/${rid}`} replace />
   return (
     <>
       <Top title={L('Bàn đặt', 'Reservierungen')} sub={r?.name} back={`/r/${rid}`} />

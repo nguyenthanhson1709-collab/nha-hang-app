@@ -41,7 +41,7 @@ export default function Home() {
   const [sp] = useSearchParams()
   const view = sp.get('v')
   const [tick, setTick] = useState(0)
-  const [s, setS] = useState<{ spend: number; cash: number; card: number; transfer: number; rev: number; bal: number; missing: string[]; review: Doc[]; mine: Doc[]; bk?: { n: number; g: number } } | null>(null)
+  const [s, setS] = useState<{ spend: number; cash: number; card: number; transfer: number; rev: number; bal: number; missing: string[]; review: Doc[]; mine: Doc[]; bk?: { n: number; g: number }; hasBk?: boolean } | null>(null)
 
   useEffect(() => {
     if (!r) return
@@ -66,11 +66,16 @@ export default function Home() {
         ? await supabase.from('nh_documents').select('*, nh_document_payments(*)').eq('restaurant_id', rid!).eq('created_by', profile.id).order('created_at', { ascending: false }).limit(30)
         : { data: [] }
       let bk: { n: number; g: number } | undefined
+      let hasBk = false
       if (m) {
+        const { data: bs } = await supabase.from('nh_bk_settings').select('restaurant_id').eq('restaurant_id', rid!).maybeSingle()
+        hasBk = !!bs
+      }
+      if (hasBk) {
         const { data: bks } = await supabase.from('nh_bk_bookings').select('party').eq('restaurant_id', rid!).eq('day', todayIso()).in('status', ['pending', 'confirmed', 'seated'])
         if (bks?.length) bk = { n: bks.length, g: bks.reduce((a, b) => a + Number(b.party), 0) }
       }
-      setS({ bk, spend: purchase.reduce((a, d) => a + Number(d.gross), 0), cash: sum('cash'), card: sum('card'), transfer: sum('transfer'), rev, bal, missing, review: (review || []) as Doc[], mine: (mine || []) as Doc[] })
+      setS({ bk, hasBk, spend: purchase.reduce((a, d) => a + Number(d.gross), 0), cash: sum('cash'), card: sum('card'), transfer: sum('transfer'), rev, bal, missing, review: (review || []) as Doc[], mine: (mine || []) as Doc[] })
     })()
   }, [rid, r, m, profile.id, tick])
 
@@ -89,7 +94,7 @@ export default function Home() {
       { icon: 'archive', label: t('archive'), desc: de ? 'Buchhaltungsunterlagen' : 'Tài liệu kế toán', to: `/r/${rid}/archive` },
       { icon: 'book', label: t('kassenbuch'), desc: de ? 'Kassenbuch führen' : 'Sổ quỹ tiền mặt', to: `/r/${rid}/kb` },
       { icon: 'chart', label: t('reports'), desc: de ? 'Auswertungen und Statistik' : 'Thống kê và phân tích', to: `/r/${rid}/reports` },
-      { icon: 'calendar', label: de ? 'Reservierungen' : 'Bàn đặt', desc: s?.bk ? (de ? `Heute: ${s.bk.n} Res. · ${s.bk.g} Gäste` : `Hôm nay: ${s.bk.n} đơn · ${s.bk.g} khách`) : (de ? 'Tischreservierungen und Tischplan' : 'Xem và quản lý đặt bàn'), to: `/r/${rid}/bk` },
+      ...(s?.hasBk ? [{ icon: 'calendar', label: de ? 'Reservierungen' : 'Bàn đặt', desc: s?.bk ? (de ? `Heute: ${s.bk.n} Res. · ${s.bk.g} Gäste` : `Hôm nay: ${s.bk.n} đơn · ${s.bk.g} khách`) : (de ? 'Tischreservierungen und Tischplan' : 'Xem và quản lý đặt bàn'), to: `/r/${rid}/bk` }] : []),
       { icon: 'invoice', label: t('invoicing'), desc: de ? 'Rechnungen und Angebote' : 'Hoá đơn và Angebot', to: `/r/${rid}/inv` },
       { icon: 'people', label: t('hr'), desc: de ? 'Personalakten verwalten' : 'Quản lý hồ sơ nhân viên', to: `/r/${rid}/hr` },
     ] : []),

@@ -118,5 +118,38 @@ await db.exec(`insert into nh_bk_bookings(restaurant_id, code, day, slot, party,
 const n = await q(`select nh_bk_auto_arrive() n`)
 ok(Number(n[0].n) >= 1, 'Đơn đã qua giờ tự chuyển Đã đến')
 
+// 024: chép từ app cũ (chỉ Vietbowl Mitte), quán đang chép thì app chỉ xem
+await db.exec(`create schema vault; create table vault.secrets(name text, secret text);
+create view vault.decrypted_secrets as select name, secret as decrypted_secret from vault.secrets;
+create function vault.create_secret(v text, n text, d text) returns void language sql as $$ insert into vault.secrets values (n, v) $$;
+create schema cron; create table cron.job(jobname text);
+create function cron.schedule(a text, b text, c text) returns bigint language sql as $$ insert into cron.job values (a) returning 1::bigint $$;`)
+await db.exec(mig('024_nh_booking_mirror.sql'))
+await db.exec(mig('024_nh_booking_mirror.sql')) // chạy lại được
+const mo = await q(`select restaurant_id from nh_bk_settings where mirror_old`)
+ok(mo.length === 1 && mo[0].restaurant_id === A, 'Chỉ Vietbowl Mitte bật chép từ app cũ')
+const OB = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+const payload = {
+  settings: { auto_confirm: true, peak_enabled: true, duration_min: 90, min_online: 4, max_online: 20, slot_step: 15, open_time: '11:30', close_time: '23:00', weekday_from: '14:00', closed_days: ['12-24'], lead_hours: 4, auto_arrive_min: 20, contact_email: 'pp@x.de', google_review_url: null },
+  rules: [], areas: [{ id: 'in', name: 'Innen', sort: 1 }],
+  tables: [{ id: 't41', label: '41', area_id: 'in', x: 1, y: 1, w: 40, h: 40, rot: 0, active: true }],
+  bookings: [{ id: OB, code: 'VB-AAAAA', manage_token: 'tok', day, slot: '19:00', party: 6, name: 'Alt Gast', phone: '0176', email: null, note: null, lang: 'de', status: 'confirmed', source: 'phone', channel: null, created_at: '2026-11-01T10:00:00Z', created_by: 'st1', auto_arrived: false, cancelled_at: null, called: true, review_ok: false }],
+  booking_tables: [{ booking_id: OB, table_id: 't41' }, { booking_id: OB, table_id: 'khong-co' }],
+  notes: [{ guest_key: 'alt gast', note: 'VIP' }], reviews: [{ booking_id: OB, stars: 5, comment: 'Super', created_at: '2026-11-02T10:00:00Z', updated_at: '2026-11-02T10:00:00Z' }],
+  log: [{ id: 7, booking_id: OB, at: '2026-11-01T10:00:00Z', staff_name: 'Mai', kind: 'status', old_value: 'pending', new_value: 'confirmed' }],
+  staff: [{ id: 'st1', name: 'Mai' }],
+}
+ok(err(await as(M, () => q(`select nh_bk_mirror_apply($1)`, [payload]))), 'Người dùng app không gọi được hàm chép')
+const ap = await q(`select nh_bk_mirror_apply($1) r`, [payload])
+await q(`select nh_bk_mirror_apply($1) r`, [payload]) // chép lần 2 không trùng
+ok((ap[0].r as { bookings: number }).bookings === 1, 'Hàm chép ghi đơn từ app cũ')
+const mb = await q(`select b.code, b.created_by_name, b.called, (select count(*) from nh_bk_booking_tables t where t.booking_id=b.id)::int nt, (select count(*) from nh_bk_log l where l.booking_id=b.id)::int nl from nh_bk_bookings b where restaurant_id=$1`, [A])
+ok(mb.length === 1 && mb[0].code === 'VB-AAAAA' && mb[0].created_by_name === 'Mai' && mb[0].called === true && mb[0].nt === 1 && mb[0].nl === 1, 'Đơn chép giữ mã, người tạo, bàn hợp lệ, lịch sử; đơn không còn ở app cũ bị bỏ')
+const t999 = await q(`select active from nh_bk_tables where restaurant_id=$1 and id='t999'`, [A])
+ok(t999[0]?.active === false, 'Bàn không có ở app cũ chuyển sang ẩn')
+ok(msg(await save(M, 2, false, null, ['t41'], '20:00')).includes('mirror_readonly'), 'Đang chép: phụ trách không thêm đơn trong app được')
+ok(msg(await as(O, () => q(`update nh_bk_settings set duration_min = 60 where restaurant_id=$1`, [A]))).includes('mirror_readonly'), 'Đang chép: chủ không sửa cài đặt trong app được')
+ok(Number((await q(`select nh_bk_auto_arrive() n`))[0].n) === 0, 'Đang chép: không tự chuyển Đã đến ở app mới')
+
 console.log(fails ? `\n${fails} lỗi` : '\nTất cả đạt')
 process.exit(fails ? 1 : 0)
