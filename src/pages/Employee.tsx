@@ -115,6 +115,8 @@ export default function EmployeePage() {
   const [ab, setAb] = useState<{ anrede: Anrede; job: string; date: string } | null>(null)
   // Bản xem trước: chưa lưu gì cho tới khi bấm Lưu
   const [pv, setPv] = useState<{ title: string; pdf: Blob; docx?: Blob; base: string; kind: 'contract' | 'certificate'; miss?: string; saved?: boolean } | null>(null)
+  /** Chọn nhiều bảng lương để gửi WhatsApp: path → File (tải sẵn khi chọn để bấm Gửi mở bảng chia sẻ ngay) */
+  const [pick, setPick] = useState<Record<string, File | null> | null>(null)
   const [fv, setFv] = useState<{ title: string; blob: Blob; name: string; slip?: boolean } | null>(null)
   const [exitF, setExitF] = useState<{ date: string | null; reason: string } | null>(null)
 
@@ -451,6 +453,11 @@ export default function EmployeePage() {
   const viewFile = async (path: string, title: string, slip = false) => {
     setBusy(true)
     try {
+      const { blob, name } = await loadFile(path, title, slip)
+      setFv({ title, slip, blob, name })
+    } catch { openHrFile(path) } finally { setBusy(false) }
+  }
+  const loadFile = async (path: string, title: string, slip: boolean) => {
       const { data, error } = await supabase.storage.from(HR_BUCKET).download(path)
       if (error || !data) throw error || new Error('download')
       const ext = (path.split('.').pop() || 'pdf').toLowerCase()
@@ -460,32 +467,59 @@ export default function EmployeePage() {
       const per = title.match(/(\d{2})\/(\d{4})/)
       const name = slip ? [`Lohnabrechnung${per ? `_${per[1]}-${per[2]}` : ''}`, asc(e!.first_name), asc(e!.last_name)].filter(Boolean).join('_') + `.${ext}`
         : `${title.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '_')}.${ext}`
-      setFv({ title, slip, blob, name })
-    } catch { openHrFile(path) } finally { setBusy(false) }
+      return { blob, name }
   }
   /** Gửi bảng lương qua WhatsApp: gửi chính file PDF qua bảng chia sẻ của điện thoại (chọn WhatsApp, chọn người nhận).
    *  Trình duyệt không thể đưa file thẳng vào một chat WhatsApp; máy tính không chia sẻ được file nên tải file về
    *  và mở chat WhatsApp với số trong hồ sơ để đính kèm. */
-  const sendWhatsApp = async (f: { title: string; blob: Blob; name: string }) => {
-    const m = f.title.match(/(\d{2}\/\d{4})/)
-    const text = `Hallo ${(e.first_name || '').trim()}, anbei deine Lohnabrechnung${m ? ` ${m[1]}` : ''}. Viele Grüße, ${hs?.company_name || e.company || r.name}`
-    const file = new File([f.blob], f.name, { type: f.blob.type || 'application/pdf' })
+  const sendWhatsApp = (f: { title: string; blob: Blob; name: string }) =>
+    shareSlips([new File([f.blob], f.name, { type: f.blob.type || 'application/pdf' })], [f.title])
+  /** Gửi một hay nhiều bảng lương cùng lúc (một lần chia sẻ, nhiều file) */
+  const shareSlips = async (files: File[], titles: string[]) => {
+    const per = titles.map((t) => t.match(/(\d{2}\/\d{4})/)?.[1]).filter(Boolean)
+    const many = files.length > 1
+    const text = `Hallo ${(e.first_name || '').trim()}, anbei ${many ? 'deine Lohnabrechnungen' : 'deine Lohnabrechnung'}${per.length ? ` ${per.join(', ')}` : ''}. Viele Grüße, ${hs?.company_name || e.company || r.name}`
     try {
-      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], text }); return }
-    } catch (x) { if ((x as Error)?.name === 'AbortError') return }
+      if (navigator.canShare?.({ files })) { await navigator.share({ files, text }); return true }
+    } catch (x) { if ((x as Error)?.name === 'AbortError') return false }
     let ph = (e.phone || '').replace(/[^\d+]/g, '')
     if (ph.startsWith('+')) ph = ph.slice(1); else if (ph.startsWith('00')) ph = ph.slice(2); else if (ph.startsWith('0')) ph = `49${ph.slice(1)}`
-    download(f.blob, f.name)
+    files.forEach((f) => download(f, f.name))
     window.open(`https://wa.me/${ph}?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
     toast(T('Đã tải file. Đính kèm file vào WhatsApp rồi gửi.', 'Datei geladen. In WhatsApp anhängen und senden.'))
+    return true
+  }
+  const togglePick = (d: EmpDoc) => {
+    if (!pick) return
+    if (d.path in pick) { const n = { ...pick }; delete n[d.path]; setPick(n); return }
+    setPick({ ...pick, [d.path]: null }); fetchPick(d)
+  }
+  const pickAll = () => {
+    if (!pick) return
+    const miss = slips.filter((d) => !(d.path in pick))
+    setPick({ ...pick, ...Object.fromEntries(miss.map((d) => [d.path, null])) }); miss.forEach(fetchPick)
+  }
+  const fetchPick = (d: EmpDoc) => {
+    loadFile(d.path, docTitle(d), true)
+      .then(({ blob, name }) => setPick((p) => (p && d.path in p ? { ...p, [d.path]: new File([blob], name, { type: blob.type || 'application/pdf' }) } : p)))
+      .catch(() => { toast(T('Không tải được file', 'Datei nicht ladbar')); setPick((p) => { if (!p) return p; const n = { ...p }; delete n[d.path]; return n }) })
+  }
+  const sendPicked = async () => {
+    if (!pick) return
+    const sel = slips.filter((d) => d.path in pick)
+    const files = sel.map((d) => pick[d.path]).filter((f): f is File => !!f)
+    if (!files.length || files.length < sel.length) return
+    if (await shareSlips(files, sel.map(docTitle))) setPick(null)
   }
   const docRow = (d: EmpDoc) => {
     const dl = permitDaysLeft(d.valid_until)
     const slip = d.kind === 'payslip' && d.period
+    const picking = !!pick && d.kind === 'payslip'
+    const on = picking && d.path in pick!
     return (
-      <div key={d.id} className="it">
-        <button className="ghost grow" style={{ justifyContent: 'flex-start', textAlign: 'left', minWidth: 0, padding: 0 }} onClick={() => viewFile(d.path, docTitle(d), d.kind === 'payslip')}>
-          <span className="doc-ic"><GIcon k="file" /></span>
+      <div key={d.id} className={`it${on ? ' picked' : ''}`}>
+        <button className="ghost grow" style={{ justifyContent: 'flex-start', textAlign: 'left', minWidth: 0, padding: 0 }} onClick={() => (picking ? togglePick(d) : viewFile(d.path, docTitle(d), d.kind === 'payslip'))}>
+          {picking ? <span className={`pick-box${on ? ' on' : ''}`} aria-checked={on} role="checkbox">{on && '✓'}</span> : <span className="doc-ic"><GIcon k="file" /></span>}
           <div style={{ minWidth: 0 }}>
             <div className="t">{docTitle(d)}</div>
             <div className="small muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{slip ? '' : `${d.title} · `}{T('tải lên', 'hochgeladen')} {dmy(d.created_at)}</div>
@@ -497,13 +531,25 @@ export default function EmployeePage() {
             {dl != null && dl <= PERMIT_WARN_DAYS && <span className={`tag ${dl < 0 ? 'err' : 'warn'}`}>{dl < 0 ? T('hết hạn', 'abgelaufen') : `${dl} ${T('ngày', 'Tage')}`}</span>}
           </div>
         )}
-        <button className="ghost" onClick={() => delDoc(d)} aria-label="delete">✕</button>
+        {!picking && <button className="ghost" onClick={() => delDoc(d)} aria-label="delete">✕</button>}
       </div>
     )
   }
-  const folder = (title: string, list: EmpDoc[], open: boolean) => (
+  const nPick = pick ? Object.keys(pick).length : 0
+  const pickReady = !!pick && nPick > 0 && Object.values(pick).every(Boolean)
+  const folder = (title: string, list: EmpDoc[], open: boolean, slipBar = false) => (
     <details className="folder" open={open}>
       <summary><GIcon k="folder" /> {title} <span className="muted">({list.length})</span></summary>
+      {slipBar && list.length > 0 && (
+        <div className="pick-bar">
+          {pick ? <>
+            <button onClick={() => setPick(null)}>{T('Hủy', 'Abbrechen')}</button>
+            <button onClick={() => (nPick === list.length ? setPick({}) : pickAll())}>{nPick === list.length ? T('Bỏ chọn', 'Keine') : T('Chọn tất cả', 'Alle')}</button>
+            <button className="primary grow" disabled={!pickReady} onClick={sendPicked}>
+              {nPick && !pickReady ? T('Đang chuẩn bị…', 'Wird vorbereitet…') : `${T('Gửi qua WhatsApp', 'Per WhatsApp senden')}${nPick ? ` (${nPick})` : ''}`}
+            </button>
+          </> : <button className="grow" onClick={() => setPick({})}>{T('Chọn nhiều bảng lương để gửi WhatsApp', 'Mehrere per WhatsApp senden')}</button>}
+        </div>)}
       {list.length ? <div className="list">{list.map(docRow)}</div> : <div className="small muted" style={{ padding: '6px 12px 12px' }}>{T('Chưa có', 'Leer')}</div>}
     </details>
   )
@@ -748,7 +794,7 @@ export default function EmployeePage() {
     <Group icon={<GIcon k="folder" />} title={`${T('Tài liệu', 'Dokumente')}${o.acc ? ` (${docs.length})` : ''}`} {...(o.acc ? sec('docs') : {})}>
       {uploadBox}
       {folder(T('Giấy tờ cá nhân', 'Persönliche Dokumente'), personalDocs, true)}
-      {folder(T('Bảng lương', 'Lohnabrechnungen'), slips, false)}
+      {folder(T('Bảng lương', 'Lohnabrechnungen'), slips, false, true)}
     </Group>
   )
   // Các thao tác xuất tài liệu (máy tính: nút riêng, điện thoại: menu ⋯)

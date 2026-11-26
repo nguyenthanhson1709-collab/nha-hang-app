@@ -631,3 +631,9 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 @media (max-width: 340px) { .pf .kv { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 640px) { .nav-logo.hide-m { display: none; } }
 @media (max-width: 640px) { #root:has(.nav-logo.hide-m) { padding-bottom: 0; } }
+/* Chọn nhiều bảng lương để gửi WhatsApp */
+.pick-bar { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--line, rgba(127,127,127,.25)); flex-wrap: wrap; }
+.pick-bar button { min-height: 44px; }
+.pick-box { width: 24px; height: 24px; flex: none; border-radius: 6px; border: 2px solid var(--muted, #888); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; color: #15120F; margin-right: 10px; }
+.pick-box.on { background: var(--brand, #FF9018); border-color: var(--brand, #FF9018); }
+.it.picked { background: rgb(255 144 24 / .08); }
