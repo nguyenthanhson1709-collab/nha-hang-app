@@ -52,6 +52,33 @@ const SEGMENT = obj({
   }) },
 });
 
+// Kassenbon/Rechnung der eigenen Restaurantkasse -> Positionen für eine neue Rechnung
+const KASSE = obj({
+  doc_date: { ...nStr, description: "Datum des Bons YYYY-MM-DD" },
+  receipt_no: { ...nStr, description: "Rechnungs-/Bonnummer der Kasse" },
+  table: { ...nStr, description: "Tischnummer, falls gedruckt" },
+  gross: { ...num, description: "Endbetrag brutto (Total/Summe), OHNE Trinkgeld" },
+  tip: { ...num, description: "Trinkgeld, 0 wenn nicht vorhanden" },
+  taxes: { type: "array", items: obj({ rate: { type: "number", enum: [0, 7, 19] }, net: num, tax: num, gross: num }) },
+  lines: { type: "array", items: obj({
+    qty: { ...num, description: "Menge vor dem x, z.B. 4 bei '4x'" },
+    number: { ...nStr, description: "Artikelnummer der Kasse in Klammern, z.B. '467' bei '(467) Bier Klein'; null wenn keine" },
+    name: { type: "string", description: "Artikelname ohne Menge und ohne die Nummer in Klammern" },
+    unit_price: { ...num, description: "Preis pro Stück brutto ('Preis pro Stück'), sonst Zeilenbetrag / Menge" },
+    total: { ...num, description: "Zeilenbetrag brutto" },
+    rate: { type: "number", enum: [0, 7, 19], description: "Steuersatz über den Buchstaben am Zeilenende (A/B) und die MwSt-Legende" },
+  }) },
+});
+
+const PROMPT_KASSE = `Du liest einen Bon/eine Rechnung aus der Kasse eines deutschen Restaurants (Scan oder Foto, evtl. sehr lang).
+Daraus wird eine ordentliche Rechnung geschrieben, deshalb müssen ALLE Positionen vollständig und exakt übernommen werden.
+- Jede Artikelzeile "Nx (Nummer) Name  Betrag EUR A" ist eine Position, auch wenn derselbe Artikel mehrmals untereinander steht (nicht zusammenfassen, nichts auslassen).
+- "(Preis pro Stück = 4,20 EUR)" gehört zur Zeile darüber und ist deren unit_price.
+- rate: Buchstaben über die MwSt-Legende zuordnen (z.B. "MwSt. A 7%", "MwSt. B 19%").
+- gross = Total/Summe des Bons. Trinkgeld, TSE-Daten, QR-Code und den Bewirtungsbeleg ignorieren (Trinkgeld nur in tip).
+- Prüfe: Summe aller Zeilenbeträge = gross. Wenn nicht, lies die Zeilen noch einmal.
+- Datum im deutschen Format TT.MM.JJJJ.`;
+
 const PROMPT_SEG = (n: number) => `Dieses PDF hat ${n} Seiten und enthält einen oder mehrere Belege hintereinander (Eingangsrechnungen, Kassenbons oder Z-Berichte/Tagesabschlüsse einer Kasse; bei Z-Berichten zählt jeder Geschäftstag als ein Beleg).
 Bestimme, welche Seiten zu welcher Rechnung gehören. WICHTIG: Eine Rechnung kann mehrere Seiten haben ("Seite 2 von 3", "Übertrag", gleiche Rechnungsnummer, Endsumme erst auf der letzten Seite, Folgeseite ohne Kopf). Folgeseiten gehören zur selben Rechnung, nicht jede Seite ist eine eigene Rechnung.
 Leere Seiten, Deckblätter oder AGB-Seiten gehören zur vorherigen Rechnung (oder werden weggelassen, wenn davor keine ist).
@@ -103,14 +130,14 @@ Deno.serve(async (req) => {
       f.type === "application/pdf"
         ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: f.data } }
         : { type: "image", source: { type: "base64", media_type: (["image/png", "image/webp", "image/gif"].includes(f.type) ? f.type : "image/jpeg") as "image/jpeg", data: f.data } });
-    content.push({ type: "text", text: kind === "zbon" ? PROMPT_Z(map) : kind === "segment" ? PROMPT_SEG(pages || 0) : PROMPT_INV });
+    content.push({ type: "text", text: kind === "zbon" ? PROMPT_Z(map) : kind === "segment" ? PROMPT_SEG(pages || 0) : kind === "kasse" ? PROMPT_KASSE : PROMPT_INV });
 
     const client = new Anthropic({ apiKey: key });
     const msg = await client.messages.create({
       model: MODEL,
-      max_tokens: 8000,
+      max_tokens: kind === "kasse" ? 16000 : 8000,
       thinking: { type: "between_tools" },
-      output_config: { effort: "medium", format: { type: "json_schema", schema: kind === "zbon" ? ZBON : kind === "segment" ? SEGMENT : INVOICE } },
+      output_config: { effort: "medium", format: { type: "json_schema", schema: kind === "zbon" ? ZBON : kind === "segment" ? SEGMENT : kind === "kasse" ? KASSE : INVOICE } },
       messages: [{ role: "user", content }],
     } as never) as Anthropic.Message;
     if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") return json({ error: msg.stop_reason }, 502);

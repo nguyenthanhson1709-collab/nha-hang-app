@@ -48,7 +48,7 @@ export async function prepareForAi(files: F[]): Promise<F[]> {
   return use
 }
 
-async function call<T>(kind: 'invoice' | 'zbon' | 'segment', rid: string, files: F[], pages?: number): Promise<T | null> {
+async function call<T>(kind: 'invoice' | 'zbon' | 'segment' | 'kasse', rid: string, files: F[], pages?: number): Promise<T | null> {
   let use: F[]
   try { use = await prepareForAi(files) } catch (e) { console.warn('nh-read prepare', e); return null }
   if (!use.length) return null
@@ -126,4 +126,11 @@ export async function fillUnits(d: { restaurant_id: string; files: string[]; nh_
     Object.assign(l, patch); n++
   }
   return n
+}
+
+export type KasseLine = { qty: number; number: string | null; name: string; unit_price: number; total: number; rate: number }
+export type KasseReceipt = { doc_date: string | null; receipt_no: string | null; table: string | null; gross: number; tip: number; taxes: { rate: number; net: number; tax: number; gross: number }[]; lines: KasseLine[] }
+/** Đọc hoá đơn in từ máy Kasse của quán (để viết lại thành Rechnung). null khi lỗi. */
+export async function aiReadKasse(rid: string, files: { blob: Blob; type: string }[]): Promise<KasseReceipt | null> {
+  return call<KasseReceipt>('kasse', rid, files)
 }

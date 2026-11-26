@@ -12,6 +12,8 @@ import { fillTemplate } from '../template'
 import { LANGS, companyText, type Lang } from '../pdfText'
 import { pdfFilename } from '../docname'
 import { InvShell, StatusBadge, useL } from '../ui'
+import { kasseToItems } from '../kasse'
+import { aiReadKasse, lastAiError } from '../../lib/ai'
 import PdfSheet from '../../components/PdfSheet'
 
 // PDF tải lười (chunk riêng) vì @react-pdf/renderer khá nặng
@@ -125,6 +127,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
   const [err, setErr] = useState('')
   const [ok, setOk] = useState('')
   const [busy, setBusy] = useState(false)
+  const [reading, setReading] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [custEmail, setCustEmail] = useState('')
   const [mail, setMail] = useState<{ to: string; subject: string; body: string } | null>(null)
@@ -180,6 +183,25 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
       return [...list, { ...emptyItem(), article_id: a.id, name: label, description: a.description, unit: a.unit, unit_price_gross: a.price_gross, tax_rate: a.tax_rate }]
     })
     setDirty(true)
+  }
+  /** Đọc hoá đơn in từ máy Kasse (PDF / ảnh) và điền món, giá, thuế, ngày */
+  async function readKasse(files: File[]) {
+    if (!files.length) return
+    setErr(''); setOk(''); setReading(true)
+    try {
+      const r = await aiReadKasse(rid!, files.map((f) => ({ blob: f, type: f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : 'image/jpeg') })))
+      if (!r || !r.lines?.length) throw new Error(L(`Không đọc được hoá đơn Kasse. ${lastAiError}`, `Kassenbon konnte nicht gelesen werden. ${lastAiError}`))
+      const got = kasseToItems(r.lines, articles)
+      setItems((list) => [...list, ...got].map((it, j) => ({ ...it, position: j + 1 })))
+      if (r.doc_date && !isQuote) setInvoice((i) => ({ ...i, delivery_type: 'service_date', delivery_date: r.doc_date, delivery_end: null }))
+      setDirty(true)
+      const sum = round2(got.reduce((s, it) => s + it.quantity * it.unit_price_gross, 0))
+      const match = Math.abs(sum - round2(r.gross || 0)) < 0.01
+      const head = L(`Đã đọc ${r.lines.length} dòng từ hoá đơn Kasse${r.receipt_no ? ` ${r.receipt_no}` : ''}${r.doc_date ? ` (${fmtDate(r.doc_date)})` : ''}, gộp thành ${got.length} món.`,
+        `${r.lines.length} Positionen vom Kassenbon${r.receipt_no ? ` ${r.receipt_no}` : ''}${r.doc_date ? ` (${fmtDate(r.doc_date)})` : ''} übernommen, zusammengefasst zu ${got.length}.`)
+      if (match) setOk(`${head} ${L(`Tổng ${fmtEur(sum)} khớp với Kasse.`, `Summe ${fmtEur(sum)} stimmt mit der Kasse überein.`)}`)
+      else setErr(`${head} ${L(`Tổng các món ${fmtEur(sum)} KHÁC tổng trên Kasse ${fmtEur(r.gross)}: hãy so lại từng dòng.`, `Summe ${fmtEur(sum)} weicht vom Kassenbon ${fmtEur(r.gross)} ab: bitte Positionen prüfen.`)}`)
+    } catch (e) { setErr((e as Error).message) } finally { setReading(false) }
   }
   function pickCustomer(c: Customer) {
     setInvoice((i) => ({ ...i, customer_id: c.id, customer_snapshot: snapshotOf(c) })); setCustEmail(c.emails ?? ''); setDirty(true)
@@ -439,6 +461,10 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
             </div>
             <label className="chk"><input type="checkbox" checked={lunch} onChange={(e) => setLunch(e.target.checked)} /> {L('Giá trưa (Mittag)', 'Mittagspreis')}</label>
             <button onClick={() => { setItems((l) => [...l, emptyItem()]); setDirty(true) }}>+ {L('Dòng tự do', 'Freie Position')}</button>
+            <label className={`btn${reading ? ' disabled' : ''}`} title={L('Tải hoá đơn PDF hoặc ảnh từ máy Kasse, app tự điền món', 'Kassenbon (PDF/Foto) hochladen, Positionen werden übernommen')}>
+              {reading ? L('Đang đọc…', 'Wird gelesen…') : `📄 ${L('Từ hoá đơn Kasse', 'Aus Kassenbon')}`}
+              <input type="file" accept="application/pdf,image/*" multiple hidden disabled={reading} onChange={(e) => { readKasse([...(e.target.files ?? [])]); e.target.value = '' }} />
+            </label>
           </div>
         )}
         {!locked && !articles.length && <p className="muted small">{L('Chưa có món nào. Thêm món ở mục "Món & dịch vụ" hoặc nhập từ Lexware trong Cài đặt; vẫn dùng được "Dòng tự do".', 'Noch keine Artikel. Unter „Artikel" anlegen oder in den Einstellungen aus Lexware importieren; „Freie Position" geht immer.')}</p>}
