@@ -44,8 +44,10 @@ function openFresh(start: string) {
 
 // Logo Vietbowl nổi ở đáy mọi trang: bấm để về nhanh trang chủ (của quán đang xem, hoặc trang đầu)
 function HomeNav({ start }: { start: string }) {
-  const m = useLocation().pathname.match(/^\/r\/([^/]+)/)
-  return <BottomNav to={m ? `/r/${m[1]}` : start} />
+  const path = useLocation().pathname
+  const m = path.match(/^\/r\/([^/]+)/)
+  // Hồ sơ nhân viên trên điện thoại: ẩn logo để không che nội dung (người dùng yêu cầu 26/11/2026)
+  return <BottomNav to={m ? `/r/${m[1]}` : start} hideMobile={/^\/r\/[^/]+\/hr\/[^/]+$/.test(path)} />
 }
 
 function RestLayout({ children }: { children: React.ReactNode }) {
