@@ -20,3 +20,20 @@ export function Clock() {
     </span>
   )
 }
+
+/** Ngày + giờ gọn cho thanh tiêu đề: "Thứ Năm, 26.11.2026 · 01:48" (chỉ giờ:phút) */
+export function ClockShort() {
+  const { lang } = useLang()
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => { const id = setInterval(() => setNow(new Date()), 10000); return () => clearInterval(id) }, [])
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Berlin', weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(now).map((x) => [x.type, x.value]))
+  const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(p.weekday)
+  return (
+    <span className="hclock">
+      <span className="hclock-d">{(lang === 'de' ? DE : VI)[wd]}, {p.day}.{p.month}.{p.year}</span>
+      <b>{p.hour}:{p.minute}</b>
+    </span>
+  )
+}

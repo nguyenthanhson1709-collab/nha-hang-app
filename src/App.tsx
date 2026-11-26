@@ -37,8 +37,8 @@ function openFresh(start: string) {
 
 function RestLayout({ children }: { children: React.ReactNode }) {
   const { rid } = useParams()
-  // Hồ sơ nhân viên: bỏ logo nổi ở đáy để không che nội dung
-  const noNav = /\/hr\/[^/]+$/.test(useLocation().pathname)
+  // Nhân sự và hồ sơ nhân viên: bỏ logo nổi ở đáy để không che danh sách
+  const noNav = /\/hr(\/[^/]+)?$/.test(useLocation().pathname)
   return <>{children}{!noNav && <BottomNav rid={rid!} />}</>
 }
 
