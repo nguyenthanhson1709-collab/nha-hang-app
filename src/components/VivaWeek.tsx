@@ -82,7 +82,7 @@ export function VivaWeek({ rid, start, vivaMode, open, onClose, onSaved }: { rid
         <button className={vivaMode ? 'sel' : ''} disabled={!profile.is_owner || modeBusy} onClick={() => setMode('viva')}>{lang === 'de' ? 'lt. Viva Wallet' : 'Theo Viva Wallet'}</button>
       </div>
       <div className={`small ${vivaMode ? 'muted' : 'alert warn'}`} style={{ marginBottom: 10 }}>{vivaMode
-        ? (lang === 'de' ? 'Kassenbuch: Kartenzahlung lt. Z-Bon, Trinkgeld = Viva Wallet − Kreditzahlung Z-Bon.' : 'Kassenbuch: Kartenzahlung theo Z-Bon, Trinkgeld = Viva Wallet − thẻ trên Z-Bon.')
+        ? (lang === 'de' ? 'Kassenbuch: Kartenzahlung = Viva Wallet, Trinkgeld lt. Z-Bon direkt darunter.' : 'Kassenbuch: Kartenzahlung = số Viva Wallet, Trinkgeld theo Z-Bon ghi ngay dưới.')
         : (lang === 'de' ? 'Das Kassenbuch rechnet gerade lt. Z-Bon: Viva-Beträge werden gespeichert, aber nicht verwendet.' : 'Kassenbuch đang tính theo Z-Bon: số Viva vẫn được lưu nhưng chưa được dùng. Bấm "Theo Viva Wallet" để áp dụng.')}</div>
       <WeekBar value={mon} onChange={setMon} />
       {!orig ? <Spinner /> : <>
@@ -97,7 +97,7 @@ export function VivaWeek({ rid, start, vivaMode, open, onClose, onSaved }: { rid
                 <div className="vw-in">
                   <Money value={val[d] || 0} disabled={lk} onChange={(v) => setVal((s) => ({ ...s, [d]: v }))} />
                   {(zc != null || lk) && <div className="small muted">
-                    {lk ? '🔒 ' : ''}{zc != null && <>Z-Bon Karte {eur(zc)}{vivaMode && tip != null && <> · Trinkgeld {eur(Math.max(0, tip))}</>}</>}
+                    {lk ? '🔒 ' : ''}{zc != null && <>Z-Bon Karte {eur(zc)}{vivaMode && tip != null && <> · {lang === 'de' ? 'Differenz' : 'Chênh lệch'} {eur(tip)}</>}</>}
                   </div>}
                 </div>
               </div>
