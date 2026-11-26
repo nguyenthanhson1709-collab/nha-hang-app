@@ -291,6 +291,8 @@ export default function EmployeePage() {
     if (k === 'work_permitted' || k === 'multiple_employment') return v ? T('Có', 'Ja') : T('Không', 'Nein')
     if (k === 'job_title') return de || !jobInfo(String(v)) ? String(v) : `${jobInfo(String(v))![1]} · ${v}`
     if (k === 'weekly_hours') return `${String(v).replace('.', ',')} ${T('giờ / tuần', 'Std. / Woche')}`
+    if (k === 'work_days') return `${String(v).replace('.', ',')} ${T('ngày / tuần', 'Tage / Woche')}`
+    if (k === 'daily_hours') return `${String(v).replace('.', ',')} ${T('giờ / ngày', 'Std. / Tag')}`
     if (k === 'vacation_days') return `${String(v).replace('.', ',')} ${T('ngày / năm', 'Tage / Jahr')}`
     return String(v)
   }
@@ -299,7 +301,7 @@ export default function EmployeePage() {
     nationality: L('Quốc tịch', 'Nationalität'), address: L('Địa chỉ', 'Anschrift'), phone: L('Điện thoại', 'Telefon'), email: 'E-Mail',
     residence_permit: L('Giấy phép cư trú', 'Aufenthaltstitel'), residence_permit_until: L('Hết hạn ngày', 'gültig bis'), work_permitted: L('Được phép làm việc', 'Erwerbstätigkeit gestattet'),
     company: L('Công ty', 'Firma'), personnel_no: L('Mã nhân viên', 'Personal-Nr.'), entry_date: L('Ngày vào làm', 'Eintrittsdatum'), job_title: L('Vị trí', 'Tätigkeit'),
-    employment_type: L('Hợp đồng', 'Beschäftigungsart'), weekly_hours: L('Giờ làm', 'Arbeitszeit'), gross_monthly: L('Lương tháng', 'Monatslohn'),
+    employment_type: L('Hợp đồng', 'Beschäftigungsart'), weekly_hours: L('Giờ làm', 'Arbeitszeit'), work_days: L('Ngày làm', 'Arbeitstage'), daily_hours: L('Giờ mỗi ngày', 'tägl. Arbeitszeit'), gross_monthly: L('Lương tháng', 'Monatslohn'),
     hourly_wage: L('Lương giờ', 'Stundenlohn'), vacation_days: L('Ngày phép', 'Urlaubsanspruch'), multiple_employment: L('Làm thêm nơi khác', 'Mehrfachbeschäftigung'),
     tax_id: L('Mã số thuế', 'Steuer-ID'), pension_no: L('Số BH hưu trí', 'RV-Nummer'), tax_class: L('Bậc thuế', 'Steuerklasse'),
     health_insurance: L('Bảo hiểm y tế', 'Krankenkasse'), iban: 'IBAN', bic: 'BIC', bank_name: L('Ngân hàng', 'Bank'), note: L('Ghi chú', 'Notiz'),
@@ -315,7 +317,7 @@ export default function EmployeePage() {
     residence: { title: T('Cư trú và lao động', 'Aufenthalt und Erwerbstätigkeit'), icon: 'shield', fields: [
       { k: 'residence_permit' }, { k: 'residence_permit_until' }, { k: 'work_permitted' }] },
     pay: { title: T('Lương và giờ làm', 'Vergütung und Arbeitszeit'), icon: 'wallet', fields: [
-      { k: 'gross_monthly' }, { k: 'hourly_wage' }, { k: 'weekly_hours' }] },
+      { k: 'gross_monthly' }, { k: 'hourly_wage' }, { k: 'weekly_hours' }, { k: 'work_days' }, { k: 'daily_hours' }] },
     tax: { title: T('Thuế và bảo hiểm', 'Steuer und Sozialversicherung'), icon: 'shield', fields: [
       { k: 'tax_id', fixed: true }, { k: 'pension_no', fixed: true }, { k: 'tax_class' }, { k: 'health_insurance' }] },
     bank: { title: T('Tài khoản ngân hàng', 'Bankverbindung'), icon: 'bank', fields: [{ k: 'iban' }, { k: 'bic' }, { k: 'bank_name' }] },
@@ -397,7 +399,7 @@ export default function EmployeePage() {
           {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}
         </select>)
       case 'gross_monthly': case 'hourly_wage': return <Money value={(v as number) ?? null} onChange={(x) => up({ [k]: x || null } as Partial<Employee>)} />
-      case 'weekly_hours': case 'vacation_days': return <input inputMode="decimal" value={v == null ? '' : String(v).replace('.', ',')} onChange={(ev) => up({ [k]: ev.target.value.trim() ? parseNum(ev.target.value) : null } as Partial<Employee>)} />
+      case 'weekly_hours': case 'vacation_days': case 'work_days': case 'daily_hours': return <input inputMode="decimal" value={v == null ? '' : String(v).replace('.', ',')} onChange={(ev) => up({ [k]: ev.target.value.trim() ? parseNum(ev.target.value) : null } as Partial<Employee>)} />
       case 'address': case 'note': return <textarea rows={2} value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
       case 'phone': return <input type="tel" value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
       case 'email': return <input type="email" value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
@@ -559,7 +561,7 @@ export default function EmployeePage() {
   const CNAMES: Record<string, string> = { name: T('họ tên', 'Name'), address: T('địa chỉ', 'Anschrift'), entry_date: T('ngày vào làm', 'Eintritt'), gross_monthly: T('lương brutto', 'Bruttolohn'), weekly_hours: T('giờ/tuần', 'Wochenstunden'), vacation_days: T('ngày phép', 'Urlaubstage'), job: T('công việc', 'Tätigkeit') }
   function makeContract() {
     if (e!.employment_type === 'minijob') { toast(T('Hợp đồng Minijob dùng mẫu riêng. Gửi mẫu Minijob để thêm vào app.', 'Für Minijobs gibt es einen eigenen Vertrag (Vorlage fehlt noch).')); return }
-    setCv({ job: e!.job_title || '', days: guessDays(e!.weekly_hours != null ? Number(e!.weekly_hours) : null) })
+    setCv({ job: e!.job_title || '', days: e!.work_days != null && Number(e!.work_days) >= 2 && Number(e!.work_days) <= 6 ? Number(e!.work_days) : guessDays(e!.weekly_hours != null ? Number(e!.weekly_hours) : null) })
   }
   async function doContract() {
     if (!cv) return
