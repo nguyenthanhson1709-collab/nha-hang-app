@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ClockShort } from '../components/Clock'
+import { LangSwitch } from '../components/LangSwitch'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase, type Doc } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
@@ -87,7 +88,7 @@ export default function Home() {
   return (
     <>
       <Top title={r.name} back={profile.is_owner ? '/restaurants' : undefined}
-        right={<div className="hd-right"><ClockShort /><Link className="btn hd-gear" to={m ? `/r/${rid}/settings` : '/settings'} aria-label={t('settings')} title={t('settings')}><Lucide k="settings" /></Link></div>} />
+        right={<div className="hd-right"><ClockShort /><LangSwitch /><Link className="btn hd-gear" to={m ? `/r/${rid}/settings` : '/settings'} aria-label={t('settings')} title={t('settings')}><Lucide k="settings" /></Link></div>} />
       <div className="page dash">
         <div className="dash-grid">
           {tiles.map((x) => (

@@ -475,3 +475,9 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
   .st-type b { grid-row: 1; grid-column: 2; text-align: left; }
   .st-type-l { grid-row: 2; grid-column: 1 / -1; white-space: normal; font-size: .75rem; line-height: 1.2; }
 }
+.lang-sw { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.lang-sw button { min-height: 36px; min-width: 40px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-size: .8rem; font-weight: 700; letter-spacing: .03em; }
+.lang-sw button.on { background: var(--brand); color: var(--on-brand); }
+.lang-sw button:not(.on):hover { color: var(--text); }
+@media (max-width: 420px) { .hd-right { gap: 6px; } .lang-sw button { min-width: 34px; padding: 0 7px; } }
+@media (max-width: 420px) { .lang-sw { padding: 2px; } .lang-sw button { min-width: 28px; min-height: 32px; padding: 0 5px; font-size: .72rem; } .top h1 { font-size: 1.12rem; } }
