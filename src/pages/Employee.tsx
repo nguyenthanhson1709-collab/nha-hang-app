@@ -307,7 +307,7 @@ export default function EmployeePage() {
   )
   const active = isActive(e)
 
-  // ===== Hồ sơ đã có: xem theo nhóm; mỗi nhóm một nút Sửa (Lưu / Hủy). Mục cố định chỉ bổ sung được khi còn trống.
+  // ===== Hồ sơ đã có: xem theo nhóm; mỗi nhóm một nút Sửa (Lưu / Hủy). Mọi mục đều sửa được.
   const show = (k: K): string => {
     const v = e[k]
     if (v == null || v === '') return ''
@@ -358,7 +358,8 @@ export default function EmployeePage() {
     leave: { title: T('Phép năm', 'Urlaubsanspruch'), icon: 'calendar', fields: [{ k: 'vacation_days' }, { k: 'vacation_year' }, { k: 'vacation_left' }] },
     note: { title: T('Ghi chú', 'Notiz'), icon: 'note', fields: [{ k: 'note', full: true }] },
   }
-  const editable = (f: FD) => !f.fixed || e[f.k] == null || e[f.k] === ''
+  // Người dùng yêu cầu (26/11): bấm Sửa thì sửa được toàn bộ thông tin, không còn mục khoá
+  const editable = (_f: FD) => true
   const sub = (k: K) => (!de && k === 'residence_permit' && permitInfo(e.residence_permit) ? permitInfo(e.residence_permit)![1] : null)
   const group = (id: GroupId, o: { flat?: boolean; acc?: boolean; extra?: ReactNode } = {}) => {
     const G = GROUPS[id]
