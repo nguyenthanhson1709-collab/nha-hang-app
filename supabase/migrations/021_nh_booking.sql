@@ -1,4 +1,4 @@
--- 020: Module Đặt bàn (Reservierungen), ghép từ app đặt bàn Vietbowl Potsdamer Platz (Supabase cũ sfeqtlqibaiptnkkjecw).
+-- 021: Module Đặt bàn (Reservierungen), ghép từ app đặt bàn Vietbowl Potsdamer Platz (Supabase cũ sfeqtlqibaiptnkkjecw).
 -- Mọi bảng có restaurant_id; quyền theo thành viên quán:
 --   thành viên (nh_is_member)  = xem đơn, tạo/sửa đơn, đổi trạng thái, chọn bàn, ghi chú khách
 --   chủ + người phụ trách (nh_can_manage) = cài đặt, sơ đồ bàn, luật cao điểm, đánh giá, lịch sử thao tác, xoá đơn, vượt giới hạn cao điểm

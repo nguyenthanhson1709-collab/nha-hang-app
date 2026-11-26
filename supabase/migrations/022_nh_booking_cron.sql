@@ -1,4 +1,4 @@
--- 021: Việc chạy nền của module Đặt bàn (pg_cron):
+-- 022: Việc chạy nền của module Đặt bàn (pg_cron):
 --   mỗi phút: đơn đã xác nhận tự chuyển "Đã đến" sau N phút (theo cài đặt từng quán)
 --   9:00 Berlin (8:00 UTC): xếp email mời đánh giá cho khách hôm qua (chỉ quán đã bật nhận khách online)
 --   4:30 UTC: xoá đơn cũ hơn 12 tháng (GDPR)
