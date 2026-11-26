@@ -152,3 +152,6 @@ table.rc-tab { width: 100%; border-collapse: collapse; }
 .rc-link { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
 .rc-found { display: flex; flex-direction: column; gap: 4px; max-height: 280px; overflow: auto; }
 .rc-found button { justify-content: space-between; text-align: left; min-height: 40px; padding: 6px 10px; }
+.rc-drop-hint { font-size: .75rem; opacity: .8; }
+.rc-photo-in.drag-over .rc-photo-btn, .rc-photo-in.drag-over > button.small { border-color: var(--brand); border-style: solid; background: var(--brand-2); }
+.rc-photo-in.drag-over { outline: none !important; background: none !important; }
