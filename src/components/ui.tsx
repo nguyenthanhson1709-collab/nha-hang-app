@@ -6,10 +6,10 @@ import { parseNum } from '../lib/format'
 
 export function Spinner() { return <div className="center"><div className="spinner" /></div> }
 
-export function Top({ title, sub, back, right, onBack }: { title: string; sub?: ReactNode; back?: string | boolean; right?: ReactNode; onBack?: () => void }) {
+export function Top({ title, sub, back, right, onBack, className }: { title: string; sub?: ReactNode; back?: string | boolean; right?: ReactNode; onBack?: () => void; className?: string }) {
   const nav = useNavigate()
   return (
-    <div className="top">
+    <div className={`top${className ? ` ${className}` : ''}`}>
       {(back || onBack) && <button className="back-btn" aria-label="back" onClick={() => (onBack ? onBack() : typeof back === 'string' ? nav(back) : nav(-1))}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 5l-7 7 7 7" /></svg></button>}
       <div className="grow">
         <h1 className="top-title">{title}</h1>
@@ -32,10 +32,10 @@ export const Icon = ({ k }: { k: keyof typeof I }) => (
 )
 
 /** Thanh dưới cùng: chỉ một nút về trang chủ của quán, hiển thị logo Vietbowl */
-export function BottomNav({ to }: { to: string }) {
+export function BottomNav({ to, hideMobile }: { to: string; hideMobile?: boolean }) {
   const t = useT()
   return (
-    <nav className="nav nav-logo"><div className="in">
+    <nav className={`nav nav-logo${hideMobile ? ' hide-m' : ''}`}><div className="in">
       <NavLink to={to} end aria-label={t('home')}><img src={`${import.meta.env.BASE_URL}logo-vietbowl-round.webp`} alt="Vietbowl" /></NavLink>
     </div></nav>
   )
