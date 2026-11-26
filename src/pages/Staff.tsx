@@ -7,6 +7,7 @@ import { useLang } from '../lib/i18n'
 import { dmy } from '../lib/format'
 import { EMP_TYPES, fullName, HR_BUCKET, isActive, permitDaysLeft, PERMIT_WARN_DAYS, type EmpType, type Employee, type HrSettings } from '../lib/hr'
 import { Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
+import { LangSwitch } from '../components/LangSwitch'
 
 type Row = Employee & { id: string }
 type Filter = 'all' | 'active' | 'left'
@@ -108,12 +109,20 @@ export default function Staff() {
   return (
     <>
       <Top title={T('Nhân sự', 'Personal')} sub={hs?.company_name || r.name} back={`/r/${rid}`}
-        right={<button className="btn st-gear" onClick={() => setEditCo(hs?.company_name || '')} aria-label={T('Cài đặt', 'Einstellungen')} title={T('Cài đặt', 'Einstellungen')}><SIcon k="gear" /></button>} />
+        right={<div className="hd-right"><LangSwitch /><button className="btn st-gear" onClick={() => setEditCo(hs?.company_name || '')} aria-label={T('Cài đặt', 'Einstellungen')} title={T('Cài đặt', 'Einstellungen')}><SIcon k="gear" /></button></div>} />
       <div className="page st">
         <div className="st-stats">
           {stat('all', 'users', all.length, T('Tổng nhân viên', 'Mitarbeiter gesamt'))}
           {stat('active', 'active', active.length, T('Đang làm', 'Aktiv'))}
           {stat('left', 'left', left, T('Đã nghỉ', 'Ausgeschieden'))}
+        </div>
+        <div className="st-types">
+          {(['vollzeit', 'teilzeit', 'minijob'] as EmpType[]).map((k) => (
+            <button key={k} className={`st-type${filter === 'active' && ctype === k ? ' on' : ''}`} onClick={() => { const on = filter === 'active' && ctype === k; setFilter('active'); setCtype(on ? '' : k) }}
+              title={T('Nhân viên đang làm theo loại hợp đồng', 'Aktive Mitarbeiter nach Beschäftigungsart')}>
+              <span className={`dot ct-${k}`} /><span className="st-type-l">{EMP_TYPES[k][li]}</span><b className={`ct ct-${k}`}>{list ? active.filter((e) => e.employment_type === k).length : '–'}</b>
+            </button>
+          ))}
         </div>
 
         {expiring.length > 0 && (
