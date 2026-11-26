@@ -8,6 +8,8 @@ import { dmy } from '../lib/format'
 import { EMP_TYPES, fullName, HR_BUCKET, isActive, permitDaysLeft, PERMIT_WARN_DAYS, type EmpType, type Employee, type HrSettings } from '../lib/hr'
 import { Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
 import { LangSwitch } from '../components/LangSwitch'
+import { dropProps } from '../lib/drop'
+import type { SlipResult } from '../lib/payslipImport'
 
 type Row = Employee & { id: string }
 type Filter = 'all' | 'active' | 'left'
@@ -22,6 +24,7 @@ const SI = {
   gear: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></>,
   search: <><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></>,
   chev: <path d="M9 6l6 6-6 6" />,
+  upload: <><path d="M12 15V4M7 9l5-5 5 5" /><path d="M5 15v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4" /></>,
 }
 function SIcon({ k }: { k: keyof typeof SI }) {
   return <svg className="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{SI[k]}</svg>
@@ -43,6 +46,7 @@ export default function Staff() {
   const [sort, setSort] = useState<Sort>('pnr')
   const [q, setQ] = useState('')
   const [editCo, setEditCo] = useState<string | null>(null)
+  const [imp, setImp] = useState<{ busy: boolean; prog: string; res: SlipResult[] | null } | null>(null)
   const [stickTop, setStickTop] = useState(0)
 
   const load = () => {
@@ -99,6 +103,16 @@ export default function Staff() {
     setHs(data as HrSettings); setEditCo(null); toast(de ? 'Gespeichert' : 'Đã lưu')
   }
 
+  async function importSlips(fl: FileList | File[]) {
+    const files = Array.from(fl)
+    if (!files.length) return
+    setImp({ busy: true, prog: T('Đang đọc bảng lương…', 'Lohnabrechnungen werden gelesen…'), res: null })
+    try {
+      const { importMonthlyPayslips } = await import('../lib/payslipImport')
+      const res = await importMonthlyPayslips(rid!, all, files, (d, n) => setImp({ busy: true, prog: `${d} / ${n}`, res: null }))
+      setImp({ busy: false, prog: '', res })
+    } catch (x) { toast(errMsg(x)); setImp({ busy: false, prog: '', res: null }) }
+  }
   const initials = (e: Row) => [e.first_name, e.last_name].map((x) => (x || '').trim()[0] || '').join('').toUpperCase() || '?'
   const stat = (k: Filter, icon: keyof typeof SI, n: number, l: string) => (
     <button className={`st-stat ${k}${filter === k ? ' on' : ''}`} onClick={() => setFilter(k)} aria-pressed={filter === k}>
@@ -138,6 +152,7 @@ export default function Staff() {
             <button className="st-btn" disabled title={T('Xếp lịch sẽ có ở bước tiếp theo', 'Dienstplan folgt im nächsten Schritt')}>
               <SIcon k="calendar" /><span>{T('Xếp lịch', 'Dienstplan')}</span><em>{T('sắp có', 'bald')}</em>
             </button>
+            <button className="st-btn" onClick={() => setImp({ busy: false, prog: '', res: null })}><SIcon k="upload" /><span>{T('Tải bảng lương', 'Lohnabrechnungen')}</span></button>
             <button className="st-btn primary" onClick={() => nav(`/r/${rid}/hr/new`)}><SIcon k="plus" /><span>{T('Thêm nhân viên', 'Neuer Mitarbeiter')}</span></button>
           </div>
           <div className="st-search">
@@ -198,6 +213,39 @@ export default function Staff() {
         )}
         {list && <div className="st-foot">{T('Hiển thị', 'Angezeigt:')} {shown.length} / {base} {T('nhân viên', 'Mitarbeiter')}</div>}
       </div>
+
+      <Sheet open={imp != null} onClose={() => !imp?.busy && setImp(null)} title={T('Tải bảng lương hằng tháng', 'Monatliche Lohnabrechnungen')}>
+        {imp && <>
+          <p className="small muted" style={{ marginTop: 0 }}>{T('Chọn file PDF hoặc ZIP bảng lương DATEV (một hoặc nhiều tháng, nhiều nhân viên). Mỗi phiếu tự lưu vào giấy tờ của đúng nhân viên theo mã nhân viên (Personal-Nr.). Phiếu đã có sẽ bỏ qua.', 'DATEV-Lohnabrechnungen als PDF oder ZIP. Jede Abrechnung wird anhand der Personal-Nr. dem Mitarbeiter zugeordnet. Bereits vorhandene werden übersprungen.')}</p>
+          <label className={`btn block drop${imp.busy ? ' disabled' : ''}`} {...dropProps((fl) => importSlips(fl), imp.busy)}>
+            {imp.busy ? imp.prog : T('Chọn file bảng lương (PDF / ZIP)', 'Dateien wählen (PDF / ZIP)')}
+            <span className="drop-hint">{T('hoặc kéo thả file vào đây', 'oder Dateien hierher ziehen')}</span>
+            <input type="file" accept="application/pdf,.pdf,.zip" multiple hidden disabled={imp.busy} onChange={(ev) => { importSlips(ev.target.files || []); ev.target.value = '' }} />
+          </label>
+          {imp.res && (() => {
+            const c = (st: SlipResult['status']) => imp.res!.filter((x) => x.status === st)
+            const saved = c('saved'), exists = c('exists'), nomatch = c('nomatch'), errs = c('error')
+            const mm = (p: string) => `${p.slice(5, 7)}/${p.slice(0, 4)}`
+            return <div style={{ marginTop: 12 }}>
+              {!imp.res.length && <div className="alert warn">{T('Không tìm thấy bảng lương DATEV trong file.', 'Keine DATEV-Lohnabrechnung gefunden.')}</div>}
+              {saved.length > 0 && <div className="alert ok">{T(`Đã lưu ${saved.length} bảng lương`, `${saved.length} Abrechnungen gespeichert`)}</div>}
+              {exists.length > 0 && <div className="small muted" style={{ marginBottom: 8 }}>{T(`${exists.length} phiếu đã có, bỏ qua.`, `${exists.length} bereits vorhanden, übersprungen.`)}</div>}
+              {(nomatch.length > 0 || errs.length > 0) && <div className="alert warn">{T('Chưa lưu được:', 'Nicht gespeichert:')}</div>}
+              <div className="list">
+                {[...nomatch, ...errs, ...saved].map((x, i) => (
+                  <div key={i} className="it">
+                    <div className="grow" style={{ minWidth: 0 }}>
+                      <div className="t">{x.employee || x.name || '—'}</div>
+                      <div className="small muted">{mm(x.period)} · Pers.-Nr. {x.pnr}{x.status === 'nomatch' ? ` · ${T('không có hồ sơ nhân viên này, hãy thêm nhân viên rồi tải lại', 'keine Personalakte, bitte erst anlegen')}` : x.msg ? ` · ${x.msg}` : ''}</div>
+                    </div>
+                    <span className={`tag ${x.status === 'saved' ? 'ok' : 'warn'}`}>{x.status === 'saved' ? T('đã lưu', 'gespeichert') : x.status === 'nomatch' ? T('không khớp', 'keine Zuordnung') : T('lỗi', 'Fehler')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          })()}
+        </>}
+      </Sheet>
 
       <Sheet open={editCo != null} onClose={() => setEditCo(null)} title={T('Công ty của nhà hàng', 'Firma des Restaurants')}>
         <label className="f"><span>{T('Tên công ty (Firma), in trên giấy tờ nhân viên', 'Firma (erscheint im Personalbogen)')}</span>
