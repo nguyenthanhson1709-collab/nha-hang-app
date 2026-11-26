@@ -16,7 +16,7 @@ export default function BkApp() {
   const r = useRestaurant(rid)
   const L = useL()
   const role = useRole(rid)
-  // chỉ quán đã có cài đặt đặt bàn (hiện chỉ Vietbowl Mitte) mới dùng module này
+  // chỉ quán đã có cài đặt đặt bàn (hiện chỉ Vietbowl Mitte) mới dùng module này; kiểm tra song song, khung mở ngay
   const [has, setHas] = useState<boolean | null>(null)
   useEffect(() => {
     let live = true
@@ -34,7 +34,7 @@ export default function BkApp() {
   return (
     <>
       <Top title={L('Bàn đặt', 'Reservierungen')} sub={r?.name} back={`/r/${rid}`} />
-      {has && <iframe ref={frame} className="bk-frame" title={L('Bàn đặt', 'Reservierungen')} src={`dat-ban/staff.html?inapp=1&lang=${L.lang}`} />}
+      <iframe ref={frame} className="bk-frame" title={L('Bàn đặt', 'Reservierungen')} src={`dat-ban/staff.html?inapp=1&lang=${L.lang}`} />
     </>
   )
 }
