@@ -461,3 +461,17 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
   .dcard-d { white-space: normal; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
   .hclock-d { display: none; }
 }
+.st-types { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: -2px; }
+.st-type { justify-content: flex-start; gap: 8px; min-height: 44px; padding: 8px 14px; border-radius: 12px; background: var(--card); font-size: .88rem; }
+.st-type .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: 0 0 8px; }
+.st-type-l { flex: 1; text-align: left; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-type b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.st-type:hover { border-color: color-mix(in srgb, var(--brand) 50%, var(--line)); }
+.st-type.on { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 7%, var(--card)); }
+@media (max-width: 640px) { .st-types { gap: 8px; } .st-type { padding: 8px 10px; font-size: .8rem; gap: 6px; } }
+@media (max-width: 640px) {
+  .st-type { display: grid; grid-template-columns: 8px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 6px; row-gap: 0; align-items: center; padding: 8px 10px; }
+  .st-type .dot { grid-row: 1; }
+  .st-type b { grid-row: 1; grid-column: 2; text-align: left; }
+  .st-type-l { grid-row: 2; grid-column: 1 / -1; white-space: normal; font-size: .75rem; line-height: 1.2; }
+}

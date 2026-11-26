@@ -115,6 +115,14 @@ export default function Staff() {
           {stat('active', 'active', active.length, T('Đang làm', 'Aktiv'))}
           {stat('left', 'left', left, T('Đã nghỉ', 'Ausgeschieden'))}
         </div>
+        <div className="st-types">
+          {(['vollzeit', 'teilzeit', 'minijob'] as EmpType[]).map((k) => (
+            <button key={k} className={`st-type${filter === 'active' && ctype === k ? ' on' : ''}`} onClick={() => { const on = filter === 'active' && ctype === k; setFilter('active'); setCtype(on ? '' : k) }}
+              title={T('Nhân viên đang làm theo loại hợp đồng', 'Aktive Mitarbeiter nach Beschäftigungsart')}>
+              <span className={`dot ct-${k}`} /><span className="st-type-l">{EMP_TYPES[k][li]}</span><b className={`ct ct-${k}`}>{list ? active.filter((e) => e.employment_type === k).length : '–'}</b>
+            </button>
+          ))}
+        </div>
 
         {expiring.length > 0 && (
           <div className="alert warn" style={{ margin: 0 }}>
