@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { HashRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import { fromRecoveryLink, supabase, type Category, type Profile, type Restaurant, type Role } from './lib/supabase'
 import { LangCtx, type Lang, useT } from './lib/i18n'
@@ -37,7 +37,9 @@ function openFresh(start: string) {
 
 function RestLayout({ children }: { children: React.ReactNode }) {
   const { rid } = useParams()
-  return <>{children}<BottomNav rid={rid!} /></>
+  // Hồ sơ nhân viên: bỏ logo nổi ở đáy để không che nội dung
+  const noNav = /\/hr\/[^/]+$/.test(useLocation().pathname)
+  return <>{children}{!noNav && <BottomNav rid={rid!} />}</>
 }
 
 function Shell({ session }: { session: Session }) {
