@@ -18,6 +18,8 @@ import { readPayslips } from '../lib/payslipImport'
 import { baseSalary, empTypeOf, hourlyOf, splitName } from '../lib/payslip'
 import { DateField } from '../components/PeriodBar'
 import { ComboInput, Money, Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
+import PdfSheet from '../components/PdfSheet'
+import WorkTime from '../components/WorkTime'
 
 type K = keyof Employee
 type GroupId = 'personal' | 'work' | 'residence' | 'pay' | 'tax' | 'bank' | 'leave' | 'note'
@@ -90,6 +92,9 @@ export default function EmployeePage() {
   const [abs, setAbs] = useState<Absence[]>([])
   const [cv, setCv] = useState<{ job: string; days: number } | null>(null)
   const [ab, setAb] = useState<{ anrede: Anrede; job: string; date: string } | null>(null)
+  // Bản xem trước: chưa lưu gì cho tới khi bấm Lưu
+  const [pv, setPv] = useState<{ title: string; pdf: Blob; docx?: Blob; base: string; kind: 'contract' | 'certificate'; miss?: string; saved?: boolean } | null>(null)
+  const [fv, setFv] = useState<{ title: string; blob: Blob; name: string } | null>(null)
   const [exitF, setExitF] = useState<{ date: string | null; reason: string } | null>(null)
 
   async function loadChildren() {
@@ -412,15 +417,26 @@ export default function EmployeePage() {
   // ===== Giấy tờ
   const slips = docs.filter((d) => d.kind === 'payslip').sort((a, b) => (b.period || b.created_at).localeCompare(a.period || a.created_at))
   const personalDocs = docs.filter((d) => d.kind !== 'payslip')
+  const docTitle = (d: EmpDoc) => d.kind === 'payslip' && d.period ? `${T('Bảng lương', 'Lohnabrechnung')} ${d.period.slice(5, 7)}/${d.period.slice(0, 4)}` : d.kind === 'other' ? (d.title || '') : DOC_KINDS[d.kind][li]
+  const viewFile = async (path: string, title: string) => {
+    setBusy(true)
+    try {
+      const { data, error } = await supabase.storage.from(HR_BUCKET).download(path)
+      if (error || !data) throw error || new Error('download')
+      const ext = (path.split('.').pop() || 'pdf').toLowerCase()
+      const blob = data.type && data.type !== 'application/octet-stream' ? data : new Blob([data], { type: ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}` })
+      setFv({ title, blob, name: `${title.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '_')}.${ext}` })
+    } catch { openHrFile(path) } finally { setBusy(false) }
+  }
   const docRow = (d: EmpDoc) => {
     const dl = permitDaysLeft(d.valid_until)
     const slip = d.kind === 'payslip' && d.period
     return (
       <div key={d.id} className="it">
-        <button className="ghost grow" style={{ justifyContent: 'flex-start', textAlign: 'left', minWidth: 0, padding: 0 }} onClick={() => openHrFile(d.path)}>
+        <button className="ghost grow" style={{ justifyContent: 'flex-start', textAlign: 'left', minWidth: 0, padding: 0 }} onClick={() => viewFile(d.path, docTitle(d))}>
           <span className="doc-ic"><GIcon k="file" /></span>
           <div style={{ minWidth: 0 }}>
-            <div className="t">{slip ? `${T('Bảng lương', 'Lohnabrechnung')} ${d.period!.slice(5, 7)}/${d.period!.slice(0, 4)}` : d.kind === 'other' ? d.title : DOC_KINDS[d.kind][li]}</div>
+            <div className="t">{docTitle(d)}</div>
             <div className="small muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{slip ? '' : `${d.title} · `}{T('tải lên', 'hochgeladen')} {dmy(d.created_at)}</div>
           </div>
         </button>
@@ -573,14 +589,8 @@ export default function EmployeePage() {
     try {
       const { docx, pdf } = await arbeitsvertrag(e!, o)
       const base = `Arbeitsvertrag_${e!.last_name}_${e!.first_name}_${todayIso()}`.replace(/\s+/g, '_')
-      // Lưu bản PDF vào giấy tờ của nhân viên, tải bản Word để in / sửa
-      const path = await uploadHrFile(rid!, eid!, pdf, `${base}.pdf`)
-      const { error } = await supabase.from('nh_employee_docs').insert({ restaurant_id: rid, employee_id: eid, kind: 'contract', title: `${base}.pdf`, path })
-      if (error) throw error
-      download(docx, `${base}.docx`)
-      loadChildren(); setCv(null)
-      toast(T('Đã lưu hợp đồng (PDF) vào Tài liệu và tải bản Word', 'Vertrag als PDF in Dokumenten gespeichert, Word-Datei heruntergeladen'))
-      if (miss.length) toast(T(`Hồ sơ còn thiếu: ${miss.map((k) => CNAMES[k]).join(', ')}. Các chỗ này để dòng chấm để điền tay.`, `Fehlt: ${miss.map((k) => CNAMES[k]).join(', ')}. Diese Stellen bleiben zum Ausfüllen frei.`))
+      setCv(null)
+      setPv({ title: T('Hợp đồng lao động', 'Arbeitsvertrag'), pdf, docx, base, kind: 'contract', miss: miss.length ? miss.map((k) => CNAMES[k]).join(', ') : undefined })
     } catch (x) { toast(errMsg(x)) }
     setBusy(false)
   }
@@ -589,8 +599,22 @@ export default function EmployeePage() {
     setBusy(true)
     try {
       const pdf = await arbeitgeberbestaetigungPdf(e!, { anrede: ab.anrede, job: ab.job.trim() || null, date: ab.date })
-      download(pdf, `Arbeitgeberbestaetigung_${e!.last_name}_${e!.first_name}_${ab.date}.pdf`.replace(/\s+/g, '_'))
+      const base = `Arbeitgeberbestaetigung_${e!.last_name}_${e!.first_name}_${ab.date}`.replace(/\s+/g, '_')
       setAb(null)
+      setPv({ title: 'Arbeitgeberbestätigung', pdf, base, kind: 'certificate' })
+    } catch (x) { toast(errMsg(x)) }
+    setBusy(false)
+  }
+  /** Lưu bản PDF đang xem vào Tài liệu của nhân viên */
+  async function savePreview() {
+    if (!pv || pv.saved) return
+    setBusy(true)
+    try {
+      const path = await uploadHrFile(rid!, eid!, pv.pdf, `${pv.base}.pdf`)
+      const { error } = await supabase.from('nh_employee_docs').insert({ restaurant_id: rid, employee_id: eid, kind: pv.kind, title: `${pv.base}.pdf`, path })
+      if (error) throw error
+      setPv({ ...pv, saved: true }); loadChildren()
+      toast(T('Đã lưu vào Tài liệu', 'In Dokumenten gespeichert'))
     } catch (x) { toast(errMsg(x)) }
     setBusy(false)
   }
@@ -600,7 +624,7 @@ export default function EmployeePage() {
   const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5) + 1
   const TABS: [Tab, string][] = [
     ['overview', T('Tổng quan', 'Übersicht')], ['personal', T('Cá nhân', 'Persönlich')], ['work', T('Công việc', 'Beschäftigung')], ['residence', T('Cư trú', 'Aufenthalt')],
-    ['pay', T('Lương và bảo hiểm', 'Lohn und Versicherung')], ['leave', T('Nghỉ phép', 'Abwesenheit')], ['docs', `${T('Tài liệu', 'Dokumente')} (${docs.length})`],
+    ['pay', T('Lương và bảo hiểm', 'Lohn und Versicherung')], ['leave', T('Giờ làm và nghỉ phép', 'Arbeitszeit und Urlaub')], ['docs', `${T('Tài liệu', 'Dokumente')} (${docs.length})`],
   ]
 
   return (
@@ -689,21 +713,23 @@ export default function EmployeePage() {
         </>}
         {tab === 'leave' && <>
           {group('leave')}
-          <Group icon={<GIcon k="calendar" />} title={T('Ngày nghỉ đã ghi', 'Erfasste Abwesenheiten')}>
-            {abs.length ? (
-              <div className="list">
-                {abs.map((a) => (
-                  <div key={a.id} className="it">
-                    <div className="grow" style={{ minWidth: 0 }}>
-                      <div className="t">{(ABS[a.kind] || ABS.other)[li]}</div>
-                      <div className="small muted">{dmy(a.from_date)} – {dmy(a.to_date)}{a.note && ` · ${a.note}`}</div>
-                    </div>
-                    <div className="num">{days(a.from_date, a.to_date)} {T('ngày', 'Tage')}</div>
-                  </div>
-                ))}
-              </div>
-            ) : <div className="kv-v empty">{T('Chưa có ngày nghỉ nào được ghi', 'Keine Abwesenheiten erfasst')}</div>}
+          <Group icon={<GIcon k="calendar" />} title={T('Giờ làm theo tháng', 'Arbeitszeiten je Monat')}>
+            <WorkTime eid={eid!} name={`${e.first_name} ${e.last_name}`.trim()} pnr={e.personnel_no || null} company={hs?.company_name || e.company || r.name} de={de} download={download}
+              contract={e.work_days != null && e.daily_hours != null ? `${String(e.work_days).replace('.', ',')} Tage/Woche × ${String(e.daily_hours).replace('.', ',')} Std.` : null} />
           </Group>
+          {abs.some((a) => a.kind !== 'vacation') && <Group icon={<GIcon k="calendar" />} title={T('Nghỉ ốm và nghỉ khác', 'Krankheit und sonstige Abwesenheit')}>
+            <div className="list">
+              {abs.filter((a) => a.kind !== 'vacation').map((a) => (
+                <div key={a.id} className="it">
+                  <div className="grow" style={{ minWidth: 0 }}>
+                    <div className="t">{(ABS[a.kind] || ABS.other)[li]}</div>
+                    <div className="small muted">{dmy(a.from_date)} – {dmy(a.to_date)}{a.note && ` · ${a.note}`}</div>
+                  </div>
+                  <div className="num">{days(a.from_date, a.to_date)} {T('ngày', 'Tage')}</div>
+                </div>
+              ))}
+            </div>
+          </Group>}
         </>}
         {tab === 'docs' && (
           <Group icon={<GIcon k="folder" />} title={T('Tài liệu', 'Dokumente')}>
@@ -740,7 +766,7 @@ export default function EmployeePage() {
           <div className="f"><span>{T('File hợp đồng', 'Vertragsdatei')}</span>
             {ct.files.map((p, i) => (
               <div key={p} className="row" style={{ marginBottom: 4 }}>
-                <button className="ghost grow" style={{ justifyContent: 'flex-start' }} onClick={() => openHrFile(p)}>📎 {T('File', 'Datei')} {i + 1}</button>
+                <button className="ghost grow" style={{ justifyContent: 'flex-start' }} onClick={() => viewFile(p, `${T('Hợp đồng', 'Vertrag')} ${i + 1}`)}>📎 {T('File', 'Datei')} {i + 1}</button>
                 <button className="ghost" onClick={() => setCt({ ...ct, files: ct.files.filter((x) => x !== p) })}>✕</button>
               </div>
             ))}
@@ -774,7 +800,7 @@ export default function EmployeePage() {
             {vac != null && vac < min && <div className="alert warn">{T(`Ngày phép thấp hơn mức tối thiểu theo luật (${min} ngày khi làm ${cv.days} ngày/tuần).`, `Urlaub unter dem gesetzlichen Minimum (${min} Tage bei ${cv.days}-Tage-Woche).`)}</div>}
             {miss.length > 0 && <div className="alert warn">{T('Còn thiếu', 'Fehlt')}: {miss.map((k) => CNAMES[k]).join(', ')}. {T('Các chỗ này để dòng chấm để điền tay.', 'Diese Stellen bleiben frei.')}</div>}
             <p className="small muted">{T('Lương, giờ/tuần, ngày phép lấy từ hồ sơ. Muốn đổi thì sửa ở tab Lương và bảo hiểm / Nghỉ phép.', 'Lohn, Wochenstunden und Urlaub kommen aus der Akte.')}</p>
-            <button className="primary block" disabled={busy} onClick={doContract}>{busy ? '…' : T('Tạo hợp đồng (lưu PDF, tải Word)', 'Vertrag erstellen (PDF speichern, Word laden)')}</button>
+            <button className="primary block" disabled={busy} onClick={doContract}>{busy ? '…' : T('Xem trước hợp đồng', 'Vorschau anzeigen')}</button>
           </>
         })()}
       </Sheet>
@@ -791,7 +817,7 @@ export default function EmployeePage() {
             <F l={L('Ngày viết', 'Datum')}><DateField value={ab.date} onChange={(d) => setAb({ ...ab, date: d || todayIso() })} /></F>
             {miss.length > 0 && <div className="alert warn">{T('Còn thiếu', 'Fehlt')}: {miss.map((k) => MN[k]).join(', ')}. {T('Các chỗ này để dòng chấm.', 'Diese Stellen bleiben frei.')}</div>}
             <p className="small muted">{T('Tên, ngày sinh, nơi sinh, địa chỉ, ngày vào làm lấy từ hồ sơ.', 'Name, Geburtsdatum, Geburtsort, Anschrift und Eintritt kommen aus der Akte.')}</p>
-            <button className="primary block" disabled={busy} onClick={doBestaetigung}>{busy ? '…' : T('Tạo PDF', 'PDF erstellen')}</button>
+            <button className="primary block" disabled={busy} onClick={doBestaetigung}>{busy ? '…' : T('Xem trước', 'Vorschau')}</button>
           </>
         })()}
       </Sheet>
@@ -804,6 +830,15 @@ export default function EmployeePage() {
           <button className="primary block" onClick={() => saveExit(exitF.date, exitF.reason.trim() || null)}>{T('Lưu', 'Speichern')}</button>
         </>}
       </Sheet>
+      {pv && <PdfSheet pdf={pv.pdf} title={pv.title} onClose={() => setPv(null)} actions={[
+        ...(pv.docx ? [{ label: T('Tải Word', 'Word laden'), onClick: () => download(pv.docx!, `${pv.base}.docx`) }] : []),
+        { label: T('Tải PDF', 'PDF laden'), onClick: () => download(pv.pdf, `${pv.base}.pdf`) },
+        { label: pv.saved ? T('Đã lưu ✓', 'Gespeichert ✓') : T('Lưu vào hồ sơ', 'In Akte speichern'), primary: true, disabled: busy || pv.saved, onClick: savePreview },
+      ]} />}
+      {fv && <PdfSheet pdf={fv.blob} title={fv.title} onClose={() => setFv(null)} actions={[
+        { label: T('Tải về', 'Herunterladen'), primary: true, onClick: () => download(fv.blob, fv.name) },
+      ]} />}
+      {pv?.miss && <div className="pv-miss">{T(`Hồ sơ còn thiếu: ${pv.miss}. Các chỗ này để dòng chấm để điền tay.`, `Fehlt: ${pv.miss}. Diese Stellen bleiben zum Ausfüllen frei.`)}</div>}
     </>
   )
 }
