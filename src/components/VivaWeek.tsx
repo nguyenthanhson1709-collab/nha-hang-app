@@ -82,7 +82,7 @@ export function VivaWeek({ rid, start, vivaMode, open, onClose, onSaved }: { rid
         <button className={vivaMode ? 'sel' : ''} disabled={!profile.is_owner || modeBusy} onClick={() => setMode('viva')}>{lang === 'de' ? 'lt. Viva Wallet' : 'Theo Viva Wallet'}</button>
       </div>
       <div className={`small ${vivaMode ? 'muted' : 'alert warn'}`} style={{ marginBottom: 10 }}>{vivaMode
-        ? (lang === 'de' ? 'Kassenbuch: Kartenzahlung = Viva Wallet, Trinkgeld lt. Z-Bon direkt darunter.' : 'Kassenbuch: Kartenzahlung = số Viva Wallet, Trinkgeld theo Z-Bon ghi ngay dưới.')
+        ? (lang === 'de' ? 'Kassenbuch: Kartenzahlung = Viva Wallet. Am Monatsende eine Zeile „Trinkgeld von Viva Wallet“ = Σ Viva − Σ Kreditzahlung.' : 'Kassenbuch: Kartenzahlung = số Viva Wallet. Cuối tháng có một dòng „Trinkgeld von Viva Wallet“ = tổng Viva − tổng Kreditzahlung.')
         : (lang === 'de' ? 'Das Kassenbuch rechnet gerade lt. Z-Bon: Viva-Beträge werden gespeichert, aber nicht verwendet.' : 'Kassenbuch đang tính theo Z-Bon: số Viva vẫn được lưu nhưng chưa được dùng. Bấm "Theo Viva Wallet" để áp dụng.')}</div>
       <WeekBar value={mon} onChange={setMon} />
       {!orig ? <Spinner /> : <>
