@@ -486,7 +486,10 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
       </div>
 
       {preview && <PdfSheet pdf={preview} title={pdfFilename(invoice as Invoice)} onClose={() => setPreview(null)}
-        actions={[{ label: L('Tải PDF', 'PDF herunterladen'), primary: true, onClick: () => download(preview) }]} />}
+        actions={[
+          { label: L('Tải PDF', 'PDF herunterladen'), primary: !locked || invoice.status === 'cancelled', onClick: () => download(preview) },
+          ...(locked && invoice.status !== 'cancelled' ? [{ label: L('Gửi email', 'Per E-Mail senden'), primary: true, onClick: () => { setPreview(null); openMail() } }] : []),
+        ]} />}
 
       {mail && (
         <div className="inv-modal-bg" onClick={() => !busy && setMail(null)}>
