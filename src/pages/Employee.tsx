@@ -8,7 +8,7 @@ import { dmy, eur, parseNum, todayIso } from '../lib/format'
 import { dropProps } from '../lib/drop'
 import { download } from '../lib/pdf'
 import {
-  DOC_KINDS, EMP_TYPES, guessKind, JOBS, jobInfo, PERMITS, permitInfo, emptyEmployee, fullName, hrSignedUrl, HR_BUCKET, isActive, openHrFile, permitDaysLeft, PERMIT_WARN_DAYS, POSITIONS,
+  DOC_KINDS, EMP_TYPES, guessKind, JOBS, jobInfo, NATIONS, PERMITS, permitInfo, emptyEmployee, fullName, hrSignedUrl, HR_BUCKET, isActive, openHrFile, permitDaysLeft, PERMIT_WARN_DAYS, POSITIONS,
   uploadHrFile, validIban, validTaxId, type DocKind, type EmpContract, type EmpDoc, type EmpType, type Employee, type HrSettings,
 } from '../lib/hr'
 import { personalbogenPdf } from '../lib/hrPdf'
@@ -385,6 +385,7 @@ export default function EmployeePage() {
         </div>)
       case 'residence_permit': return <ComboInput value={(v as string) || ''} options={PERMITS.map((p) => p[0])} onChange={(x) => { const pi = permitInfo(x); up({ residence_permit: x || null, ...(pi && pi[2] != null ? { work_permitted: pi[2] } : {}), ...(pi?.[3] ? { residence_permit_until: null } : {}) }) }} />
       case 'job_title': return <ComboInput value={(v as string) || ''} options={JOBS.map((j) => j[0])} onChange={sv} />
+      case 'nationality': return <ComboInput value={(v as string) || ''} options={NATIONS} onChange={sv} placeholder={T('Chọn hoặc gõ', 'Auswählen oder eingeben')} />
       case 'employment_type': return (
         <select value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)}>
           <option value="">—</option>
@@ -469,7 +470,7 @@ export default function EmployeePage() {
             <F l={L('Ngày sinh', 'Geburtsdatum')}><input type="date" value={e.birth_date || ''} onChange={(ev) => set({ birth_date: ev.target.value || null })} /></F>
             <F l={L('Nơi sinh', 'Geburtsort')}><input {...txt('birth_place')} /></F>
           </div>
-          <F l={L('Quốc tịch', 'Nationalität')}><input {...txt('nationality')} placeholder="vietnamesisch, deutsch…" /></F>
+          <F l={L('Quốc tịch', 'Nationalität')}><ComboInput value={e.nationality || ''} options={NATIONS} onChange={(v) => set({ nationality: v || null })} placeholder={T('Chọn hoặc gõ', 'Auswählen oder eingeben')} /></F>
           <div className="grid2">
             <F l={L('Điện thoại', 'Telefon')}><input type="tel" {...txt('phone')} /></F>
             <F l="E-Mail"><input type="email" {...txt('email')} /></F>
