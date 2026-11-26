@@ -74,3 +74,7 @@
 .inv-presets { display: flex; gap: 8px; align-items: center; margin: 4px 0 6px; }
 .inv-presets select { flex: 1 1 auto; min-width: 0; }
 .inv-presets button { flex: 0 0 auto; white-space: nowrap; }
+
+.inv .email-list { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.inv .email-row { display: flex; gap: 6px; width: 100%; }
+.inv .email-row input { flex: 1; min-width: 0; }

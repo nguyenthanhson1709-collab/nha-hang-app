@@ -11,7 +11,7 @@ import { addDays, computeTotals, fmt, fmtDate, fmtEur, grossOf, netOf, parseNum,
 import { fillTemplate } from '../template'
 import { LANGS, companyText, type Lang } from '../pdfText'
 import { pdfFilename } from '../docname'
-import { InvShell, StatusBadge, useL } from '../ui'
+import { EmailList, InvShell, StatusBadge, splitEmails, useL } from '../ui'
 import { kasseImages, kasseToItems } from '../kasse'
 import { aiReadKasse, lastAiError } from '../../lib/ai'
 import PdfSheet from '../../components/PdfSheet'
@@ -284,7 +284,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
   }
   async function sendMail() {
     if (!mail || !invoice.id) return
-    const to = mail.to.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean)
+    const to = splitEmails(mail.to)
     if (!to.length) { setErr(L('Hãy nhập email người nhận.', 'Bitte Empfänger eingeben.')); return }
     setBusy(true); setErr('')
     try {
@@ -309,7 +309,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
       if (!shared) {
         // Máy tính: tải PDF về rồi mở thư soạn sẵn để đính kèm
         lib.downloadBlob(blob, pdfFilename(invoice as Invoice))
-        const to = (custEmail || customer?.emails || '').split(/[,;\s]+/).filter(Boolean).join(',')
+        const to = splitEmails(custEmail || customer?.emails).join(',')
         window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body + '\n\n(PDF im Anhang)')}`
         setOk(L('Đã tải PDF về máy. Hãy đính kèm file đó vào thư vừa mở.', 'PDF heruntergeladen. Bitte an die geöffnete E-Mail anhängen.'))
       }
@@ -386,7 +386,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
                   {addr.country && !COUNTRIES.some(([c]) => c === addr.country) && <option value={addr.country}>{addr.country}</option>}
                 </select>
               </div>
-              <div className="mt"><input type="email" placeholder={L('E-Mail (để gửi hoá đơn)', 'E-Mail (für den Versand)')} value={custEmail} onChange={(e) => { setCustEmail(e.target.value); setDirty(true) }} /></div>
+              <div className="mt"><EmailList placeholder={L('E-Mail (để gửi hoá đơn)', 'E-Mail (für den Versand)')} value={custEmail} onChange={(v) => { if (v !== custEmail) { setCustEmail(v); setDirty(true) } }} /></div>
               <div className="toolbar mt" style={{ marginBottom: 0 }}>
                 {customer ? <span className="muted small grow">{L('Khách có sẵn · mã', 'Vorhandener Kunde · Nr.')} {customer.customer_number}</span> : addr.name ? <span className="muted small grow">{L('Khách mới (chưa lưu)', 'Neuer Kunde (nicht gespeichert)')}</span> : <span className="grow" />}
                 {!customer && addr.name?.trim() && <button className="primary sm" onClick={() => saveAsCustomer(true)} disabled={busy}>{L('Lưu khách hàng mới', 'Als Kunde speichern')}</button>}
@@ -541,8 +541,8 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
         <div className="inv-modal-bg" onClick={() => !busy && setMail(null)}>
           <div className="inv-modal" onClick={(e) => e.stopPropagation()}>
             <h2>{L(`Gửi ${docName} qua email`, `${isQuote ? 'Angebot' : 'Rechnung'} per E-Mail senden`)}</h2>
-            <span className="lbl">{L('Tới (nhiều email cách nhau bằng dấu phẩy)', 'An (mehrere mit Komma getrennt)')}</span>
-            <input value={mail.to} onChange={(e) => setMail({ ...mail, to: e.target.value })} />
+            <span className="lbl">{L('Gửi tới', 'An')}</span>
+            <EmailList value={mail.to} onChange={(v) => setMail((m) => m && { ...m, to: v })} />
             <div className="mt"><span className="lbl">{L('Tiêu đề', 'Betreff')}</span>
               <input value={mail.subject} onChange={(e) => setMail({ ...mail, subject: e.target.value })} /></div>
             <div className="mt"><span className="lbl">{L('Nội dung', 'Text')}</span>
