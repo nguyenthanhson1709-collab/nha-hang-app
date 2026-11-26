@@ -5,6 +5,7 @@ import { useLang } from '../lib/i18n'
 import { Top, useRestaurant } from '../components/ui'
 import { ALLERGENS, STATUS, type Status } from './rc'
 import { uploadPhoto } from './api'
+import { dropProps } from '../lib/drop'
 import './congthuc.css'
 
 /** Chữ theo ngôn ngữ giao diện: L('tiếng Việt', 'Deutsch') */
@@ -97,9 +98,9 @@ export function PhotoInput({ path, url, onChange, label, small }: { path: string
     try { onChange(await uploadPhoto(f)) } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
   return (
-    <div className={`rc-photo-in${small ? ' small' : ''}`}>
+    <div className={`rc-photo-in${small ? ' small' : ''}`} {...dropProps((fl) => { const f = Array.from(fl).find((x) => x.type.startsWith('image/')); if (f) pick(f); else setErr(L('Chỉ nhận file ảnh', 'Nur Bilddateien')) }, busy)}>
       <button type="button" className={small && !path ? 'small' : 'rc-photo-btn'} onClick={() => ref.current?.click()} disabled={busy}>
-        {path && url ? <img src={url} alt="" /> : <span className="muted small">{busy ? L('Đang tải…', 'Lädt…') : `+ ${label}`}</span>}
+        {path && url ? <img src={url} alt="" /> : <span className="muted small">{busy ? L('Đang tải…', 'Lädt…') : <>+ {label}{!small && <><br /><span className="rc-drop-hint">{L('hoặc kéo thả ảnh vào đây', 'oder Bild hierher ziehen')}</span></>}</>}</span>}
       </button>
       {path && <button type="button" className="ghost small" onClick={() => onChange(null)}>{L('Bỏ ảnh', 'Foto entfernen')}</button>}
       {err && <div className="err-t small">{err}</div>}
