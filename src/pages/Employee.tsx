@@ -1,4 +1,4 @@
-// Hồ sơ nhân viên: form Meldungsbogen PERSONAL, giấy tờ, hợp đồng lao động, nghỉ việc
+// Hồ sơ nhân viên: form Meldungsbogen PERSONAL (nhân viên mới); hồ sơ đã có xem theo tab, mỗi nhóm một nút Sửa
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase, errMsg } from '../lib/supabase'
@@ -17,16 +17,39 @@ import { baseSalary, empTypeOf, hourlyOf, splitName } from '../lib/payslip'
 import { DateField } from '../components/PeriodBar'
 import { ComboInput, Money, Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
 
-/** Một dòng thông tin trong hồ sơ; có onEdit thì hiện nút ✎ */
-function InfoRow({ l, v, onEdit, add }: { l: string; v: string; onEdit?: () => void; add: string }) {
+type K = keyof Employee
+type GroupId = 'personal' | 'work' | 'residence' | 'pay' | 'tax' | 'bank' | 'leave' | 'note'
+type Tab = 'overview' | 'personal' | 'work' | 'residence' | 'pay' | 'leave' | 'docs'
+type Absence = { id: string; kind: string; from_date: string; to_date: string; note: string | null }
+
+/** Biểu tượng nét mảnh cho các nhóm thông tin */
+const GI = {
+  user: <><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></>,
+  work: <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" /></>,
+  shield: <><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" /><path d="M9 12l2 2 4-4" /></>,
+  wallet: <><rect x="3" y="6" width="18" height="14" rx="2" /><path d="M3 10h18M16 15h2" /></>,
+  bank: <><path d="M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 20h18" /></>,
+  calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></>,
+  note: <><path d="M5 4h14v16H5z" /><path d="M9 9h6M9 13h6M9 17h3" /></>,
+  file: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /></>,
+  folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
+  pen: <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />,
+  lock: <><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>,
+  camera: <><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></>,
+  download: <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />,
+}
+type GKey = keyof typeof GI
+function GIcon({ k }: { k: GKey }) {
+  return <svg className="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{GI[k]}</svg>
+}
+/** Một nhóm thông tin (card) có tiêu đề, nút hành động góc phải và chân (Lưu / Hủy) */
+function Group({ icon, title, action, foot, children }: { icon: ReactNode; title: string; action?: ReactNode; foot?: ReactNode; children: ReactNode }) {
   return (
-    <div className="info-row">
-      <div className="grow" style={{ minWidth: 0 }}>
-        <div className="small muted">{l}</div>
-        <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{v || <span className="muted">—</span>}</div>
-      </div>
-      {onEdit && <button className="ghost" onClick={onEdit} aria-label="edit" title={v ? '' : add} style={{ color: 'var(--brand)' }}>✎</button>}
-    </div>
+    <section className="pcard">
+      <header className="pcard-h"><span className="pcard-ic">{icon}</span><h3>{title}</h3>{action}</header>
+      {children}
+      {foot}
+    </section>
   )
 }
 
@@ -48,7 +71,7 @@ export default function EmployeePage() {
   const de = useLang().lang === 'de'
   const li = de ? 1 : 0
   /** Nhãn: tiếng Việt kèm thuật ngữ Đức; giao diện Đức chỉ hiện tiếng Đức */
-  const L = (vi: string, g: string) => (de ? g : `${vi} (${g})`)
+  const L = (vi: string, g: string) => (de ? g : `${vi} · ${g}`)
   const T = (vi: string, g: string) => (de ? g : vi)
 
   const [e, setE] = useState<Employee | null>(null)
@@ -60,16 +83,19 @@ export default function EmployeePage() {
   const [busy, setBusy] = useState(false)
   const [ct, setCt] = useState<EmpContract | null>(null)
   const [ctFiles, setCtFiles] = useState<File[]>([])
-  const [ed, setEd] = useState<{ keys: (keyof Employee)[]; draft: Partial<Employee> } | null>(null)
+  const [ed, setEd] = useState<{ g: GroupId; draft: Partial<Employee> } | null>(null)
+  const [tab, setTab] = useState<Tab>('overview')
+  const [abs, setAbs] = useState<Absence[]>([])
   const [exitF, setExitF] = useState<{ date: string | null; reason: string } | null>(null)
 
   async function loadChildren() {
     if (isNew) return
-    const [d, c] = await Promise.all([
+    const [d, c, a] = await Promise.all([
       supabase.from('nh_employee_docs').select('*').eq('employee_id', eid!).order('created_at', { ascending: false }),
       supabase.from('nh_employment_contracts').select('*').eq('employee_id', eid!).order('start_date', { ascending: false }),
+      supabase.from('nh_absences').select('id,kind,from_date,to_date,note').eq('employee_id', eid!).order('from_date', { ascending: false }),
     ])
-    setDocs((d.data || []) as EmpDoc[]); setContracts((c.data || []) as never)
+    setDocs((d.data || []) as EmpDoc[]); setContracts((c.data || []) as never); setAbs((a.data || []) as Absence[])
   }
   useEffect(() => {
     if (!rid) return
@@ -83,6 +109,9 @@ export default function EmployeePage() {
       loadChildren()
     })()
   }, [rid, eid]) // eslint-disable-line
+  // Trang hồ sơ rộng hơn để lưới 3 cột trên máy tính
+  useEffect(() => { const el = document.getElementById('root'); el?.classList.add('xwide'); return () => el?.classList.remove('xwide') }, [])
+  useEffect(() => { setEd(null); setTab('overview') }, [eid])
   useEffect(() => { if (e?.photo) hrSignedUrl(e.photo).then(setPhotoUrl); else setPhotoUrl('') }, [e?.photo])
 
   if (!r || !canManage(role)) return null
@@ -248,8 +277,7 @@ export default function EmployeePage() {
   )
   const active = isActive(e)
 
-  // ===== Hồ sơ đã có: chỉ xem; mục thay đổi được có nút ✎ (mục cố định chỉ bổ sung khi còn trống)
-  type K = keyof Employee
+  // ===== Hồ sơ đã có: xem theo nhóm; mỗi nhóm một nút Sửa (Lưu / Hủy). Mục cố định chỉ bổ sung được khi còn trống.
   const show = (k: K): string => {
     const v = e[k]
     if (v == null || v === '') return ''
@@ -257,83 +285,87 @@ export default function EmployeePage() {
     if (k === 'gross_monthly' || k === 'hourly_wage') return eur(Number(v))
     if (k === 'employment_type') return EMP_TYPES[v as EmpType][li]
     if (k === 'work_permitted' || k === 'multiple_employment') return v ? T('Có', 'Ja') : T('Không', 'Nein')
-    if (k === 'job_title') return de ? String(v) : `${jobInfo(String(v))?.[1] || ''}${jobInfo(String(v)) ? ' · ' : ''}${v}`
-    if (k === 'weekly_hours') return `${String(v).replace('.', ',')} ${T('giờ', 'Std.')}`
+    if (k === 'job_title') return de || !jobInfo(String(v)) ? String(v) : `${jobInfo(String(v))![1]} · ${v}`
+    if (k === 'weekly_hours') return `${String(v).replace('.', ',')} ${T('giờ / tuần', 'Std. / Woche')}`
+    if (k === 'vacation_days') return `${String(v).replace('.', ',')} ${T('ngày / năm', 'Tage / Jahr')}`
     return String(v)
-  }
-  const fixedRow = (l: string, k: K) => <InfoRow l={l} v={show(k)} onEdit={e[k] == null || e[k] === '' ? () => setEd({ keys: [k], draft: {} }) : undefined} add={T('Bổ sung', 'Ergänzen')} />
-  const editRow = (l: string, keys: K[], v?: string) => <InfoRow l={l} v={v ?? show(keys[0])} onEdit={() => setEd({ keys, draft: Object.fromEntries(keys.map((k) => [k, e[k]])) as Partial<Employee> })} add={T('Bổ sung', 'Ergänzen')} />
-  const profileView = () => (
-    <>
-      <div className="card">
-        <div className="row" style={{ marginBottom: 6 }}>
-          {photoUrl ? <img src={photoUrl} alt="" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover' }} /> : <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--brand-2)' }} />}
-          <label className="btn">{T('Ảnh chân dung', 'Foto')}<input type="file" accept="image/*" hidden onChange={(ev) => { uploadPhoto(ev.target.files?.[0]); ev.target.value = '' }} /></label>
-        </div>
-        <h3>{T('Cá nhân', 'Persönliche Angaben')}</h3>
-        <div className="info">
-          {fixedRow(L('Họ', 'Name'), 'last_name')}
-          {fixedRow(L('Tên', 'Vorname'), 'first_name')}
-          {fixedRow(L('Ngày sinh', 'Geburtsdatum'), 'birth_date')}
-          {fixedRow(L('Nơi sinh', 'Geburtsort'), 'birth_place')}
-          {fixedRow(L('Quốc tịch', 'Nationalität'), 'nationality')}
-          {editRow(L('Địa chỉ', 'Anschrift'), ['address'])}
-          {editRow(L('Điện thoại', 'Telefon'), ['phone'])}
-          {editRow('E-Mail', ['email'])}
-        </div>
-      </div>
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>{T('Cư trú và lao động', 'Aufenthalt und Erwerbstätigkeit')}</h3>
-        <div className="info">
-          {editRow(L('Giấy phép cư trú', 'Aufenthaltstitel'), ['residence_permit', 'residence_permit_until', 'work_permitted'], [e.residence_permit, e.residence_permit_until && `${T('đến', 'bis')} ${dmy(e.residence_permit_until)}`].filter(Boolean).join(' · '))}
-          {fixedRow(L('Được phép làm việc', 'Erwerbstätigkeit gestattet'), 'work_permitted')}
-        </div>
-      </div>
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>{T('Công việc', 'Beschäftigung')}</h3>
-        <div className="info">
-          {fixedRow(L('Công ty', 'Firma'), 'company')}
-          {fixedRow(L('Mã nhân viên', 'Personal-Nr.'), 'personnel_no')}
-          {fixedRow(L('Ngày bắt đầu làm', 'Eintrittsdatum'), 'entry_date')}
-          {editRow(L('Công việc', 'Tätigkeit'), ['job_title'])}
-          {editRow(L('Loại hợp đồng', 'Beschäftigungsart'), ['employment_type', 'weekly_hours', 'gross_monthly', 'hourly_wage', 'vacation_days'],
-            [show('employment_type'), show('weekly_hours') && `${show('weekly_hours')}/${T('tuần', 'Woche')}`, show('gross_monthly') && `${show('gross_monthly')}/${T('tháng', 'Monat')}`, show('hourly_wage') && `${show('hourly_wage')}/${T('giờ', 'Std.')}`, e.vacation_days != null && `${String(e.vacation_days).replace('.', ',')} ${T('ngày phép', 'Urlaubstage')}`].filter(Boolean).join(' · '))}
-          {editRow(L('Làm thêm nơi khác', 'Mehrfachbeschäftigung'), ['multiple_employment'])}
-        </div>
-      </div>
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>{T('Thuế và bảo hiểm', 'Steuer und Sozialversicherung')}</h3>
-        <div className="info">
-          {fixedRow(L('Số Steuer-ID', 'Steuer-ID'), 'tax_id')}
-          {fixedRow(L('Số bảo hiểm hưu trí', 'Rentenversicherungsnr.'), 'pension_no')}
-          {editRow(L('Bậc thuế lương', 'Steuerklasse'), ['tax_class'])}
-          {editRow(L('Hãng bảo hiểm y tế', 'Krankenkasse'), ['health_insurance'])}
-          {editRow(L('Ngân hàng', 'Bankverbindung'), ['iban', 'bic', 'bank_name'], [e.iban, e.bic, e.bank_name].filter(Boolean).join(' · '))}
-          {editRow(T('Ghi chú', 'Notiz'), ['note'])}
-        </div>
-      </div>
-    </>
-  )
-  async function saveEd() {
-    if (!ed) return
-    const patch = { ...ed.draft }
-    if ('iban' in patch && patch.iban) patch.iban = patch.iban.replace(/\s+/g, '').toUpperCase()
-    if ('iban' in patch && !validIban(patch.iban ?? null)) { toast(T('IBAN có vẻ sai', 'IBAN ungültig')); return }
-    if ('tax_id' in patch && !validTaxId(patch.tax_id ?? null)) { toast(T('Steuer-ID phải có 11 chữ số', 'Steuer-ID muss 11 Ziffern haben')); return }
-    if ('job_title' in patch) { const j = jobInfo(patch.job_title ?? null); if (j) patch.position = j[2] }
-    const { error } = await supabase.from('nh_employees').update(patch).eq('id', eid!)
-    if (error) { toast(/nh_employees_pnr|duplicate key/.test(errMsg(error)) ? T('Mã nhân viên này đã có ở hồ sơ khác', 'Personal-Nr. bereits vergeben') : errMsg(error)); return }
-    set(patch); setEd(null); toast(T('Đã lưu', 'Gespeichert'))
   }
   const labelOf: Partial<Record<K, string>> = {
     last_name: L('Họ', 'Name'), first_name: L('Tên', 'Vorname'), birth_date: L('Ngày sinh', 'Geburtsdatum'), birth_place: L('Nơi sinh', 'Geburtsort'),
     nationality: L('Quốc tịch', 'Nationalität'), address: L('Địa chỉ', 'Anschrift'), phone: L('Điện thoại', 'Telefon'), email: 'E-Mail',
-    residence_permit: L('Giấy phép cư trú', 'Aufenthaltstitel'), residence_permit_until: L('Hết hạn ngày', 'gültig bis'), work_permitted: L('Được phép làm việc?', 'Erwerbstätigkeit gestattet'),
-    company: L('Công ty', 'Firma'), personnel_no: L('Mã nhân viên', 'Personal-Nr.'), entry_date: L('Ngày bắt đầu làm', 'Eintrittsdatum'), job_title: L('Công việc', 'Tätigkeit'),
-    employment_type: L('Loại hợp đồng', 'Beschäftigungsart'), weekly_hours: L('Giờ / tuần', 'Std./Woche'), gross_monthly: L('Lương brutto / tháng', 'Monatl. Bruttolohn'),
-    hourly_wage: L('Lương / giờ', 'Stundenlohn'), vacation_days: L('Ngày phép / năm', 'Urlaubstage'), multiple_employment: L('Có làm việc ở nơi khác không?', 'Mehrfachbeschäftigung'),
-    tax_id: L('Số Steuer-ID', 'Steuer-ID'), pension_no: L('Số bảo hiểm hưu trí', 'Rentenversicherungsnr.'), tax_class: L('Bậc thuế lương', 'Steuerklasse'),
-    health_insurance: L('Hãng bảo hiểm y tế', 'Krankenkasse'), iban: 'IBAN', bic: 'BIC', bank_name: L('Ngân hàng', 'Bank'), note: T('Ghi chú', 'Notiz'),
+    residence_permit: L('Giấy phép cư trú', 'Aufenthaltstitel'), residence_permit_until: L('Hết hạn ngày', 'gültig bis'), work_permitted: L('Được phép làm việc', 'Erwerbstätigkeit gestattet'),
+    company: L('Công ty', 'Firma'), personnel_no: L('Mã nhân viên', 'Personal-Nr.'), entry_date: L('Ngày vào làm', 'Eintrittsdatum'), job_title: L('Vị trí', 'Tätigkeit'),
+    employment_type: L('Hợp đồng', 'Beschäftigungsart'), weekly_hours: L('Giờ làm', 'Arbeitszeit'), gross_monthly: L('Lương tháng', 'Monatslohn'),
+    hourly_wage: L('Lương giờ', 'Stundenlohn'), vacation_days: L('Ngày phép', 'Urlaubsanspruch'), multiple_employment: L('Làm thêm nơi khác', 'Mehrfachbeschäftigung'),
+    tax_id: L('Mã số thuế', 'Steuer-ID'), pension_no: L('Số BH hưu trí', 'RV-Nummer'), tax_class: L('Bậc thuế', 'Steuerklasse'),
+    health_insurance: L('Bảo hiểm y tế', 'Krankenkasse'), iban: 'IBAN', bic: 'BIC', bank_name: L('Ngân hàng', 'Bank'), note: L('Ghi chú', 'Notiz'),
+  }
+  type FD = { k: K; fixed?: boolean; full?: boolean }
+  const GROUPS: Record<GroupId, { title: string; icon: GKey; fields: FD[] }> = {
+    personal: { title: T('Thông tin cá nhân', 'Persönliche Angaben'), icon: 'user', fields: [
+      { k: 'last_name', fixed: true }, { k: 'first_name', fixed: true }, { k: 'birth_date', fixed: true }, { k: 'birth_place', fixed: true },
+      { k: 'nationality', fixed: true }, { k: 'phone' }, { k: 'email' }, { k: 'address', full: true }] },
+    work: { title: T('Thông tin công việc', 'Beschäftigung'), icon: 'work', fields: [
+      { k: 'company', fixed: true }, { k: 'personnel_no', fixed: true }, { k: 'entry_date', fixed: true },
+      { k: 'job_title' }, { k: 'employment_type' }, { k: 'multiple_employment' }] },
+    residence: { title: T('Cư trú và lao động', 'Aufenthalt und Erwerbstätigkeit'), icon: 'shield', fields: [
+      { k: 'residence_permit' }, { k: 'residence_permit_until' }, { k: 'work_permitted' }] },
+    pay: { title: T('Lương và giờ làm', 'Vergütung und Arbeitszeit'), icon: 'wallet', fields: [
+      { k: 'gross_monthly' }, { k: 'hourly_wage' }, { k: 'weekly_hours' }] },
+    tax: { title: T('Thuế và bảo hiểm', 'Steuer und Sozialversicherung'), icon: 'shield', fields: [
+      { k: 'tax_id', fixed: true }, { k: 'pension_no', fixed: true }, { k: 'tax_class' }, { k: 'health_insurance' }] },
+    bank: { title: T('Tài khoản ngân hàng', 'Bankverbindung'), icon: 'bank', fields: [{ k: 'iban' }, { k: 'bic' }, { k: 'bank_name' }] },
+    leave: { title: T('Phép năm', 'Urlaubsanspruch'), icon: 'calendar', fields: [{ k: 'vacation_days' }] },
+    note: { title: T('Ghi chú', 'Notiz'), icon: 'note', fields: [{ k: 'note', full: true }] },
+  }
+  const editable = (f: FD) => !f.fixed || e[f.k] == null || e[f.k] === ''
+  const sub = (k: K) => (!de && k === 'residence_permit' && permitInfo(e.residence_permit) ? permitInfo(e.residence_permit)![1] : null)
+  const group = (id: GroupId) => {
+    const G = GROUPS[id]
+    const editing = ed?.g === id
+    const fields = G.fields.filter((f) => !(f.k === 'residence_permit_until' && permitInfo((editing ? ed!.draft.residence_permit : e.residence_permit) ?? null)?.[3]))
+    return (
+      <Group key={id} icon={<GIcon k={G.icon} />} title={G.title}
+        action={!editing && G.fields.some(editable) && (
+          <button className="pc-edit" onClick={() => setEd({ g: id, draft: Object.fromEntries(G.fields.filter(editable).map((f) => [f.k, e[f.k]])) as Partial<Employee> })}>
+            <GIcon k="pen" />{T('Sửa', 'Bearbeiten')}
+          </button>)}
+        foot={editing && (
+          <div className="pc-foot">
+            <button onClick={() => setEd(null)}>{T('Hủy', 'Abbrechen')}</button>
+            <button className="primary" disabled={busy} onClick={saveEd}>{T('Lưu', 'Speichern')}</button>
+          </div>)}>
+        <div className="kv">
+          {fields.map((f) => {
+            const v = show(f.k)
+            return (
+              <div key={f.k} className={`kv-i${f.full ? ' full' : ''}`}>
+                <div className="kv-l">{labelOf[f.k]}{editing && !editable(f) && <span className="kv-lock" title={T('Cố định', 'Fest')}><GIcon k="lock" /></span>}</div>
+                {editing && editable(f) ? edInput(f.k) : <>
+                  <div className={`kv-v${v ? '' : ' empty'}`}>{v || T('Chưa cập nhật', 'Nicht erfasst')}</div>
+                  {v && sub(f.k) && <div className="kv-sub">{sub(f.k)}</div>}
+                </>}
+              </div>
+            )
+          })}
+        </div>
+      </Group>
+    )
+  }
+  async function saveEd() {
+    if (!ed) return
+    const patch = { ...ed.draft }
+    if ('last_name' in patch && !(patch.last_name || '').trim()) delete patch.last_name
+    if ('first_name' in patch && patch.first_name == null) delete patch.first_name
+    if ('iban' in patch && patch.iban) patch.iban = patch.iban.replace(/\s+/g, '').toUpperCase()
+    if ('iban' in patch && !validIban(patch.iban ?? null)) { toast(T('IBAN có vẻ sai', 'IBAN ungültig')); return }
+    if ('tax_id' in patch && !validTaxId(patch.tax_id ?? null)) { toast(T('Steuer-ID phải có 11 chữ số', 'Steuer-ID muss 11 Ziffern haben')); return }
+    if ('job_title' in patch) { const j = jobInfo(patch.job_title ?? null); if (j) patch.position = j[2] }
+    setBusy(true)
+    const { error } = await supabase.from('nh_employees').update(patch).eq('id', eid!)
+    setBusy(false)
+    if (error) { toast(/nh_employees_pnr|duplicate key/.test(errMsg(error)) ? T('Mã nhân viên này đã có ở hồ sơ khác', 'Personal-Nr. bereits vergeben') : errMsg(error)); return }
+    set(patch); setEd(null); toast(T('Đã lưu', 'Gespeichert'))
   }
   const edInput = (k: K) => {
     const d = ed!.draft, v = d[k]
@@ -361,19 +393,55 @@ export default function EmployeePage() {
         </select>)
       case 'gross_monthly': case 'hourly_wage': return <Money value={(v as number) ?? null} onChange={(x) => up({ [k]: x || null } as Partial<Employee>)} />
       case 'weekly_hours': case 'vacation_days': return <input inputMode="decimal" value={v == null ? '' : String(v).replace('.', ',')} onChange={(ev) => up({ [k]: ev.target.value.trim() ? parseNum(ev.target.value) : null } as Partial<Employee>)} />
-      case 'address': case 'note': return <textarea value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
+      case 'address': case 'note': return <textarea rows={2} value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
+      case 'phone': return <input type="tel" value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
+      case 'email': return <input type="email" value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
       default: return <input value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
     }
   }
 
-  return (
+  // ===== Giấy tờ
+  const slips = docs.filter((d) => d.kind === 'payslip').sort((a, b) => (b.period || b.created_at).localeCompare(a.period || a.created_at))
+  const personalDocs = docs.filter((d) => d.kind !== 'payslip')
+  const docRow = (d: EmpDoc) => {
+    const dl = permitDaysLeft(d.valid_until)
+    const slip = d.kind === 'payslip' && d.period
+    return (
+      <div key={d.id} className="it">
+        <button className="ghost grow" style={{ justifyContent: 'flex-start', textAlign: 'left', minWidth: 0, padding: 0 }} onClick={() => openHrFile(d.path)}>
+          <span className="doc-ic"><GIcon k="file" /></span>
+          <div style={{ minWidth: 0 }}>
+            <div className="t">{slip ? `${T('Bảng lương', 'Lohnabrechnung')} ${d.period!.slice(5, 7)}/${d.period!.slice(0, 4)}` : d.kind === 'other' ? d.title : DOC_KINDS[d.kind][li]}</div>
+            <div className="small muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{slip ? '' : `${d.title} · `}{T('tải lên', 'hochgeladen')} {dmy(d.created_at)}</div>
+          </div>
+        </button>
+        {!['payslip', 'contract', 'tax', 'certificate'].includes(d.kind) && (
+          <div style={{ width: 130 }} title={T('Hết hạn', 'gültig bis')}>
+            <DateField allowEmpty value={d.valid_until} onChange={(v) => setDocValid(d, v)} />
+            {dl != null && dl <= PERMIT_WARN_DAYS && <span className={`tag ${dl < 0 ? 'err' : 'warn'}`}>{dl < 0 ? T('hết hạn', 'abgelaufen') : `${dl} ${T('ngày', 'Tage')}`}</span>}
+          </div>
+        )}
+        <button className="ghost" onClick={() => delDoc(d)} aria-label="delete">✕</button>
+      </div>
+    )
+  }
+  const folder = (title: string, list: EmpDoc[], open: boolean) => (
+    <details className="folder" open={open}>
+      <summary><GIcon k="folder" /> {title} <span className="muted">({list.length})</span></summary>
+      {list.length ? <div className="list">{list.map(docRow)}</div> : <div className="small muted" style={{ padding: '6px 12px 12px' }}>{T('Chưa có', 'Leer')}</div>}
+    </details>
+  )
+  const uploadBox = (
+    <label className="btn block drop" {...dropProps((fl) => addFiles(fl))}>{T('Tải giấy tờ lên (PDF / ảnh)', 'Dokument hochladen (PDF / Foto)')}<span className="drop-hint">{T('hoặc kéo thả file vào đây', 'oder Datei hierher ziehen')}</span>
+      <input type="file" accept="application/pdf,.pdf,image/*" multiple hidden disabled={busy} onChange={(ev) => { addFiles(ev.target.files || []); ev.target.value = '' }} />
+    </label>
+  )
+
+  if (isNew) return (
     <>
-      <Top title={isNew ? T('Nhân viên mới', 'Neuer Mitarbeiter') : fullName(e)} sub={isNew ? r.name : `${r.name}${active ? '' : ' · ' + T('Đã nghỉ', 'Ausgeschieden')}`} back={`/r/${rid}/hr`}
-        right={!isNew && <button className="btn" title="PDF" onClick={() => download(personalbogenPdf(e, r, hs?.company_name || null), `Personalbogen_${e.last_name}_${e.first_name}.pdf`.replace(/\s+/g, '_'))}>PDF</button>} />
+      <Top title={T('Nhân viên mới', 'Neuer Mitarbeiter')} sub={r.name} back={`/r/${rid}/hr`} />
       <div className="page">
-        {!active && <div className="alert warn">{T('Đã nghỉ việc từ', 'Ausgeschieden zum')} {dmy(e.exit_date)}{e.exit_reason && ` · ${e.exit_reason}`}</div>}
         {warns.map((w) => <div key={w} className="alert warn">{w}</div>)}
-        {isNew ? (<>
         <label className="btn block drop" style={{ marginBottom: 12 }} {...dropProps((fl) => fromPayslip(fl))}>
           🧾 {T('Tải bảng lương cũ lên để tự điền thông tin', 'Alte Lohnabrechnung hochladen und Daten übernehmen')}
           <span className="drop-hint">{busy ? T('Đang đọc…', 'Wird gelesen…') : T('Tên, địa chỉ, ngày sinh, Steuer-ID, số BH hưu trí, Krankenkasse, Steuerklasse… (PDF DATEV)', 'Name, Anschrift, Geburtsdatum, Steuer-ID, RV-Nr., Krankenkasse, Steuerklasse… (DATEV-PDF)')}</span>
@@ -464,13 +532,9 @@ export default function EmployeePage() {
           </div>
           <F l={T('Ghi chú', 'Notiz')}><textarea {...txt('note')} /></F>
         </div>
-        </>) : profileView()}
-
         <div className="card">
           <h3 style={{ marginTop: 0 }}>{T('Giấy tờ', 'Dokumente')}</h3>
-          <label className="btn block drop" {...dropProps((fl) => addFiles(fl))}>📄 {T('Tải giấy tờ lên (PDF / ảnh)', 'Dokument hochladen (PDF / Foto)')}<span className="drop-hint">{T('hoặc kéo thả file vào đây', 'oder Datei hierher ziehen')}</span>
-            <input type="file" accept="application/pdf,.pdf,image/*" multiple hidden disabled={busy} onChange={(ev) => { addFiles(ev.target.files || []); ev.target.value = '' }} />
-          </label>
+          {uploadBox}
           {pending.length > 0 && (
             <div className="list" style={{ marginTop: 8 }}>
               {pending.map((p, i) => (
@@ -481,46 +545,62 @@ export default function EmployeePage() {
               ))}
             </div>
           )}
-          {(() => {
-            const slips = docs.filter((d) => d.kind === 'payslip').sort((a, b) => (b.period || b.created_at).localeCompare(a.period || a.created_at))
-            const personal = docs.filter((d) => d.kind !== 'payslip')
-            const row = (d: EmpDoc) => {
-              const dl = permitDaysLeft(d.valid_until)
-              const slip = d.kind === 'payslip' && d.period
-              return (
-                <div key={d.id} className="it">
-                  <button className="ghost grow" style={{ justifyContent: 'flex-start', textAlign: 'left', minWidth: 0, padding: 0 }} onClick={() => openHrFile(d.path)}>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="t">📎 {slip ? `${T('Bảng lương', 'Lohnabrechnung')} ${d.period!.slice(5, 7)}/${d.period!.slice(0, 4)}` : d.kind === 'other' ? d.title : DOC_KINDS[d.kind][li]}</div>
-                      <div className="small muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{slip ? '' : `${d.title} · `}{T('tải lên', 'hochgeladen')} {dmy(d.created_at)}</div>
-                    </div>
-                  </button>
-                  {!['payslip', 'contract', 'tax', 'certificate'].includes(d.kind) && (
-                    <div style={{ width: 130 }} title={T('Hết hạn', 'gültig bis')}>
-                      <DateField allowEmpty value={d.valid_until} onChange={(v) => setDocValid(d, v)} />
-                      {dl != null && dl <= PERMIT_WARN_DAYS && <span className={`tag ${dl < 0 ? 'err' : 'warn'}`}>{dl < 0 ? T('hết hạn', 'abgelaufen') : `${dl} ${T('ngày', 'Tage')}`}</span>}
-                    </div>
-                  )}
-                  <button className="ghost" onClick={() => delDoc(d)} aria-label="delete">✕</button>
-                </div>
-              )
-            }
-            const folder = (title: string, list: EmpDoc[], open: boolean) => (
-              <details className="folder" open={open}>
-                <summary>📁 {title} <span className="muted">({list.length})</span></summary>
-                {list.length ? <div className="list">{list.map(row)}</div> : <div className="small muted" style={{ padding: '6px 4px' }}>{T('Chưa có', 'Leer')}</div>}
-              </details>
-            )
-            return docs.length > 0 && <>
-              {folder(T('Giấy tờ cá nhân', 'Persönliche Dokumente'), personal, true)}
-              {folder(T('Bảng lương', 'Lohnabrechnungen'), slips, false)}
-            </>
-          })()}
         </div>
+        <button className="primary block" disabled={busy} onClick={save}>{busy ? '…' : T('Lưu', 'Speichern')}</button>
+      </div>
+    </>
+  )
 
-        {!isNew && (
-          <div className="card">
-            <h3 style={{ marginTop: 0 }}>{T('Hợp đồng lao động', 'Arbeitsverträge')}</h3>
+  const initials = [e.first_name, e.last_name].map((x) => (x || '').trim()[0] || '').join('').toUpperCase()
+  const pay = e.gross_monthly != null ? eur(Number(e.gross_monthly)) : e.hourly_wage != null ? `${eur(Number(e.hourly_wage))} / ${T('giờ', 'Std.')}` : ''
+  const ABS: Record<string, [string, string]> = { vacation: ['Nghỉ phép', 'Urlaub'], sick: ['Nghỉ ốm', 'Krank'], unpaid: ['Nghỉ không lương', 'Unbezahlt'], other: ['Khác', 'Sonstiges'] }
+  const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5) + 1
+  const TABS: [Tab, string][] = [
+    ['overview', T('Tổng quan', 'Übersicht')], ['personal', T('Cá nhân', 'Persönlich')], ['work', T('Công việc', 'Beschäftigung')], ['residence', T('Cư trú', 'Aufenthalt')],
+    ['pay', T('Lương và bảo hiểm', 'Lohn und Versicherung')], ['leave', T('Nghỉ phép', 'Abwesenheit')], ['docs', `${T('Tài liệu', 'Dokumente')} (${docs.length})`],
+  ]
+
+  return (
+    <>
+      <Top title={T('Hồ sơ nhân viên', 'Personalakte')} sub={r.name} back={`/r/${rid}/hr`}
+        right={<button className="btn pdf-btn" title="Personalbogen PDF" onClick={() => download(personalbogenPdf(e, r, hs?.company_name || null), `Personalbogen_${e.last_name}_${e.first_name}.pdf`.replace(/\s+/g, '_'))}><GIcon k="download" />PDF</button>} />
+      <div className="page pf">
+        <section className="phead">
+          <div className="ph-top">
+            <label className="ph-av" title={T('Đổi ảnh chân dung', 'Foto ändern')}>
+              {photoUrl ? <img src={photoUrl} alt="" /> : <span>{initials || '?'}</span>}
+              <span className="ph-cam"><GIcon k="camera" /></span>
+              <input type="file" accept="image/*" hidden onChange={(ev) => { uploadPhoto(ev.target.files?.[0]); ev.target.value = '' }} />
+            </label>
+            <div className="ph-id">
+              <h2>{fullName(e) || '—'}</h2>
+              <div className="muted">{e.company || hs?.company_name || r.name}</div>
+              <div className="ph-tags">
+                {e.employment_type && <span className="tag">{EMP_TYPES[e.employment_type][li]}</span>}
+                {active ? <span className="tag ok">{T('Đang làm', 'Aktiv')}</span> : <span className="tag err" title={e.exit_reason || ''}>{T('Đã nghỉ từ', 'Ausgeschieden zum')} {dmy(e.exit_date)}</span>}
+                {e.personnel_no && <span className="ph-pnr">Personal-Nr. {e.personnel_no}</span>}
+              </div>
+            </div>
+          </div>
+          <div className="ph-stats">
+            <div><span>{L('Lương tháng', 'Monatslohn')}</span><b className={pay ? 'accent' : 'empty'}>{pay || T('Chưa cập nhật', 'Nicht erfasst')}</b></div>
+            <div><span>{L('Ngày vào làm', 'Eintritt')}</span><b className={e.entry_date ? '' : 'empty'}>{e.entry_date ? dmy(e.entry_date) : T('Chưa cập nhật', 'Nicht erfasst')}</b></div>
+            <div><span>{L('Hợp đồng', 'Beschäftigung')}</span><b className={e.employment_type ? '' : 'empty'}>{e.employment_type ? EMP_TYPES[e.employment_type][li] : T('Chưa cập nhật', 'Nicht erfasst')}</b></div>
+          </div>
+        </section>
+
+        {warns.length > 0 && <div className="pf-warns">{warns.map((w) => <div key={w} className="alert warn">{w}</div>)}</div>}
+
+        <nav className="ptabs" role="tablist">
+          {TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}
+        </nav>
+
+        {tab === 'overview' && <>{group('personal')}{group('work')}{group('residence')}{e.note && group('note')}</>}
+        {tab === 'personal' && <>{group('personal')}{group('note')}</>}
+        {tab === 'work' && <>
+          {group('work')}
+          <Group icon={<GIcon k="file" />} title={T('Hợp đồng lao động', 'Arbeitsverträge')}
+            action={<button className="pc-edit" onClick={() => { setCt(emptyContract(e)); setCtFiles([]) }}>+ {T('Thêm', 'Neu')}</button>}>
             <div className="list">
               {contracts.map((c) => (
                 <button key={c.id} className="it" style={{ width: '100%', textAlign: 'left' }} onClick={() => { setCt({ ...c }); setCtFiles([]) }}>
@@ -536,18 +616,54 @@ export default function EmployeePage() {
               ))}
               {!contracts.length && <div className="it muted">{T('Chưa có hợp đồng', 'Kein Vertrag erfasst')}</div>}
             </div>
-            <button className="block" onClick={() => { setCt(emptyContract(e)); setCtFiles([]) }}>+ {T('Thêm hợp đồng', 'Vertrag hinzufügen')}</button>
-          </div>
-        )}
-
-        {isNew && <button className="primary block" disabled={busy} onClick={save}>{busy ? '…' : T('Lưu', 'Speichern')}</button>}
-        {!isNew && (
-          <div className="row" style={{ marginTop: 10 }}>
+          </Group>
+          <div className="row wrap">
             {active
               ? <button className="grow" onClick={() => setExitF({ date: todayIso(), reason: '' })}>{T('Nghỉ việc / huỷ hợp đồng', 'Austritt / Kündigung')}</button>
               : <button className="grow" onClick={() => saveExit(null, null)}>{T('Đi làm lại', 'Wieder aktiv')}</button>}
             <button className="danger" onClick={delEmployee}>{T('Xoá hồ sơ', 'Akte löschen')}</button>
           </div>
+        </>}
+        {tab === 'residence' && <>
+          {group('residence')}
+          <Group icon={<GIcon k="folder" />} title={T('Giấy tờ cư trú', 'Ausweisdokumente')}>
+            {(() => {
+              const l = docs.filter((d) => ['passport', 'residence', 'work_permit', 'id_card'].includes(d.kind))
+              return l.length ? <div className="list">{l.map(docRow)}</div> : <div className="kv-v empty">{T('Chưa có. Tải lên ở tab Tài liệu.', 'Keine. Upload unter Dokumente.')}</div>
+            })()}
+          </Group>
+        </>}
+        {tab === 'pay' && <>
+          {group('pay')}{group('tax')}{group('bank')}
+          <Group icon={<GIcon k="folder" />} title={T('Bảng lương gần nhất', 'Letzte Lohnabrechnungen')}
+            action={slips.length > 3 && <button className="pc-edit" onClick={() => setTab('docs')}>{T('Xem tất cả', 'Alle')} ({slips.length})</button>}>
+            {slips.length ? <div className="list">{slips.slice(0, 3).map(docRow)}</div> : <div className="kv-v empty">{T('Chưa có bảng lương', 'Keine Lohnabrechnungen')}</div>}
+          </Group>
+        </>}
+        {tab === 'leave' && <>
+          {group('leave')}
+          <Group icon={<GIcon k="calendar" />} title={T('Ngày nghỉ đã ghi', 'Erfasste Abwesenheiten')}>
+            {abs.length ? (
+              <div className="list">
+                {abs.map((a) => (
+                  <div key={a.id} className="it">
+                    <div className="grow" style={{ minWidth: 0 }}>
+                      <div className="t">{(ABS[a.kind] || ABS.other)[li]}</div>
+                      <div className="small muted">{dmy(a.from_date)} – {dmy(a.to_date)}{a.note && ` · ${a.note}`}</div>
+                    </div>
+                    <div className="num">{days(a.from_date, a.to_date)} {T('ngày', 'Tage')}</div>
+                  </div>
+                ))}
+              </div>
+            ) : <div className="kv-v empty">{T('Chưa có ngày nghỉ nào được ghi', 'Keine Abwesenheiten erfasst')}</div>}
+          </Group>
+        </>}
+        {tab === 'docs' && (
+          <Group icon={<GIcon k="folder" />} title={T('Tài liệu', 'Dokumente')}>
+            {uploadBox}
+            {folder(T('Giấy tờ cá nhân', 'Persönliche Dokumente'), personalDocs, true)}
+            {folder(T('Bảng lương', 'Lohnabrechnungen'), slips, false)}
+          </Group>
         )}
       </div>
 
@@ -588,13 +704,6 @@ export default function EmployeePage() {
           </div>
           <button className="primary block" disabled={busy} onClick={saveContract}>{busy ? '…' : T('Lưu', 'Speichern')}</button>
           {ct.id && <button className="danger block" style={{ marginTop: 8 }} onClick={delContract}>{T('Xoá', 'Löschen')}</button>}
-        </>}
-      </Sheet>
-
-      <Sheet open={!!ed} onClose={() => setEd(null)} title={ed ? labelOf[ed.keys[0]] : ''}>
-        {ed && <>
-          {ed.keys.map((k) => (k !== 'residence_permit_until' || !permitInfo(ed.draft.residence_permit ?? null)?.[3]) && <F key={k} l={labelOf[k] || k}>{edInput(k)}</F>)}
-          <button className="primary block" onClick={saveEd}>{T('Lưu', 'Speichern')}</button>
         </>}
       </Sheet>
 
