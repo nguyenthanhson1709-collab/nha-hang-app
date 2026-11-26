@@ -481,3 +481,4 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .lang-sw button:not(.on):hover { color: var(--text); }
 @media (max-width: 420px) { .hd-right { gap: 6px; } .lang-sw button { min-width: 34px; padding: 0 7px; } }
 @media (max-width: 420px) { .lang-sw { padding: 2px; } .lang-sw button { min-width: 28px; min-height: 32px; padding: 0 5px; font-size: .72rem; } .top h1 { font-size: 1.12rem; } }
+@media (max-width: 640px) { .pdf-btn span { display: none; } .pdf-btn { width: 44px; padding: 0; } .pdf-btn .gi { width: 19px; height: 19px; } }

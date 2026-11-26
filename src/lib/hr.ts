@@ -65,6 +65,9 @@ export const PERMITS: [string, string, boolean | null, boolean][] = [
 export const permitInfo = (v: string | null) => PERMITS.find((p) => p[0] === v)
 
 /** Công việc (Tätigkeit): [tên Đức (lưu và in ra), tiếng Việt, khu vực dùng khi xếp lịch] */
+/** Quốc tịch hay gặp (ghi tiếng Đức vì in lên giấy tờ); vẫn gõ được quốc tịch khác */
+export const NATIONS = ['vietnamesisch', 'deutsch', 'deutsch, vietnamesisch']
+
 export const JOBS: [string, string, Position][] = [
   ['Koch / Köchin', 'Đầu bếp', 'kitchen'],
   ['Beikoch / Beiköchin', 'Phụ bếp', 'kitchen'],

@@ -8,10 +8,11 @@ import { dmy, eur, parseNum, todayIso } from '../lib/format'
 import { dropProps } from '../lib/drop'
 import { download } from '../lib/pdf'
 import {
-  DOC_KINDS, EMP_TYPES, guessKind, JOBS, jobInfo, PERMITS, permitInfo, emptyEmployee, fullName, hrSignedUrl, HR_BUCKET, isActive, openHrFile, permitDaysLeft, PERMIT_WARN_DAYS, POSITIONS,
+  DOC_KINDS, EMP_TYPES, guessKind, JOBS, jobInfo, NATIONS, PERMITS, permitInfo, emptyEmployee, fullName, hrSignedUrl, HR_BUCKET, isActive, openHrFile, permitDaysLeft, PERMIT_WARN_DAYS, POSITIONS,
   uploadHrFile, validIban, validTaxId, type DocKind, type EmpContract, type EmpDoc, type EmpType, type Employee, type HrSettings,
 } from '../lib/hr'
 import { personalbogenPdf } from '../lib/hrPdf'
+import { arbeitgeberbestaetigungPdf, bestaetigungMissing, type Anrede } from '../lib/hrLetter'
 import { arbeitsvertrag, contractMissing, guessDays, legalMinVacation } from '../lib/hrContract'
 import { readPayslips } from '../lib/payslipImport'
 import { baseSalary, empTypeOf, hourlyOf, splitName } from '../lib/payslip'
@@ -88,6 +89,7 @@ export default function EmployeePage() {
   const [tab, setTab] = useState<Tab>('overview')
   const [abs, setAbs] = useState<Absence[]>([])
   const [cv, setCv] = useState<{ job: string; days: number } | null>(null)
+  const [ab, setAb] = useState<{ anrede: Anrede; job: string; date: string } | null>(null)
   const [exitF, setExitF] = useState<{ date: string | null; reason: string } | null>(null)
 
   async function loadChildren() {
@@ -383,6 +385,7 @@ export default function EmployeePage() {
         </div>)
       case 'residence_permit': return <ComboInput value={(v as string) || ''} options={PERMITS.map((p) => p[0])} onChange={(x) => { const pi = permitInfo(x); up({ residence_permit: x || null, ...(pi && pi[2] != null ? { work_permitted: pi[2] } : {}), ...(pi?.[3] ? { residence_permit_until: null } : {}) }) }} />
       case 'job_title': return <ComboInput value={(v as string) || ''} options={JOBS.map((j) => j[0])} onChange={sv} />
+      case 'nationality': return <ComboInput value={(v as string) || ''} options={NATIONS} onChange={sv} placeholder={T('Chọn hoặc gõ', 'Auswählen oder eingeben')} />
       case 'employment_type': return (
         <select value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)}>
           <option value="">—</option>
@@ -467,7 +470,7 @@ export default function EmployeePage() {
             <F l={L('Ngày sinh', 'Geburtsdatum')}><input type="date" value={e.birth_date || ''} onChange={(ev) => set({ birth_date: ev.target.value || null })} /></F>
             <F l={L('Nơi sinh', 'Geburtsort')}><input {...txt('birth_place')} /></F>
           </div>
-          <F l={L('Quốc tịch', 'Nationalität')}><input {...txt('nationality')} placeholder="vietnamesisch, deutsch…" /></F>
+          <F l={L('Quốc tịch', 'Nationalität')}><ComboInput value={e.nationality || ''} options={NATIONS} onChange={(v) => set({ nationality: v || null })} placeholder={T('Chọn hoặc gõ', 'Auswählen oder eingeben')} /></F>
           <div className="grid2">
             <F l={L('Điện thoại', 'Telefon')}><input type="tel" {...txt('phone')} /></F>
             <F l="E-Mail"><input type="email" {...txt('email')} /></F>
@@ -577,6 +580,16 @@ export default function EmployeePage() {
     } catch (x) { toast(errMsg(x)) }
     setBusy(false)
   }
+  async function doBestaetigung() {
+    if (!ab) return
+    setBusy(true)
+    try {
+      const pdf = await arbeitgeberbestaetigungPdf(e!, { anrede: ab.anrede, job: ab.job.trim() || null, date: ab.date })
+      download(pdf, `Arbeitgeberbestaetigung_${e!.last_name}_${e!.first_name}_${ab.date}.pdf`.replace(/\s+/g, '_'))
+      setAb(null)
+    } catch (x) { toast(errMsg(x)) }
+    setBusy(false)
+  }
   const initials = [e.first_name, e.last_name].map((x) => (x || '').trim()[0] || '').join('').toUpperCase()
   const pay = e.gross_monthly != null ? eur(Number(e.gross_monthly)) : e.hourly_wage != null ? `${eur(Number(e.hourly_wage))} / ${T('giờ', 'Std.')}` : ''
   const ABS: Record<string, [string, string]> = { vacation: ['Nghỉ phép', 'Urlaub'], sick: ['Nghỉ ốm', 'Krank'], unpaid: ['Nghỉ không lương', 'Unbezahlt'], other: ['Khác', 'Sonstiges'] }
@@ -590,8 +603,9 @@ export default function EmployeePage() {
     <>
       <Top title={T('Hồ sơ nhân viên', 'Personalakte')} sub={r.name} back={`/r/${rid}/hr`}
         right={<div className="row" style={{ gap: 6 }}>
-          <button className="btn pdf-btn" title={T('Hợp đồng lao động (Word), điền sẵn thông tin nhân viên', 'Arbeitsvertrag (Word) mit Mitarbeiterdaten')} onClick={makeContract}><GIcon k="file" />{T('Hợp đồng', 'Vertrag')}</button>
-          <button className="btn pdf-btn" title="Personalbogen PDF" onClick={() => download(personalbogenPdf(e, r, hs?.company_name || null), `Personalbogen_${e.last_name}_${e.first_name}.pdf`.replace(/\s+/g, '_'))}><GIcon k="download" />PDF</button>
+          <button className="btn pdf-btn" title={T('Hợp đồng lao động (Word), điền sẵn thông tin nhân viên', 'Arbeitsvertrag (Word) mit Mitarbeiterdaten')} onClick={makeContract}><GIcon k="file" /><span>{T('Hợp đồng', 'Vertrag')}</span></button>
+          <button className="btn pdf-btn" title={T('Giấy xác nhận đang làm việc (PDF)', 'Arbeitgeberbestätigung (PDF)')} onClick={() => setAb({ anrede: 'Herr', job: e.job_title || '', date: todayIso() })}><GIcon k="file" /><span>Arbeitgeberbestätigung</span></button>
+          <button className="btn pdf-btn" title="Personalbogen PDF" onClick={() => download(personalbogenPdf(e, r, hs?.company_name || null), `Personalbogen_${e.last_name}_${e.first_name}.pdf`.replace(/\s+/g, '_'))}><GIcon k="download" /><span>PDF</span></button>
         </div>} />
       <div className="page pf">
         <section className="phead">
@@ -757,6 +771,23 @@ export default function EmployeePage() {
             {miss.length > 0 && <div className="alert warn">{T('Còn thiếu', 'Fehlt')}: {miss.map((k) => CNAMES[k]).join(', ')}. {T('Các chỗ này để dòng chấm để điền tay.', 'Diese Stellen bleiben frei.')}</div>}
             <p className="small muted">{T('Lương, giờ/tuần, ngày phép lấy từ hồ sơ. Muốn đổi thì sửa ở tab Lương và bảo hiểm / Nghỉ phép.', 'Lohn, Wochenstunden und Urlaub kommen aus der Akte.')}</p>
             <button className="primary block" disabled={busy} onClick={doContract}>{busy ? '…' : T('Tạo hợp đồng (lưu PDF, tải Word)', 'Vertrag erstellen (PDF speichern, Word laden)')}</button>
+          </>
+        })()}
+      </Sheet>
+
+      <Sheet open={!!ab} onClose={() => setAb(null)} title="Arbeitgeberbestätigung">
+        {ab && (() => {
+          const miss = bestaetigungMissing(e, ab.job)
+          const MN: Record<string, string> = { name: T('họ tên', 'Name'), birth_date: T('ngày sinh', 'Geburtsdatum'), birth_place: T('nơi sinh', 'Geburtsort'), address: T('địa chỉ', 'Anschrift'), entry_date: T('ngày vào làm', 'Eintritt'), job: T('công việc', 'Tätigkeit') }
+          return <>
+            <F l={L('Xưng hô', 'Anrede')}>
+              <div className="seg">{(['Herr', 'Frau'] as Anrede[]).map((a) => <button key={a} className={ab.anrede === a ? 'sel' : ''} onClick={() => setAb({ ...ab, anrede: a })}>{a}</button>)}</div>
+            </F>
+            <F l={L('Công việc', 'Tätigkeit')}><ComboInput value={ab.job} options={JOBS.map((j) => j[0])} onChange={(v) => setAb({ ...ab, job: v })} placeholder="Koch, Servicekraft…" /></F>
+            <F l={L('Ngày viết', 'Datum')}><DateField value={ab.date} onChange={(d) => setAb({ ...ab, date: d || todayIso() })} /></F>
+            {miss.length > 0 && <div className="alert warn">{T('Còn thiếu', 'Fehlt')}: {miss.map((k) => MN[k]).join(', ')}. {T('Các chỗ này để dòng chấm.', 'Diese Stellen bleiben frei.')}</div>}
+            <p className="small muted">{T('Tên, ngày sinh, nơi sinh, địa chỉ, ngày vào làm lấy từ hồ sơ.', 'Name, Geburtsdatum, Geburtsort, Anschrift und Eintritt kommen aus der Akte.')}</p>
+            <button className="primary block" disabled={busy} onClick={doBestaetigung}>{busy ? '…' : T('Tạo PDF', 'PDF erstellen')}</button>
           </>
         })()}
       </Sheet>
