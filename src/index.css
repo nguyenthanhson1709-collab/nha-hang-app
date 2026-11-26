@@ -551,3 +551,12 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .pl-legend i.frueh { background: rgb(255 144 24 / .35); } .pl-legend i.spaet { background: rgb(111 207 151 / .35); } .pl-legend i.so { background: rgb(255 120 150 / .4); }
 .pl-legend i.ft { background: rgb(255 214 102 / .45); } .pl-legend i.u { background: rgb(143 176 240 / .45); }
 .pl-kpi .st-stat { display: flex; } .pl-kpi .st-stat span { font-size: .8rem; color: var(--muted); }
+.st-sort { background: none; border: 0; padding: 4px 0; min-height: 0; font: inherit; color: inherit; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; border-radius: 6px; }
+.st-sort:hover { color: var(--text); }
+.st-sort.on { color: var(--brand); }
+.st-arr { font-size: .65rem; opacity: .55; }
+.st-sort.on .st-arr { opacity: 1; }
+@media (max-width: 640px) {
+  .st-table .st-th { display: flex; flex-wrap: wrap; gap: 6px 14px; min-height: 0; padding: 10px 14px; }
+  .st-table .st-th > span:empty { display: none; }
+}
