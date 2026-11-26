@@ -185,7 +185,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
-  async function save(): Promise<string | null> {
+  async function save(go = true): Promise<string | null> {
     setErr(''); setOk('')
     if (!invoice.customer_snapshot?.name?.trim()) { setErr(L('Hãy nhập tên khách hàng.', 'Bitte Kundennamen eingeben.')); return null }
     if (!items.length) { setErr(L('Hãy thêm ít nhất một món.', 'Bitte mindestens eine Position hinzufügen.')); return null }
@@ -194,7 +194,8 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     try {
       const newId = await saveDraft(rid!, invoice, items)
       setDirty(false)
-      if (!id) nav(`${listBase}/${newId}`, { replace: true })
+      // Hoá đơn mới: đổi địa chỉ sang /:id (trang được tải lại). Khi hoàn tất thì đợi cấp số xong mới đổi.
+      if (!id && go) nav(`${listBase}/${newId}`, { replace: true })
       setInvoice((i) => ({ ...i, id: newId }))
       setOk(L('Đã lưu nháp.', 'Entwurf gespeichert.'))
       return newId
@@ -205,11 +206,12 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     if (!confirm(isQuote
       ? L('Hoàn tất Angebot? Sau khi hoàn tất sẽ có số Angebot và không sửa được nữa.', 'Angebot abschließen? Danach erhält es eine Nummer und kann nicht mehr geändert werden.')
       : L('Hoàn tất hoá đơn? Sau khi hoàn tất sẽ có số hoá đơn và không sửa được nữa.', 'Rechnung abschließen? Danach erhält sie eine Nummer und kann nicht mehr geändert werden.'))) return
-    const invId = await save()
+    const invId = await save(false)
     if (!invId) return
     setBusy(true)
     try {
       await finalizeInvoice(invId)
+      if (!id) { nav(`${listBase}/${invId}`, { replace: true }); return }
       const r = await loadInvoice(invId)
       setInvoice(r.invoice); setItems(r.items)
       setOk(L(`Đã hoàn tất ${docName} ${r.invoice.invoice_number}.`, `${isQuote ? 'Angebot' : 'Rechnung'} ${r.invoice.invoice_number} abgeschlossen.`))
