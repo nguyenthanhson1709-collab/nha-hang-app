@@ -119,9 +119,11 @@ export default function Bookings() {
       <div className="toolbar bk-top">
         <DateNav day={day} setDay={setDay} data={data} />
         <span className="grow" />
-        <button className="primary" onClick={() => setEdit(newEdit(day))}>+ {L('Đặt bàn mới', 'Neue Reservierung')}</button>
+        {!st.mirror_old && <button className="primary" onClick={() => setEdit(newEdit(day))}>+ {L('Đặt bàn mới', 'Neue Reservierung')}</button>}
       </div>
-      {!st.online_enabled && (
+      {st.mirror_old ? (
+        <div className="alert warn small">{L('Đang xem đơn chép từ hệ thống đặt bàn cũ (cập nhật mỗi phút). Thêm, sửa đơn vẫn làm ở trang nhân viên cũ /mitarbeiter.', 'Ansicht der Reservierungen aus dem alten System (minütlich aktualisiert). Anlegen und Bearbeiten weiterhin auf der alten Mitarbeiterseite /mitarbeiter.')}</div>
+      ) : !st.online_enabled && (
         <div className="alert warn small">{L('Trang khách vẫn chạy trên hệ thống đặt bàn cũ. Đơn khách đặt online sẽ hiện ở đây sau khi chuyển dữ liệu.', 'Die Gästeseite läuft noch auf dem alten System. Online-Reservierungen erscheinen hier nach der Datenübernahme.')}</div>
       )}
       <div className="bk-stats">

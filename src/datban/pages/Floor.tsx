@@ -95,7 +95,7 @@ export default function Floor() {
               <select value={t} onChange={(e) => setTime(e.target.value)} style={{ width: 'auto' }}>{times.map((x) => <option key={x}>{x}</option>)}</select>
             </label>
             <span className="grow" />
-            <button onClick={() => { setPlan({ tables: data.tables.map((x) => ({ ...x })), areas: data.areas.map((a) => ({ ...a })) }); setPicked([]) }}>{L('Sửa sơ đồ', 'Plan bearbeiten')}</button>
+            {!st.mirror_old && <button onClick={() => { setPlan({ tables: data.tables.map((x) => ({ ...x })), areas: data.areas.map((a) => ({ ...a })) }); setPicked([]) }}>{L('Sửa sơ đồ', 'Plan bearbeiten')}</button>}
           </>
         )}
       </div>

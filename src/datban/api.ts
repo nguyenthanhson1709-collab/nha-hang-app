@@ -5,7 +5,7 @@ export type Status = 'pending' | 'confirmed' | 'seated' | 'noshow' | 'cancelled'
 export const ACTIVE: Status[] = ['pending', 'confirmed', 'seated']
 
 export interface BkSettings {
-  restaurant_id: string; slug: string | null; online_enabled: boolean
+  restaurant_id: string; slug: string | null; online_enabled: boolean; mirror_old?: boolean
   auto_confirm: boolean; peak_enabled: boolean; duration_min: number; min_online: number; max_online: number
   slot_step: number; open_time: string; close_time: string; weekday_from: string | null; closed_days: string[]
   lead_hours: number; auto_arrive_min: number; contact_email: string | null; tz: string; google_review_url: string | null
