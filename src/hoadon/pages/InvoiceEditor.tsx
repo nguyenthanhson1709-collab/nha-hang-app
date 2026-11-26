@@ -253,7 +253,11 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
     if (!invoice.customer_snapshot?.name?.trim() && !confirm(L(
       `Chưa có thông tin khách hàng (tên, địa chỉ).\nHoá đơn trên 250 € theo luật phải ghi tên và địa chỉ khách; sau khi hoàn tất sẽ không sửa được nữa.\n\nVẫn hoàn tất không có thông tin khách hàng?`,
       `Keine Kundendaten (Name, Anschrift).\nRechnungen über 250 € müssen Name und Anschrift des Kunden enthalten; nach dem Abschluss ist keine Änderung mehr möglich.\n\nTrotzdem ohne Kundendaten abschließen?`))) return
-    if (!confirm(isQuote
+    const want = invoice.desired_number?.trim()
+    if (want && !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,39}$/.test(want)) { setErr(L('Số hoá đơn chỉ gồm chữ, số và . _ / - (tối đa 40 ký tự).', 'Rechnungsnummer: nur Buchstaben, Ziffern und . _ / - (max. 40 Zeichen).')); return }
+    if (!confirm(want
+      ? L(`Hoàn tất ${docName} với số ${want}? Sau khi hoàn tất sẽ không sửa được nữa.`, `${isQuote ? 'Angebot' : 'Rechnung'} mit Nummer ${want} abschließen? Danach kann nichts mehr geändert werden.`)
+      : isQuote
       ? L('Hoàn tất Angebot? Sau khi hoàn tất sẽ có số Angebot và không sửa được nữa.', 'Angebot abschließen? Danach erhält es eine Nummer und kann nicht mehr geändert werden.')
       : L('Hoàn tất hoá đơn? Sau khi hoàn tất sẽ có số hoá đơn và không sửa được nữa.', 'Rechnung abschließen? Danach erhält sie eine Nummer und kann nicht mehr geändert werden.'))) return
     const invId = await save(false)
@@ -406,6 +410,11 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
             </div>
           )}
           <div className="doc-meta">
+            {!locked && <div>
+              <span className="lbl">{isQuote ? L('Số Angebot', 'Angebotsnr.') : L('Số hoá đơn', 'Rechnungsnr.')}</span>
+              <input value={invoice.desired_number ?? ''} maxLength={40} placeholder={L('Để trống = tự động', 'Leer = automatisch')}
+                onChange={(e) => update('desired_number', e.target.value.replace(/\s/g, ''))} />
+            </div>}
             <div>
               <span className="lbl">{isQuote ? L('Ngày Angebot', 'Angebotsdatum') : L('Ngày hoá đơn', 'Rechnungsdatum')}</span>
               <input type="date" value={invoice.invoice_date ?? ''} disabled={locked} onChange={(e) => update('invoice_date', e.target.value)} />

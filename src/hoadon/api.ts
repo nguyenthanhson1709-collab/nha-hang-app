@@ -98,6 +98,7 @@ export async function saveDraft(rid: string, inv: Partial<Invoice>, items: Invoi
     due_date: inv.due_date ?? null,
     intro_text: inv.intro_text ?? '',
     closing_text: inv.closing_text ?? '',
+    desired_number: inv.desired_number?.trim() || null,
     total_net: totals.net, total_tax: totals.tax, total_gross: totals.gross,
   }
   let id = inv.id
