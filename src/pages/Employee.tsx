@@ -12,7 +12,7 @@ import {
   uploadHrFile, validIban, validTaxId, type DocKind, type EmpContract, type EmpDoc, type EmpType, type Employee, type HrSettings,
 } from '../lib/hr'
 import { personalbogenPdf } from '../lib/hrPdf'
-import { arbeitsvertragDocx, contractMissing } from '../lib/hrContract'
+import { arbeitsvertrag, contractMissing, guessDays, legalMinVacation } from '../lib/hrContract'
 import { readPayslips } from '../lib/payslipImport'
 import { baseSalary, empTypeOf, hourlyOf, splitName } from '../lib/payslip'
 import { DateField } from '../components/PeriodBar'
@@ -87,6 +87,7 @@ export default function EmployeePage() {
   const [ed, setEd] = useState<{ g: GroupId; draft: Partial<Employee> } | null>(null)
   const [tab, setTab] = useState<Tab>('overview')
   const [abs, setAbs] = useState<Absence[]>([])
+  const [cv, setCv] = useState<{ job: string; days: number } | null>(null)
   const [exitF, setExitF] = useState<{ date: string | null; reason: string } | null>(null)
 
   async function loadChildren() {
@@ -552,13 +553,29 @@ export default function EmployeePage() {
     </>
   )
 
-  async function makeContract() {
-    const miss = contractMissing(e!)
-    const names: Record<string, string> = { name: T('họ tên', 'Name'), address: T('địa chỉ', 'Anschrift'), entry_date: T('ngày vào làm', 'Eintritt'), gross_monthly: T('lương brutto', 'Bruttolohn'), weekly_hours: T('giờ/tuần', 'Wochenstunden'), vacation_days: T('ngày phép', 'Urlaubstage') }
+  const CNAMES: Record<string, string> = { name: T('họ tên', 'Name'), address: T('địa chỉ', 'Anschrift'), entry_date: T('ngày vào làm', 'Eintritt'), gross_monthly: T('lương brutto', 'Bruttolohn'), weekly_hours: T('giờ/tuần', 'Wochenstunden'), vacation_days: T('ngày phép', 'Urlaubstage'), job: T('công việc', 'Tätigkeit') }
+  function makeContract() {
+    if (e!.employment_type === 'minijob') { toast(T('Hợp đồng Minijob dùng mẫu riêng. Gửi mẫu Minijob để thêm vào app.', 'Für Minijobs gibt es einen eigenen Vertrag (Vorlage fehlt noch).')); return }
+    setCv({ job: e!.job_title || '', days: guessDays(e!.weekly_hours != null ? Number(e!.weekly_hours) : null) })
+  }
+  async function doContract() {
+    if (!cv) return
+    const o = { job: cv.job.trim() || null, days: cv.days }
+    const miss = contractMissing(e!, o)
+    setBusy(true)
     try {
-      download(await arbeitsvertragDocx(e!), `Arbeitsvertrag_${e!.last_name}_${e!.first_name}.docx`.replace(/\s+/g, '_'))
-      if (miss.length) toast(T(`Hồ sơ còn thiếu: ${miss.map((k) => names[k]).join(', ')}. Các chỗ này để dòng chấm để điền tay.`, `Fehlt in der Akte: ${miss.map((k) => names[k]).join(', ')}. Diese Stellen bleiben zum Ausfüllen frei.`))
+      const { docx, pdf } = await arbeitsvertrag(e!, o)
+      const base = `Arbeitsvertrag_${e!.last_name}_${e!.first_name}_${todayIso()}`.replace(/\s+/g, '_')
+      // Lưu bản PDF vào giấy tờ của nhân viên, tải bản Word để in / sửa
+      const path = await uploadHrFile(rid!, eid!, pdf, `${base}.pdf`)
+      const { error } = await supabase.from('nh_employee_docs').insert({ restaurant_id: rid, employee_id: eid, kind: 'contract', title: `${base}.pdf`, path })
+      if (error) throw error
+      download(docx, `${base}.docx`)
+      loadChildren(); setCv(null)
+      toast(T('Đã lưu hợp đồng (PDF) vào Tài liệu và tải bản Word', 'Vertrag als PDF in Dokumenten gespeichert, Word-Datei heruntergeladen'))
+      if (miss.length) toast(T(`Hồ sơ còn thiếu: ${miss.map((k) => CNAMES[k]).join(', ')}. Các chỗ này để dòng chấm để điền tay.`, `Fehlt: ${miss.map((k) => CNAMES[k]).join(', ')}. Diese Stellen bleiben zum Ausfüllen frei.`))
     } catch (x) { toast(errMsg(x)) }
+    setBusy(false)
   }
   const initials = [e.first_name, e.last_name].map((x) => (x || '').trim()[0] || '').join('').toUpperCase()
   const pay = e.gross_monthly != null ? eur(Number(e.gross_monthly)) : e.hourly_wage != null ? `${eur(Number(e.hourly_wage))} / ${T('giờ', 'Std.')}` : ''
@@ -717,6 +734,31 @@ export default function EmployeePage() {
           <button className="primary block" disabled={busy} onClick={saveContract}>{busy ? '…' : T('Lưu', 'Speichern')}</button>
           {ct.id && <button className="danger block" style={{ marginTop: 8 }} onClick={delContract}>{T('Xoá', 'Löschen')}</button>}
         </>}
+      </Sheet>
+
+      <Sheet open={!!cv} onClose={() => setCv(null)} title={T('Tạo hợp đồng lao động', 'Arbeitsvertrag erstellen')}>
+        {cv && (() => {
+          const wk = e.weekly_hours != null ? Number(e.weekly_hours) : null
+          const hpd = wk != null ? Math.round((wk / cv.days) * 100) / 100 : null
+          const min = legalMinVacation(cv.days)
+          const vac = e.vacation_days != null ? Number(e.vacation_days) : null
+          const miss = contractMissing(e, { job: cv.job, days: cv.days })
+          return <>
+            <F l={L('Công việc', 'Tätigkeit')}><ComboInput value={cv.job} options={JOBS.map((j) => j[0])} onChange={(v) => setCv({ ...cv, job: v })} placeholder="Sushi-Koch, Servicekraft…" /></F>
+            <F l={L('Số ngày làm / tuần', 'Arbeitstage pro Woche')}>
+              <div className="seg">{[2, 3, 4, 5, 6].map((d) => <button key={d} className={cv.days === d ? 'sel' : ''} onClick={() => setCv({ ...cv, days: d })}>{d}</button>)}</div>
+            </F>
+            <div className="kv" style={{ marginBottom: 12 }}>
+              <div className="kv-i"><div className="kv-l">{L('Giờ / tuần', 'Wochenstunden')}</div><div className={`kv-v${wk == null ? ' empty' : ''}`}>{wk != null ? String(wk).replace('.', ',') : T('Chưa cập nhật', 'Nicht erfasst')}</div></div>
+              <div className="kv-i"><div className="kv-l">{L('Giờ / ngày', 'Stunden pro Tag')}</div><div className={`kv-v${hpd == null ? ' empty' : ''}`}>{hpd != null ? String(hpd).replace('.', ',') : '—'}</div></div>
+              <div className="kv-i"><div className="kv-l">{L('Ngày phép', 'Urlaub')}</div><div className={`kv-v${vac == null ? ' empty' : ''}`}>{vac != null ? `${String(vac).replace('.', ',')} (${T('tối thiểu', 'mind.')} ${min})` : T('Chưa cập nhật', 'Nicht erfasst')}</div></div>
+            </div>
+            {vac != null && vac < min && <div className="alert warn">{T(`Ngày phép thấp hơn mức tối thiểu theo luật (${min} ngày khi làm ${cv.days} ngày/tuần).`, `Urlaub unter dem gesetzlichen Minimum (${min} Tage bei ${cv.days}-Tage-Woche).`)}</div>}
+            {miss.length > 0 && <div className="alert warn">{T('Còn thiếu', 'Fehlt')}: {miss.map((k) => CNAMES[k]).join(', ')}. {T('Các chỗ này để dòng chấm để điền tay.', 'Diese Stellen bleiben frei.')}</div>}
+            <p className="small muted">{T('Lương, giờ/tuần, ngày phép lấy từ hồ sơ. Muốn đổi thì sửa ở tab Lương và bảo hiểm / Nghỉ phép.', 'Lohn, Wochenstunden und Urlaub kommen aus der Akte.')}</p>
+            <button className="primary block" disabled={busy} onClick={doContract}>{busy ? '…' : T('Tạo hợp đồng (lưu PDF, tải Word)', 'Vertrag erstellen (PDF speichern, Word laden)')}</button>
+          </>
+        })()}
       </Sheet>
 
       <Sheet open={!!exitF} onClose={() => setExitF(null)} title={T('Nghỉ việc / huỷ hợp đồng', 'Austritt / Kündigung')}>
