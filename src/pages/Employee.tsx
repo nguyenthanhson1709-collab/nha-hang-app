@@ -12,6 +12,7 @@ import {
   uploadHrFile, validIban, validTaxId, type DocKind, type EmpContract, type EmpDoc, type EmpType, type Employee, type HrSettings,
 } from '../lib/hr'
 import { personalbogenPdf } from '../lib/hrPdf'
+import { arbeitsvertragDocx, contractMissing } from '../lib/hrContract'
 import { readPayslips } from '../lib/payslipImport'
 import { baseSalary, empTypeOf, hourlyOf, splitName } from '../lib/payslip'
 import { DateField } from '../components/PeriodBar'
@@ -551,6 +552,14 @@ export default function EmployeePage() {
     </>
   )
 
+  async function makeContract() {
+    const miss = contractMissing(e!)
+    const names: Record<string, string> = { name: T('họ tên', 'Name'), address: T('địa chỉ', 'Anschrift'), entry_date: T('ngày vào làm', 'Eintritt'), gross_monthly: T('lương brutto', 'Bruttolohn'), weekly_hours: T('giờ/tuần', 'Wochenstunden'), vacation_days: T('ngày phép', 'Urlaubstage') }
+    try {
+      download(await arbeitsvertragDocx(e!), `Arbeitsvertrag_${e!.last_name}_${e!.first_name}.docx`.replace(/\s+/g, '_'))
+      if (miss.length) toast(T(`Hồ sơ còn thiếu: ${miss.map((k) => names[k]).join(', ')}. Các chỗ này để dòng chấm để điền tay.`, `Fehlt in der Akte: ${miss.map((k) => names[k]).join(', ')}. Diese Stellen bleiben zum Ausfüllen frei.`))
+    } catch (x) { toast(errMsg(x)) }
+  }
   const initials = [e.first_name, e.last_name].map((x) => (x || '').trim()[0] || '').join('').toUpperCase()
   const pay = e.gross_monthly != null ? eur(Number(e.gross_monthly)) : e.hourly_wage != null ? `${eur(Number(e.hourly_wage))} / ${T('giờ', 'Std.')}` : ''
   const ABS: Record<string, [string, string]> = { vacation: ['Nghỉ phép', 'Urlaub'], sick: ['Nghỉ ốm', 'Krank'], unpaid: ['Nghỉ không lương', 'Unbezahlt'], other: ['Khác', 'Sonstiges'] }
@@ -563,7 +572,10 @@ export default function EmployeePage() {
   return (
     <>
       <Top title={T('Hồ sơ nhân viên', 'Personalakte')} sub={r.name} back={`/r/${rid}/hr`}
-        right={<button className="btn pdf-btn" title="Personalbogen PDF" onClick={() => download(personalbogenPdf(e, r, hs?.company_name || null), `Personalbogen_${e.last_name}_${e.first_name}.pdf`.replace(/\s+/g, '_'))}><GIcon k="download" />PDF</button>} />
+        right={<div className="row" style={{ gap: 6 }}>
+          <button className="btn pdf-btn" title={T('Hợp đồng lao động (Word), điền sẵn thông tin nhân viên', 'Arbeitsvertrag (Word) mit Mitarbeiterdaten')} onClick={makeContract}><GIcon k="file" />{T('Hợp đồng', 'Vertrag')}</button>
+          <button className="btn pdf-btn" title="Personalbogen PDF" onClick={() => download(personalbogenPdf(e, r, hs?.company_name || null), `Personalbogen_${e.last_name}_${e.first_name}.pdf`.replace(/\s+/g, '_'))}><GIcon k="download" />PDF</button>
+        </div>} />
       <div className="page pf">
         <section className="phead">
           <div className="ph-top">
