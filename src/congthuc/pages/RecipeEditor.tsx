@@ -4,14 +4,13 @@ import { Spinner, toast } from '../../components/ui'
 import { useApp } from '../../lib/app'
 import { costPct, fmtEur, fmtPct, itemCost, recipeAllergens, recipeCost, UNIT_LABEL, type Data, type Ingredient, type Item, type ItemUnit, type Recipe, type Step } from '../rc'
 import { deleteRecipe, saveIngredient, saveRecipe, usePhotoUrls, useRc } from '../api'
-import { AllergenChips, AllergenPicker, PhotoInput, RcShell, useL, useRcPerm } from '../ui'
+import { AllergenChips, AllergenPicker, NumInput, PhotoInput, RcShell, useL, useRcPerm } from '../ui'
 
 const blank = (kind: 'dish' | 'base', rid: string, owner: boolean, concept: string | null): Recipe => ({
   id: '', concept_id: concept, kind, number: null, name: '', name_de: null, description: null, photo: null, plating_photo: null,
   status: 'testing', restaurant_ids: owner ? [] : [rid], portions: kind === 'base' ? 1 : 1, yield_qty: null, yield_unit: kind === 'base' ? 'ml' : null,
   sell_price: null, sell_rate: 7, target_pct: 30, prep_min: null, cook_min: null, steps: [], allergens_extra: [], notes: null, sort: 0,
 })
-const parse = (v: string) => { const n = Number(v.replace(',', '.')); return v.trim() === '' || isNaN(n) ? null : n }
 const show = (n: number | null | undefined) => (n == null ? '' : String(n).replace('.', ','))
 
 export default function RecipeEditor() {
@@ -142,23 +141,23 @@ export default function RecipeEditor() {
         <section className="card">
           <h3>{L('Khẩu phần, thời gian, giá bán', 'Portionen, Zeit, Verkaufspreis')}</h3>
           <div className="rc-frow">
-            <label className="f"><span>{L('Công thức này ra bao nhiêu phần', 'Rezept ergibt Portionen')}</span><input inputMode="decimal" value={show(r.portions)} onChange={(e) => set('portions', parse(e.target.value) || 1)} /></label>
+            <label className="f"><span>{L('Công thức này ra bao nhiêu phần', 'Rezept ergibt Portionen')}</span><NumInput value={r.portions} onChange={(v) => set('portions', v || 1)} /></label>
             {r.kind === 'base' && <>
-              <label className="f"><span>{L('Tổng thành phẩm', 'Gesamtmenge')}</span><input inputMode="decimal" value={show(r.yield_qty)} onChange={(e) => set('yield_qty', parse(e.target.value))} placeholder="2000" /></label>
+              <label className="f"><span>{L('Tổng thành phẩm', 'Gesamtmenge')}</span><NumInput value={r.yield_qty} onChange={(v) => set('yield_qty', v)} placeholder="2000"/></label>
               <label className="f" style={{ flex: '0 0 100px' }}><span>{L('Đơn vị', 'Einheit')}</span>
                 <select value={r.yield_unit || 'ml'} onChange={(e) => set('yield_unit', e.target.value as Recipe['yield_unit'])}><option value="ml">ml</option><option value="g">g</option><option value="pcs">{L('cái', 'Stk.')}</option></select>
               </label>
             </>}
-            <label className="f"><span>{L('Chuẩn bị (phút)', 'Vorbereitung (Min.)')}</span><input inputMode="numeric" value={show(r.prep_min)} onChange={(e) => set('prep_min', parse(e.target.value))} /></label>
-            <label className="f"><span>{L('Nấu (phút)', 'Garzeit (Min.)')}</span><input inputMode="numeric" value={show(r.cook_min)} onChange={(e) => set('cook_min', parse(e.target.value))} /></label>
+            <label className="f"><span>{L('Chuẩn bị (phút)', 'Vorbereitung (Min.)')}</span><NumInput numeric value={r.prep_min} onChange={(v) => set('prep_min', v == null ? null : Math.round(v))} /></label>
+            <label className="f"><span>{L('Nấu (phút)', 'Garzeit (Min.)')}</span><NumInput numeric value={r.cook_min} onChange={(v) => set('cook_min', v == null ? null : Math.round(v))} /></label>
           </div>
           {r.kind === 'dish' && (
             <div className="rc-frow">
-              <label className="f"><span>{L('Giá bán / phần (Brutto, €)', 'Verkaufspreis / Portion (brutto, €)')}</span><input inputMode="decimal" value={show(r.sell_price)} onChange={(e) => set('sell_price', parse(e.target.value))} /></label>
+              <label className="f"><span>{L('Giá bán / phần (Brutto, €)', 'Verkaufspreis / Portion (brutto, €)')}</span><NumInput value={r.sell_price} onChange={(v) => set('sell_price', v)} /></label>
               <label className="f"><span>MwSt</span>
                 <select value={r.sell_rate} onChange={(e) => set('sell_rate', Number(e.target.value))}><option value={7}>7 % ({L('đồ ăn', 'Speisen')})</option><option value={19}>19 % ({L('đồ uống', 'Getränke')})</option></select>
               </label>
-              <label className="f"><span>{L('Wareneinsatz mục tiêu (%)', 'Ziel-Wareneinsatz (%)')}</span><input inputMode="decimal" value={show(r.target_pct)} onChange={(e) => set('target_pct', parse(e.target.value) ?? 30)} /></label>
+              <label className="f"><span>{L('Wareneinsatz mục tiêu (%)', 'Ziel-Wareneinsatz (%)')}</span><NumInput value={r.target_pct} onChange={(v) => set('target_pct', v ?? 30)} /></label>
             </div>
           )}
         </section>
@@ -171,7 +170,7 @@ export default function RecipeEditor() {
               return (
                 <div className="rc-item" key={i}>
                   <input className="grp" placeholder={L('Nhóm', 'Gruppe')} value={it.grp || ''} onChange={(e) => setItem(i, { grp: e.target.value || null })} title={L('Nhóm trong công thức, vd "Sốt"', 'Gruppe, z. B. „Sauce"')} />
-                  <input className="qty" inputMode="decimal" value={show(it.qty)} onChange={(e) => setItem(i, { qty: parse(e.target.value) ?? 0 })} />
+                  <NumInput className="qty" value={it.qty} onChange={(v) => setItem(i, { qty: v ?? 0 })} />
                   <select className="unit" value={it.unit} onChange={(e) => setItem(i, { unit: e.target.value as ItemUnit })}>
                     {(Object.keys(UNIT_LABEL) as ItemUnit[]).filter((u) => u !== 'portion' || it.sub_recipe_id).map((u) => <option key={u} value={u}>{UNIT_LABEL[u][L.de ? 'de' : 'vi']}</option>)}
                   </select>

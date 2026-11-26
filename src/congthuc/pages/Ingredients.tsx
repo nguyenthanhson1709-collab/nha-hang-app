@@ -4,10 +4,8 @@ import { Spinner, toast } from '../../components/ui'
 import { dmy } from '../../lib/format'
 import { BASE_PRICE_LABEL, fmtEur, fmtPct, guessPack, ingPrice, priceRise, RISE_WARN, usedIn, type BaseUnit, type Ingredient } from '../rc'
 import { deleteIngredient, findLines, priceHistory, refreshPrices, saveIngredient, useRc, type FoundLine, type PricePoint } from '../api'
-import { AllergenChips, AllergenPicker, RcShell, useL, useRcPerm, useSort } from '../ui'
+import { AllergenChips, AllergenPicker, NumInput, RcShell, useL, useRcPerm, useSort } from '../ui'
 
-const parse = (v: string) => { const n = Number(v.replace(',', '.')); return v.trim() === '' || isNaN(n) ? null : n }
-const show = (n: number | null | undefined) => (n == null ? '' : String(n).replace('.', ','))
 
 export default function Ingredients() {
   const { rid } = useParams()
@@ -143,7 +141,7 @@ function IngEditor({ ing, onClose, onSaved, usedBy }: { ing: Partial<Ingredient>
           <label className="f"><span>{L('Tính theo', 'Basiseinheit')}</span>
             <select value={u} onChange={(e) => set('unit', e.target.value as BaseUnit)}><option value="g">{L('Khối lượng (g / kg)', 'Gewicht (g/kg)')}</option><option value="ml">{L('Thể tích (ml / l)', 'Volumen (ml/l)')}</option><option value="pcs">{L('Cái / quả', 'Stück')}</option></select>
           </label>
-          <label className="f"><span>{L('Tỉ lệ dùng được sau sơ chế (%)', 'Ausbeute nach Putzen (%)')}</span><input inputMode="decimal" value={show(x.yield_pct)} onChange={(e) => set('yield_pct', Math.min(100, Math.max(1, parse(e.target.value) ?? 100)))} /></label>
+          <label className="f"><span>{L('Tỉ lệ dùng được sau sơ chế (%)', 'Ausbeute nach Putzen (%)')}</span><NumInput value={x.yield_pct} onChange={(v) => set('yield_pct', Math.min(100, Math.max(1, v ?? 100)))} /></label>
         </div>
 
         <h3>{L('Giá từ hoá đơn scan', 'Preis aus gescannten Rechnungen')}</h3>
@@ -154,7 +152,7 @@ function IngEditor({ ing, onClose, onSaved, usedBy }: { ing: Partial<Ingredient>
               <button className="ghost small" onClick={() => { set('match_name', null); set('pack_size', null) }}>{L('Bỏ nối', 'Lösen')}</button>
             </div>
             <div className="rc-frow">
-              <label className="f"><span>{L(`1 đơn vị trên hoá đơn = ? ${uName}`, `1 Rechnungseinheit = ? ${uName}`)} *</span><input inputMode="decimal" value={show(x.pack_size)} onChange={(e) => set('pack_size', parse(e.target.value))} placeholder="5000" /></label>
+              <label className="f"><span>{L(`1 đơn vị trên hoá đơn = ? ${uName}`, `1 Rechnungseinheit = ? ${uName}`)} *</span><NumInput value={x.pack_size} onChange={(v) => set('pack_size', v)} placeholder="5000"/></label>
               <label className="f"><span>{L('Chỉ từ nhà cung cấp (tuỳ chọn)', 'Nur Lieferant (optional)')}</span><input value={x.match_supplier || ''} onChange={(e) => set('match_supplier', e.target.value)} placeholder="Metro" /></label>
             </div>
             <label className="f"><span>{L('Đổi mẫu tên (dấu * = bất kỳ, để gộp nhiều cách viết)', 'Namensmuster (* = beliebig)')}</span><input value={x.match_name} onChange={(e) => set('match_name', e.target.value)} /></label>
@@ -183,7 +181,7 @@ function IngEditor({ ing, onClose, onSaved, usedBy }: { ing: Partial<Ingredient>
           </div>
         )}
         <div className="rc-frow">
-          <label className="f"><span>{L(`Giá nhập tay (Netto, ${BASE_PRICE_LABEL[u].vi})`, `Manueller Preis (netto, ${BASE_PRICE_LABEL[u].de})`)}</span><input inputMode="decimal" value={show(x.price_manual)} onChange={(e) => set('price_manual', parse(e.target.value))} placeholder={x.match_name ? L('dùng khi chưa có hoá đơn', 'falls keine Rechnung') : ''} /></label>
+          <label className="f"><span>{L(`Giá nhập tay (Netto, ${BASE_PRICE_LABEL[u].vi})`, `Manueller Preis (netto, ${BASE_PRICE_LABEL[u].de})`)}</span><NumInput value={x.price_manual} onChange={(v) => set('price_manual', v)} placeholder={x.match_name ? L('dùng khi chưa có hoá đơn', 'falls keine Rechnung') : ''}/></label>
           <label className="f"><span>{L('Thuế mua vào', 'Vorsteuer')}</span><select value={x.rate ?? 7} onChange={(e) => set('rate', Number(e.target.value))}><option value={7}>7 %</option><option value={19}>19 %</option></select></label>
         </div>
 
