@@ -16,6 +16,7 @@ export interface Employee {
   company: string | null; entry_date: string | null; exit_date: string | null; exit_reason: string | null
   job_title: string | null; position: Position | null; employment_type: EmpType | null
   gross_monthly: number | null; hourly_wage: number | null; weekly_hours: number | null; vacation_days: number | null
+  work_days?: number | null; daily_hours?: number | null
   multiple_employment: boolean | null; tax_class: number | null; pension_no: string | null; health_insurance: string | null
   tax_id: string | null; iban: string | null; bic: string | null; bank_name: string | null; note: string | null
   personnel_no?: string | null
@@ -104,7 +105,7 @@ export function guessKind(name: string): DocKind {
 export const emptyEmployee = (company: string | null): Employee => ({
   last_name: '', first_name: '', address: null, birth_date: null, birth_place: null, nationality: null, phone: null, email: null, photo: null,
   residence_permit: null, residence_permit_until: null, work_permitted: null, company, entry_date: todayIso(), exit_date: null, exit_reason: null,
-  job_title: null, position: null, employment_type: null, gross_monthly: null, hourly_wage: null, weekly_hours: null, vacation_days: null,
+  job_title: null, position: null, employment_type: null, gross_monthly: null, hourly_wage: null, weekly_hours: null, vacation_days: null, work_days: null, daily_hours: null,
   multiple_employment: null, tax_class: null, pension_no: null, health_insurance: null, tax_id: null, iban: null, bic: null, bank_name: null, note: null,
 })
 
