@@ -26,15 +26,15 @@ Deno.serve(async (req) => {
     return out;
   };
   try {
-    const [settings, rules, areas, tables, bookings, bookingTables, notes, reviews, log, staff] = await Promise.all([
+    const [settings, rules, areas, tables, bookings, bookingTables, notes, reviews, log, staff, pins] = await Promise.all([
       old.from("settings").select("*").eq("id", 1).single().then((r) => { if (r.error) throw new Error(`settings: ${r.error.message}`); return r.data; }),
       all("peak_rules"), all("areas"), all("dining_tables"), all("bookings"), all("booking_tables"),
-      all("guest_notes"), all("reviews"), all("booking_log"), all("staff", "id, name"),
+      all("guest_notes"), all("reviews"), all("booking_log"), all("staff", "id, name, role, active, created_at"), all("staff_pins"),
     ]);
     const payload = {
       settings, rules, areas,
       tables,
-      bookings, booking_tables: bookingTables, notes, reviews, log, staff,
+      bookings, booking_tables: bookingTables, notes, reviews, log, staff, pins,
     };
     const { data, error } = await neu.rpc("nh_bk_mirror_apply", { p: payload });
     if (error) return json({ error: error.message }, 500);

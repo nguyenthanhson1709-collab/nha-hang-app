@@ -1,0 +1,20 @@
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: frame-ancestors 'self' https://vietbowl.de https://www.vietbowl.de https://vietbowlmitte.de https://www.vietbowlmitte.de
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+/staff*
+  X-Robots-Tag: noindex
+  X-Frame-Options: DENY
+/mitarbeiter*
+  X-Robots-Tag: noindex
+  X-Frame-Options: DENY
+/widget.js
+  Cache-Control: public, max-age=3600
+  Access-Control-Allow-Origin: *
+/music/*
+  Cache-Control: public, max-age=604800
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+/vendor/*
+  Cache-Control: public, max-age=604800
