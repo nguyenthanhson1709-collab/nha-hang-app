@@ -75,7 +75,7 @@ export async function loadInvoice(id: string): Promise<{ invoice: Invoice; items
 
 export function snapshotOf(c: Customer | null | undefined): CustomerSnapshot {
   if (!c) return {}
-  return { customer_number: c.customer_number, name: c.name, street: c.street, supplement: c.supplement, zip: c.zip, city: c.city, country: c.country }
+  return { customer_number: c.customer_number, name: c.name, street: c.street, supplement: c.supplement, supplement2: c.supplement2 ?? '', zip: c.zip, city: c.city, country: c.country }
 }
 
 /** Lưu nháp kèm các dòng. Trả về id hoá đơn. */

@@ -22,7 +22,7 @@ export interface Customer {
   customer_number: number | null
   kind: 'customer' | 'vendor'
   name: string
-  street: string; supplement: string; zip: string; city: string; country: string
+  street: string; supplement: string; supplement2?: string; zip: string; city: string; country: string
   emails: string; phone: string; vat_id: string; note: string
   archived: boolean
 }
@@ -46,7 +46,7 @@ export type DocType = 'invoice' | 'quote'
 
 export interface CustomerSnapshot {
   customer_number?: number | null
-  name?: string; street?: string; supplement?: string; zip?: string; city?: string; country?: string
+  name?: string; street?: string; supplement?: string; supplement2?: string; zip?: string; city?: string; country?: string
 }
 
 export type DeliveryType = 'none' | 'delivery_date' | 'delivery_period' | 'service_date' | 'service_period'
