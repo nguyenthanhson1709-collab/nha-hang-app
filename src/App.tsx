@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import { fromRecoveryLink, supabase, type Category, type Profile, type Restaurant, type Role } from './lib/supabase'
 import { LangCtx, type Lang, useT } from './lib/i18n'
 import { AppCtx, type AppState } from './lib/app'
-import { Spinner, Toaster } from './components/ui'
+import { BottomNav, Spinner, Toaster } from './components/ui'
 import Login from './pages/Login'
 import SetPassword from './pages/SetPassword'
 import Restaurants from './pages/Restaurants'
@@ -37,7 +37,12 @@ function openFresh(start: string) {
   if (location.hash.startsWith('#/') && location.hash !== `#${start}`) history.replaceState(null, '', `${location.pathname}${location.search}#${start}`)
 }
 
-// Không còn logo nổi ở đáy: mỗi trang đã có nút quay lại ở đầu trang
+// Logo Vietbowl nổi ở đáy mọi trang: bấm để về nhanh trang chủ (của quán đang xem, hoặc trang đầu)
+function HomeNav({ start }: { start: string }) {
+  const m = useLocation().pathname.match(/^\/r\/([^/]+)/)
+  return <BottomNav to={m ? `/r/${m[1]}` : start} />
+}
+
 function RestLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
@@ -97,6 +102,7 @@ function Shell({ session }: { session: Session }) {
           <Route path="/r/:rid/settings" element={<RestLayout><RestaurantSettings /></RestLayout>} />
           <Route path="*" element={<Navigate to={start} replace />} />
         </Routes>
+        <HomeNav start={start} />
       </HashRouter>
     </AppCtx.Provider>
   )

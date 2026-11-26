@@ -32,11 +32,11 @@ export const Icon = ({ k }: { k: keyof typeof I }) => (
 )
 
 /** Thanh dưới cùng: chỉ một nút về trang chủ của quán, hiển thị logo Vietbowl */
-export function BottomNav({ rid }: { rid: string }) {
+export function BottomNav({ to }: { to: string }) {
   const t = useT()
   return (
     <nav className="nav nav-logo"><div className="in">
-      <NavLink to={`/r/${rid}`} end aria-label={t('home')}><img src={`${import.meta.env.BASE_URL}logo-vietbowl-round.webp`} alt="Vietbowl" /></NavLink>
+      <NavLink to={to} end aria-label={t('home')}><img src={`${import.meta.env.BASE_URL}logo-vietbowl-round.webp`} alt="Vietbowl" /></NavLink>
     </div></nav>
   )
 }

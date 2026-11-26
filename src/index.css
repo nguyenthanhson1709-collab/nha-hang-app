@@ -12,7 +12,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); }
 body { min-height: 100dvh; -webkit-text-size-adjust: 100%; }
-#root { max-width: 920px; margin: 0 auto; padding: 0 0 calc(24px + env(safe-area-inset-bottom)); }
+#root { max-width: 920px; margin: 0 auto; padding: 0 0 calc(96px + env(safe-area-inset-bottom)); }
 a { color: var(--brand); text-decoration: none; }
 h1 { font-family: var(--f-display); font-weight: 700; letter-spacing: -.01em; font-size: 1.3rem; margin: 0; }
 h2 { font-size: 1.1rem; margin: 18px 0 8px; }
@@ -283,7 +283,7 @@ tr.no-cat-row td:first-child { color: var(--err); box-shadow: inset 3px 0 0 var(
 .folder > .list { border: 0; border-radius: 0; border-top: 1px solid var(--line, rgba(127,127,127,.25)); }
 
 /* ===== Hồ sơ nhân viên (Modern Premium HR) ===== */
-#root.xwide { max-width: 1200px; padding-bottom: 24px; }
+#root.xwide { max-width: 1200px; }
 .pf { display: flex; flex-direction: column; gap: 16px; padding-top: 16px; padding-bottom: 24px; }
 .pf > * { margin: 0; }
 .phead, .pcard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
