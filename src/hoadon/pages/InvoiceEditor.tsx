@@ -416,6 +416,15 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
         </p>}
       </div>
 
+      {!locked && (
+        <div className="card">
+          <h2 style={{ marginTop: 0 }}>{L('Lời mở đầu (tuỳ chọn)', 'Einleitung (optional)')}</h2>
+          <span className="lbl">{L('Để trống = dùng câu mặc định', 'Leer = Standardtext')}</span>
+          <PresetPicker kind="intro" text={invoice.intro_text ?? ''} presets={presets} onPick={(t) => update('intro_text', t)} onChange={savePresets} />
+          <textarea value={invoice.intro_text ?? ''} placeholder={companyText(company, invoice.language, 'intro_text', invoice.doc_type)} onChange={(e) => update('intro_text', e.target.value)} />
+        </div>
+      )}
+
       <div className="card">
         <h2 style={{ marginTop: 0 }}>{L('Món / dịch vụ', 'Positionen')}</h2>
         {!locked && (
@@ -467,11 +476,8 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
 
       {!locked && (
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>{L('Lời mở đầu và kết thúc (tuỳ chọn)', 'Einleitung und Schlusstext (optional)')}</h2>
-          <span className="lbl">{L('Lời mở đầu (để trống = mặc định)', 'Einleitung (leer = Standard)')}</span>
-          <PresetPicker kind="intro" text={invoice.intro_text ?? ''} presets={presets} onPick={(t) => update('intro_text', t)} onChange={savePresets} />
-          <textarea value={invoice.intro_text ?? ''} placeholder={companyText(company, invoice.language, 'intro_text', invoice.doc_type)} onChange={(e) => update('intro_text', e.target.value)} />
-          <div className="mt"><span className="lbl">{L('Lời kết (để trống = mặc định)', 'Schlusstext (leer = Standard)')}</span>
+          <h2 style={{ marginTop: 0 }}>{L('Lời kết (tuỳ chọn)', 'Schlusstext (optional)')}</h2>
+          <div><span className="lbl">{L('Lời kết (để trống = mặc định)', 'Schlusstext (leer = Standard)')}</span>
             <PresetPicker kind="closing" text={invoice.closing_text ?? ''} presets={presets} onPick={(t) => update('closing_text', t)} onChange={savePresets} />
             <textarea value={invoice.closing_text ?? ''} placeholder={companyText(company, invoice.language, 'closing_text', invoice.doc_type)} onChange={(e) => update('closing_text', e.target.value)} /></div>
         </div>
