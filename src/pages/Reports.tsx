@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { supabase, errMsg, type Category, type Doc, type ZBon } from '../lib/supabase'
 import { remember } from '../lib/categorize'
@@ -106,6 +106,7 @@ export default function Reports() {
   const { categories, profile } = useApp()
   const r = useRestaurant(rid)
   const role = useRole(rid)
+  const nav = useNavigate()
   const [tab, setTab] = useState<Tab | null>(null)
   const [mode, setMode] = useState<Mode>('month')
   const [anchor, setAnchor] = useState(thisMonth())
@@ -257,6 +258,11 @@ export default function Reports() {
               <TileIcon name={x.icon} /><span>{lang === 'de' ? x.de : x.vi}</span>
             </button>
           ))}
+          {rid && canManage(role) && (
+            <button className="tile" onClick={() => nav(`/r/${rid}/bwa`)}>
+              <TileIcon name="chart" /><span>BWA</span>
+            </button>
+          )}
         </div>
       </div>
     </>

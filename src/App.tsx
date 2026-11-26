@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { HashRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import { fromRecoveryLink, supabase, type Category, type Profile, type Restaurant, type Role } from './lib/supabase'
 import { LangCtx, type Lang, useT } from './lib/i18n'
 import { AppCtx, type AppState } from './lib/app'
-import { BottomNav, Spinner, Toaster } from './components/ui'
+import { Spinner, Toaster } from './components/ui'
 import Login from './pages/Login'
 import SetPassword from './pages/SetPassword'
 import Restaurants from './pages/Restaurants'
@@ -17,6 +17,8 @@ import Archive from './pages/Archive'
 import Contracts from './pages/Contracts'
 import Statements from './pages/Statements'
 import Reports from './pages/Reports'
+import Plan from './pages/Plan'
+import Bwa from './pages/Bwa'
 import Settings from './pages/Settings'
 import RestaurantSettings from './pages/RestaurantSettings'
 import Staff from './pages/Staff'
@@ -35,11 +37,9 @@ function openFresh(start: string) {
   if (location.hash.startsWith('#/') && location.hash !== `#${start}`) history.replaceState(null, '', `${location.pathname}${location.search}#${start}`)
 }
 
+// Không còn logo nổi ở đáy: mỗi trang đã có nút quay lại ở đầu trang
 function RestLayout({ children }: { children: React.ReactNode }) {
-  const { rid } = useParams()
-  // Nhân sự và hồ sơ nhân viên: bỏ logo nổi ở đáy để không che danh sách
-  const noNav = /\/hr(\/[^/]+)?$/.test(useLocation().pathname)
-  return <>{children}{!noNav && <BottomNav rid={rid!} />}</>
+  return <>{children}</>
 }
 
 function Shell({ session }: { session: Session }) {
@@ -90,6 +90,8 @@ function Shell({ session }: { session: Session }) {
           <Route path="/r/:rid/contracts" element={<RestLayout><Contracts /></RestLayout>} />
           <Route path="/r/:rid/statements" element={<RestLayout><Statements /></RestLayout>} />
           <Route path="/r/:rid/reports" element={<RestLayout><Reports /></RestLayout>} />
+          <Route path="/r/:rid/bwa" element={<RestLayout><Bwa /></RestLayout>} />
+          <Route path="/r/:rid/plan" element={<RestLayout><Plan /></RestLayout>} />
           <Route path="/r/:rid/hr" element={<RestLayout><Staff /></RestLayout>} />
           <Route path="/r/:rid/hr/:eid" element={<RestLayout><EmployeePage /></RestLayout>} />
           <Route path="/r/:rid/settings" element={<RestLayout><RestaurantSettings /></RestLayout>} />
