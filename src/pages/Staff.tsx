@@ -13,7 +13,8 @@ import type { SlipResult } from '../lib/payslipImport'
 
 type Row = Employee & { id: string }
 type Filter = 'all' | 'active' | 'left'
-type Sort = 'pnr' | 'name' | 'entry'
+type Sort = 'pnr' | 'name' | 'ct' | 'date'
+const CT_ORDER: Record<string, number> = { vollzeit: 0, teilzeit: 1, minijob: 2, werkstudent: 3, aushilfe: 4 }
 
 const SI = {
   users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c0-3.6 3-5.5 6.5-5.5s6.5 1.9 6.5 5.5" /><circle cx="17" cy="9" r="2.8" /><path d="M16.5 14.6c2.8.2 5 1.9 5 5" /></>,
@@ -43,7 +44,7 @@ export default function Staff() {
   const [photos, setPhotos] = useState<Record<string, string>>({})
   const [filter, setFilter] = useState<Filter>('active')
   const [ctype, setCtype] = useState<'' | EmpType>('')
-  const [sort, setSort] = useState<Sort>('pnr')
+  const [sort, setSort] = useState<{ k: Sort; asc: boolean }>({ k: 'pnr', asc: false })
   const [q, setQ] = useState('')
   const [editCo, setEditCo] = useState<string | null>(null)
   const [imp, setImp] = useState<{ busy: boolean; prog: string; res: SlipResult[] | null } | null>(null)
@@ -88,10 +89,25 @@ export default function Staff() {
       .filter((e) => (filter === 'all' ? true : filter === 'active' ? isActive(e) : !isActive(e)))
       .filter((e) => !ctype || e.employment_type === ctype)
       .filter((e) => !s || fullName(e).toLowerCase().includes(s) || `${e.first_name} ${e.last_name}`.toLowerCase().includes(s) || (e.personnel_no || '').includes(s))
-      .sort((a, b) => sort === 'pnr' ? pnrNum(b) - pnrNum(a)
-        : sort === 'entry' ? (b.entry_date || '').localeCompare(a.entry_date || '')
-        : fullName(a).localeCompare(fullName(b), 'de'))
+      .sort((a, b) => {
+        const dk = (e: Row) => (filter === 'left' ? e.exit_date : e.entry_date) || ''
+        const c = sort.k === 'pnr' ? pnrNum(a) - pnrNum(b)
+          : sort.k === 'date' ? dk(a).localeCompare(dk(b))
+          : sort.k === 'ct' ? (CT_ORDER[a.employment_type || ''] ?? 9) - (CT_ORDER[b.employment_type || ''] ?? 9) || pnrNum(b) - pnrNum(a)
+          : fullName(a).localeCompare(fullName(b), 'de')
+        return sort.asc ? c : -c
+      })
   }, [all, filter, ctype, sort, q])
+  const sortHead = (k: Sort, label: string) => {
+    const on = sort.k === k
+    return (
+      <span role="columnheader" aria-sort={on ? (sort.asc ? 'ascending' : 'descending') : 'none'}>
+        <button type="button" className={`st-sort${on ? ' on' : ''}`} onClick={() => setSort(on ? { k, asc: !sort.asc } : { k, asc: k === 'name' || k === 'ct' })}>
+          {label}<span className="st-arr">{on ? (sort.asc ? '▲' : '▼') : '↕'}</span>
+        </button>
+      </span>
+    )
+  }
   const base = filter === 'all' ? all.length : filter === 'active' ? active.length : left
   const expiring = active.filter((e) => { const d = permitDaysLeft(e.residence_permit_until); return d != null && d <= PERMIT_WARN_DAYS })
 
@@ -159,26 +175,15 @@ export default function Staff() {
             <SIcon k="search" />
             <input type="search" placeholder={T('Tìm họ tên hoặc mã nhân viên…', 'Name oder Personal-Nr. suchen…')} value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          <div className="st-filters">
-            <select value={ctype} onChange={(e) => setCtype(e.target.value as '' | EmpType)} aria-label={T('Loại hợp đồng', 'Beschäftigungsart')}>
-              <option value="">{T('Tất cả hợp đồng', 'Alle Beschäftigungsarten')}</option>
-              {(Object.keys(EMP_TYPES) as EmpType[]).map((k) => <option key={k} value={k}>{EMP_TYPES[k][li]}</option>)}
-            </select>
-            <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label={T('Sắp xếp', 'Sortierung')}>
-              <option value="pnr">{T('Theo mã nhân viên', 'Nach Personal-Nr.')}</option>
-              <option value="name">{T('Theo họ tên (A–Z)', 'Nach Name (A–Z)')}</option>
-              <option value="entry">{T('Theo ngày vào làm (mới nhất)', 'Nach Eintritt (neueste)')}</option>
-            </select>
-          </div>
         </div>
 
         {!list ? <Spinner /> : (
           <div className="st-table" role="table">
             <div className="st-tr st-th" role="row">
-              <span role="columnheader">{T('Mã NV', 'Pers.-Nr.')}</span>
-              <span role="columnheader">{T('Họ và tên', 'Name')}</span>
-              <span role="columnheader">{T('Hợp đồng', 'Beschäftigung')}</span>
-              <span role="columnheader">{filter === 'left' ? T('Ngày nghỉ', 'Austritt') : T('Ngày vào làm', 'Eintritt')}</span>
+              {sortHead('pnr', T('Mã NV', 'Pers.-Nr.'))}
+              {sortHead('name', T('Họ và tên', 'Name'))}
+              {sortHead('ct', T('Hợp đồng', 'Beschäftigung'))}
+              {sortHead('date', filter === 'left' ? T('Ngày nghỉ', 'Austritt') : T('Ngày vào làm', 'Eintritt'))}
               <span />
             </div>
             {shown.map((e) => {
