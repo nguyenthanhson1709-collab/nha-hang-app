@@ -107,8 +107,8 @@ export default function EmployeePage() {
   const [ed, setEd] = useState<{ g: GroupId; draft: Partial<Employee> } | null>(null)
   const [tab, setTab] = useState<Tab>('overview')
   const mobile = useMedia(MOBILE_Q)
-  // Điện thoại: các nhóm dạng accordion, mặc định mở Cá nhân + Công việc
-  const [openSec, setOpenSec] = useState<Record<string, boolean>>({ personal: true, work: true })
+  // Điện thoại: các nhóm dạng accordion, mặc định đóng hết
+  const [openSec, setOpenSec] = useState<Record<string, boolean>>({})
   const [menu, setMenu] = useState(false)
   const [abs, setAbs] = useState<Absence[]>([])
   const [cv, setCv] = useState<{ job: string; days: number } | null>(null)
@@ -141,7 +141,7 @@ export default function EmployeePage() {
   }, [rid, eid]) // eslint-disable-line
   // Trang hồ sơ rộng hơn để lưới 3 cột trên máy tính
   useEffect(() => { const el = document.getElementById('root'); el?.classList.add('xwide'); return () => el?.classList.remove('xwide') }, [])
-  useEffect(() => { setEd(null); setTab('overview'); setOpenSec({ personal: true, work: true }) }, [eid])
+  useEffect(() => { setEd(null); setTab('overview'); setOpenSec({}) }, [eid])
   useEffect(() => { if (e?.photo) hrSignedUrl(e.photo).then(setPhotoUrl); else setPhotoUrl('') }, [e?.photo])
 
   if (!r || !canManage(role)) return null
