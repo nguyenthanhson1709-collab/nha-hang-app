@@ -4,6 +4,7 @@ import { getCounter, insertMany, listArticles, listCustomers, loadCompany, saveC
 import type { Company } from '../types'
 import { todayIso } from '../money'
 import { InvShell, useL } from '../ui'
+import { dropProps } from '../../lib/drop'
 
 interface LexwareExport {
   articles: { nr: string; name: string; mittag: string; beschreibung: string; einheit: string; ust: number; netto: number; brutto: number }[]
@@ -117,9 +118,14 @@ export default function InvSettings() {
           <span className="lbl">Logo (PNG/JPG)</span>
           <div className="toolbar">
             {c.logo_url && <img src={c.logo_url} alt="Logo" style={{ maxHeight: 60, maxWidth: 200, background: '#fff', borderRadius: 8, padding: 4 }} />}
-            <input type="file" accept="image/png,image/jpeg" style={{ width: 'auto' }} onChange={async (e) => {
-              const file = e.target.files?.[0]; if (file) setC({ ...c, logo_url: await resizeImage(file) })
-            }} />
+            <label className="btn drop" {...dropProps(async (fl) => {
+              const file = Array.from(fl).find((x) => /^image\/(png|jpeg)$/.test(x.type)); if (file) setC({ ...c, logo_url: await resizeImage(file) })
+            })}>
+              🖼️ {L('Chọn logo', 'Logo wählen')}<span className="drop-hint">{L('hoặc kéo thả ảnh vào đây', 'oder Bild hierher ziehen')}</span>
+              <input type="file" accept="image/png,image/jpeg" hidden onChange={async (e) => {
+                const file = e.target.files?.[0]; e.target.value = ''; if (file) setC({ ...c, logo_url: await resizeImage(file) })
+              }} />
+            </label>
             {c.logo_url && <button className="sm" onClick={() => setC({ ...c, logo_url: null })}>{L('Bỏ logo', 'Logo entfernen')}</button>}
           </div>
         </div>
@@ -155,7 +161,10 @@ export default function InvSettings() {
       <div className="card" style={{ marginTop: 16 }}>
         <h2 style={{ marginTop: 0 }}>{L('Nhập dữ liệu từ Lexware', 'Import aus Lexware')}</h2>
         <p className="muted small">{L('Chọn file lexware_data.json. Khách hàng và món đã có sẽ được bỏ qua, nên nhập lại nhiều lần cũng không bị trùng.', 'Datei lexware_data.json wählen. Vorhandene Kunden und Artikel werden übersprungen.')}</p>
-        <input type="file" accept="application/json,.json" disabled={importing} onChange={(e) => { const file = e.target.files?.[0]; if (file) importLexware(file) }} />
+        <label className={`btn drop${importing ? ' disabled' : ''}`} {...dropProps((fl) => { const file = Array.from(fl).find((x) => x.name.toLowerCase().endsWith('.json')); if (file) importLexware(file) }, importing)}>
+          📄 {L('Chọn file JSON', 'JSON-Datei wählen')}<span className="drop-hint">{L('hoặc kéo thả file vào đây', 'oder Datei hierher ziehen')}</span>
+          <input type="file" accept="application/json,.json" hidden disabled={importing} onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) importLexware(file) }} />
+        </label>
         {importing && <p className="muted small">{L('Đang nhập…', 'Import läuft…')}</p>}
       </div>
     </InvShell>

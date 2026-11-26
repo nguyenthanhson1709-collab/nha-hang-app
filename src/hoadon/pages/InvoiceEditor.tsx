@@ -15,6 +15,7 @@ import { EmailList, InvShell, StatusBadge, splitEmails, useL } from '../ui'
 import { kasseDoubts, kasseImages, kasseToItems } from '../kasse'
 import { aiReadKasse, lastAiError } from '../../lib/ai'
 import PdfSheet from '../../components/PdfSheet'
+import { dropProps } from '../../lib/drop'
 
 // PDF tải lười (chunk riêng) vì @react-pdf/renderer khá nặng
 const pdfLib = () => import('../pdf')
@@ -495,7 +496,7 @@ export default function InvoiceEditor({ docType = 'invoice' }: { docType?: 'invo
             </div>
             <label className="chk"><input type="checkbox" checked={lunch} onChange={(e) => setLunch(e.target.checked)} /> {L('Giá trưa (Mittag)', 'Mittagspreis')}</label>
             <button onClick={() => { setItems((l) => [...l, emptyItem()]); setDirty(true) }}>+ {L('Dòng tự do', 'Freie Position')}</button>
-            <label className={`btn${reading ? ' disabled' : ''}`} title={L('Tải hoá đơn PDF hoặc ảnh từ máy Kasse, app tự điền món', 'Kassenbon (PDF/Foto) hochladen, Positionen werden übernommen')}>
+            <label className={`btn${reading ? ' disabled' : ''}`} {...dropProps((fl) => readKasse([...fl]), reading)} title={L('Tải hoá đơn PDF hoặc ảnh từ máy Kasse, app tự điền món', 'Kassenbon (PDF/Foto) hochladen, Positionen werden übernommen')}>
               {reading ? L('Đang đọc…', 'Wird gelesen…') : `📄 ${L('Từ hoá đơn Kasse', 'Aus Kassenbon')}`}
               <input type="file" accept="application/pdf,image/*" multiple hidden disabled={reading} onChange={(e) => { readKasse([...(e.target.files ?? [])]); e.target.value = '' }} />
             </label>
