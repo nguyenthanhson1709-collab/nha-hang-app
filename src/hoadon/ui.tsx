@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Navigate, NavLink, useParams } from 'react-router-dom'
 import { canManage, useRole } from '../lib/app'
 import { useLang } from '../lib/i18n'
@@ -48,5 +48,35 @@ export function InvShell({ title, children, back, tabs = true }: { title?: strin
         {children}
       </div>
     </>
+  )
+}
+
+export const splitEmails = (v: string | null | undefined) => (v ?? '').split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean)
+
+/** Danh sách email: mỗi email một ô, nút thêm / xoá. Giá trị lưu dạng "a@x.de, b@y.de". */
+export function EmailList({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const L = useL()
+  const [rows, setRows] = useState<string[]>(() => { const r = splitEmails(value); return r.length ? r : [''] })
+  useEffect(() => {
+    if (splitEmails(rows.join(',')).join(', ') !== splitEmails(value).join(', ')) {
+      const r = splitEmails(value); setRows(r.length ? r : [''])
+    }
+  }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
+  const set = (next: string[]) => { setRows(next); onChange(splitEmails(next.join(',')).join(', ')) }
+  return (
+    <div className="email-list">
+      {rows.map((r, i) => (
+        <div key={i} className="email-row">
+          <input type="email" inputMode="email" autoComplete="off" placeholder={placeholder} value={r}
+            onChange={(e) => set(rows.map((x, j) => (j === i ? e.target.value : x)))}
+            onPaste={(e) => {
+              const parts = splitEmails(e.clipboardData.getData('text'))
+              if (parts.length > 1) { e.preventDefault(); set([...rows.slice(0, i), ...parts, ...rows.slice(i + 1)].filter(Boolean)) }
+            }} />
+          {(rows.length > 1 || r) && <button type="button" className="sm" title={L('Xoá email này', 'E-Mail entfernen')} onClick={() => set(rows.length > 1 ? rows.filter((_, j) => j !== i) : [''])}>✕</button>}
+        </div>
+      ))}
+      <button type="button" className="sm" onClick={() => setRows([...rows, ''])}>+ {L('Thêm email', 'E-Mail hinzufügen')}</button>
+    </div>
   )
 }

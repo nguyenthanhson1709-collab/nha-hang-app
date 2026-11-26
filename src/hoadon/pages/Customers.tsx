@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { listCustomers, saveCustomer } from '../api'
 import type { Customer } from '../types'
 import { COUNTRIES } from '../countries'
-import { InvShell, useL } from '../ui'
+import { EmailList, InvShell, useL } from '../ui'
 
 const blank: Partial<Customer> = { kind: 'customer', name: '', street: '', supplement: '', zip: '', city: '', country: 'DE', emails: '', phone: '', vat_id: '', note: '', archived: false }
 
@@ -84,7 +84,7 @@ export default function Customers() {
                   {edit.country && !COUNTRIES.some(([c]) => c === edit.country) && <option value={edit.country}>{edit.country}</option>}
                 </select></div>
             </div>
-            <div className="mt"><span className="lbl">{L('Email nhận hoá đơn (cách nhau bằng dấu phẩy)', 'E-Mail für Rechnungen (mit Komma getrennt)')}</span><input {...f('emails')} /></div>
+            <div className="mt"><span className="lbl">{L('Email nhận hoá đơn', 'E-Mail für Rechnungen')}</span><EmailList value={edit.emails ?? ''} onChange={(v) => setEdit((x) => ({ ...x, emails: v }))} /></div>
             <div className="frow mt">
               <div><span className="lbl">{L('Điện thoại', 'Telefon')}</span><input {...f('phone')} /></div>
               <div><span className="lbl">USt-IdNr.</span><input {...f('vat_id')} /></div>
