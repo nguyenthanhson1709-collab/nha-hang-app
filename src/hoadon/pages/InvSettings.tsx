@@ -102,6 +102,10 @@ export default function InvSettings() {
           <div><span className="lbl">Geschäftsführer</span><input {...f('managing_director')} /></div>
         </div>
         <div className="frow mt">
+          <div><span className="lbl">{L('Toà án đăng ký (Amtsgericht)', 'Amtsgericht')}</span><input placeholder="Charlottenburg" {...f('register_court')} /></div>
+          <div><span className="lbl">{L('Số đăng ký (HRB)', 'Handelsregister (HRB)')}</span><input placeholder="HRB 123456 B" {...f('register_number')} /></div>
+        </div>
+        <div className="frow mt">
           <div><span className="lbl">{L('Chủ tài khoản', 'Kontoinhaber')}</span><input {...f('account_holder')} /></div>
           <div><span className="lbl">{L('Ngân hàng', 'Bank')}</span><input {...f('bank_name')} /></div>
         </div>

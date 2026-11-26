@@ -3,6 +3,7 @@ export interface Company {
   name: string; street: string; zip: string; city: string
   phone: string; email: string; website: string
   vat_id: string; tax_number: string; managing_director: string
+  register_court?: string; register_number?: string
   bank_name: string; account_holder: string; iban: string; bic: string
   payment_days: number
   intro_text: string; closing_text: string

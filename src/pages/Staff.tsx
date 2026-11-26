@@ -103,7 +103,7 @@ export default function Staff() {
     return (
       <span role="columnheader" aria-sort={on ? (sort.asc ? 'ascending' : 'descending') : 'none'}>
         <button type="button" className={`st-sort${on ? ' on' : ''}`} onClick={() => setSort(on ? { k, asc: !sort.asc } : { k, asc: k === 'name' || k === 'ct' })}>
-          {label}<span className="st-arr">{on ? (sort.asc ? '▲' : '▼') : '↕'}</span>
+          {label}<svg className="st-arr" viewBox="0 0 10 14" aria-hidden>{(!on || sort.asc) && <path d="M5 1 9 6H1z" />}{(!on || !sort.asc) && <path d="M5 13 1 8h8z" />}</svg>
         </button>
       </span>
     )
@@ -201,9 +201,9 @@ export default function Staff() {
                       {!on && filter !== 'left' && <span className="tag err">{T('Đã nghỉ', 'Ausgeschieden')}</span>}
                       {on && d != null && d <= PERMIT_WARN_DAYS && <span className={`tag ${d < 0 ? 'err' : 'warn'}`}>{T('Cư trú', 'Aufenthalt')} {dmy(e.residence_permit_until)}</span>}
                       <span className="st-m">
-                        {e.personnel_no && <span className="st-pnr">{e.personnel_no}</span>}
+                        <span className="st-pnr">{e.personnel_no || '—'}</span>
                         <span className={`ct ct-${ct || 'none'}`}>{ct ? EMP_TYPES[ct][li] : T('Chưa rõ hợp đồng', 'Ohne Angabe')}</span>
-                        {date && <span>{filter === 'left' ? T('nghỉ', 'bis') : T('vào', 'seit')} {dmy(date)}</span>}
+                        <span className="st-md">{date ? dmy(date) : ''}</span>
                       </span>
                     </span>
                   </span>
