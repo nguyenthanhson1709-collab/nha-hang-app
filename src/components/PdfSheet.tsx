@@ -10,6 +10,11 @@ export default function PdfSheet({ pdf, title, onClose, actions }: {
   const T = (vi: string, de: string) => (lang === 'de' ? de : vi)
   const url = useMemo(() => URL.createObjectURL(pdf), [pdf])
   useEffect(() => () => URL.revokeObjectURL(url), [url])
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [onClose])
   const frame = useRef<HTMLIFrameElement>(null)
   const print = () => {
     if (pdf.type.startsWith('image/')) {
@@ -22,7 +27,7 @@ export default function PdfSheet({ pdf, title, onClose, actions }: {
     try { frame.current?.contentWindow?.focus(); frame.current?.contentWindow?.print() } catch { window.open(url, '_blank') }
   }
   return (
-    <div className="pv-bg" role="dialog" aria-label={title}>
+    <div className="pv-bg" role="dialog" aria-label={title} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="pv">
         <div className="pv-h">
           <b className="grow">{title}</b>
