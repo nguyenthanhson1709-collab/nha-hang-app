@@ -35,7 +35,11 @@ export default function Staff() {
   if (!r || !canManage(role)) return null
   const active = (list || []).filter((e) => isActive(e))
   const left = (list || []).filter((e) => !isActive(e))
-  const shown = (tab === 'active' ? active : left).filter((e) => !q.trim() || fullName(e).toLowerCase().includes(q.trim().toLowerCase()))
+  // Xếp theo số nhân viên (Pers.-Nr.), số lớn nhất lên đầu; người chưa có số xếp cuối theo tên
+  const pnr = (e: Row) => (e.personnel_no && /^\d+$/.test(e.personnel_no) ? Number(e.personnel_no) : -1)
+  const shown = (tab === 'active' ? active : left)
+    .filter((e) => !q.trim() || fullName(e).toLowerCase().includes(q.trim().toLowerCase()) || (e.personnel_no || '').includes(q.trim()))
+    .sort((a, b) => pnr(b) - pnr(a))
   const expiring = active.filter((e) => { const d = permitDaysLeft(e.residence_permit_until); return d != null && d <= PERMIT_WARN_DAYS })
 
   async function saveCompany() {
@@ -46,7 +50,7 @@ export default function Staff() {
 
   return (
     <>
-      <Top title={de ? 'Personal' : 'Nhân sự'} sub={hs?.company_name ? `${r.name} · ${hs.company_name}` : r.name} back={`/r/${rid}`}
+      <Top title={de ? 'Personal' : 'Nhân sự'} sub={hs?.company_name && hs.company_name !== r.name ? `${r.name} · ${hs.company_name}` : r.name} back={`/r/${rid}`}
         right={<button className="btn" onClick={() => setEditCo(hs?.company_name || '')} aria-label="Firma">⚙︎</button>} />
       <div className="page">
         <div className="tiles">
@@ -68,7 +72,7 @@ export default function Staff() {
           <button className={tab === 'active' ? 'sel' : ''} onClick={() => setTab('active')}>{de ? 'Aktiv' : 'Đang làm'} ({active.length})</button>
           <button className={tab === 'left' ? 'sel' : ''} onClick={() => setTab('left')}>{de ? 'Ausgeschieden' : 'Đã nghỉ'} ({left.length})</button>
         </div>
-        {(list?.length || 0) > 8 && <input placeholder={de ? 'Name suchen…' : 'Tìm tên…'} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 8 }} />}
+        {(list?.length || 0) > 8 && <input placeholder={de ? 'Name / Pers.-Nr. suchen…' : 'Tìm tên / số NV…'} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 8 }} />}
         {!list ? <Spinner /> : (
           <div className="list">
             {shown.map((e) => {
@@ -76,7 +80,7 @@ export default function Staff() {
               return (
                 <button key={e.id} className="it" style={{ width: '100%', textAlign: 'left' }} onClick={() => nav(`/r/${rid}/hr/${e.id}`)}>
                   <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="t">{fullName(e) || '—'}</div>
+                    <div className="t">{e.personnel_no && <span className="muted" style={{ fontVariantNumeric: 'tabular-nums', marginRight: 8 }}>{e.personnel_no}</span>}{fullName(e) || '—'}</div>
                     <div className="small muted">
                       {[e.job_title ? (de ? e.job_title : jobInfo(e.job_title)?.[1] || e.job_title) : e.position && POSITIONS[e.position][li], e.employment_type && EMP_TYPES[e.employment_type][li]].filter(Boolean).join(' · ') || '—'}
                     </div>
