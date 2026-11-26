@@ -445,6 +445,8 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .dcard:hover { border-color: color-mix(in srgb, var(--brand) 55%, transparent); background: color-mix(in srgb, var(--brand) 5%, var(--card)); }
 .dcard:active { transform: scale(.985); }
 .dcard.main { border-color: color-mix(in srgb, var(--brand) 70%, transparent); }
+/* Ô chính chiếm cả hàng khi số ô lẻ (7 ô: 1 / 3 / 3 trên máy tính, 1 / 2 / 2 / 2 trên điện thoại) */
+.dcard.wide { grid-column: 1 / -1; }
 .dcard-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: auto; }
 .dcard-ic { width: 46px; height: 46px; border-radius: 12px; background: #49321B; color: var(--brand); display: flex; align-items: center; justify-content: center; }
 .dcard-ic .lu { width: 26px; height: 26px; }

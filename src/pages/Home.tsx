@@ -17,6 +17,7 @@ const LU: Record<string, React.ReactNode> = {
   archive: <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />,
   book: <><path d="M12 7v14" /><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" /></>,
   chart: <><path d="M3 3v16a2 2 0 0 0 2 2h16" /><path d="m19 9-5 5-4-4-3 3" /></>,
+  invoice: <><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" /><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" /><path d="M12 17.5v-11" /></>,
   people: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
   arrow: <><path d="M7 7h10v10" /><path d="M7 17 17 7" /></>,
   settings: <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></>,
@@ -82,6 +83,7 @@ export default function Home() {
       { icon: 'archive', label: t('archive'), desc: de ? 'Buchhaltungsunterlagen' : 'Tài liệu kế toán', to: `/r/${rid}/archive` },
       { icon: 'book', label: t('kassenbuch'), desc: de ? 'Kassenbuch führen' : 'Sổ quỹ tiền mặt', to: `/r/${rid}/kb` },
       { icon: 'chart', label: t('reports'), desc: de ? 'Auswertungen und Statistik' : 'Thống kê và phân tích', to: `/r/${rid}/reports` },
+      { icon: 'invoice', label: t('invoicing'), desc: de ? 'Rechnungen und Angebote' : 'Hoá đơn và Angebot', to: `/r/${rid}/inv` },
       { icon: 'people', label: t('hr'), desc: de ? 'Personalakten verwalten' : 'Quản lý hồ sơ nhân viên', to: `/r/${rid}/hr` },
     ] : []),
   ]
@@ -92,7 +94,7 @@ export default function Home() {
       <div className="page dash">
         <div className="dash-grid">
           {tiles.map((x) => (
-            <button key={x.to} className={`dcard${x.main ? ' main' : ''}`} onClick={() => nav(x.to)}>
+            <button key={x.to} className={`dcard${x.main ? ' main' : ''}${x.main && tiles.length % 2 === 1 && tiles.length > 1 ? ' wide' : ''}`} onClick={() => nav(x.to)}>
               <span className="dcard-top">
                 <span className="dcard-ic"><Lucide k={x.icon} /></span>
                 {x.badge ? <span className="dcard-badge" title={de ? 'offen' : 'đang chờ'}>{x.badge}</span> : <span className="dcard-go"><Lucide k="arrow" /></span>}
