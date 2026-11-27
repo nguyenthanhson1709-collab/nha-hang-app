@@ -17,6 +17,8 @@ export interface Employee {
   job_title: string | null; position: Position | null; employment_type: EmpType | null
   gross_monthly: number | null; hourly_wage: number | null; weekly_hours: number | null; vacation_days: number | null
   work_days?: number | null; daily_hours?: number | null
+  /** Phụ cấp đêm/CN/lễ: null = tự động (không phụ cấp khi ≤ 10 giờ/tuần), false = không bao giờ (ví dụ chủ) */
+  surcharge_eligible?: boolean | null
   vacation_year?: number | null; vacation_left?: number | null; vacation_as_of?: string | null
   multiple_employment: boolean | null; tax_class: number | null; pension_no: string | null; health_insurance: string | null
   tax_id: string | null; iban: string | null; bic: string | null; bank_name: string | null; note: string | null
