@@ -15,13 +15,6 @@ export interface VivaAccount {
   webhook_token?: string; wallets?: Wallet[] | null; wallets_at?: string | null; last_hook_at?: string | null
 }
 interface Wallet { id: string; name: string; iban: string; primary: boolean; amount: number; available: number; overdraft: number; currency: string }
-interface AccTx { id: string; created: string; amount: number; subtype_id: number | null; description: string | null; iban: string | null; available_after: number | null }
-// SubTypeId của Viva (Account Transaction Created)
-const SUBTYPE: Record<number, [string, string]> = {
-  30: ['Chuyển về ngân hàng', 'Auszahlung auf Bankkonto'], 25: ['Tiền vào từ IBAN', 'Eingang per Überweisung'],
-  31: ['Chuyển ra thẻ', 'Auszahlung auf Karte'], 32: ['Ghi nợ trực tiếp', 'Lastschrift'], 140: ['Chuyển giữa ví', 'Übertrag zwischen Wallets'],
-}
-const HOOK_BASE = `${(import.meta.env?.VITE_SUPABASE_URL as string) || ''}/functions/v1/nh-viva?hook=`
 interface VivaDay { day: string; amount: number; tip: number; refunds: number; n_tx: number }
 
 const ERR: Record<string, [string, string]> = {
@@ -61,7 +54,6 @@ export default function Viva() {
   const [busy, setBusy] = useState('')
   const [wallets, setWallets] = useState<Wallet[] | null>(null)
   const [walletErr, setWalletErr] = useState('')
-  const [atx, setAtx] = useState<AccTx[]>([])
   // Số dư mặc định che mờ, bấm con mắt để xem (không nhớ lại, mở trang lần sau lại mờ)
   const [showBal, setShowBal] = useState(false)
   const [edit, setEdit] = useState<{ merchant_id: string; api_key: string; source_codes: string; terminal_ids: string; cutoff_hour: number; auto_sync: boolean } | null>(null)
@@ -74,9 +66,6 @@ export default function Viva() {
       supabase.from('nh_zbons').select('z_date, total, cash_revenue').eq('restaurant_id', rid!).gte('z_date', from).lte('z_date', to),
       supabase.from('nh_cash_moves').select('move_date, amount').eq('restaurant_id', rid!).eq('channel', 'viva').gte('move_date', from).lte('move_date', to),
     ])
-    const { data: tx } = await supabase.from('nh_viva_account_tx').select('id, created, amount, subtype_id, description, iban, available_after').eq('restaurant_id', rid!)
-      .gte('created', from + 'T00:00:00+01:00').lt('created', to + 'T23:59:59+01:00').order('created', { ascending: false })
-    setAtx((tx || []) as AccTx[])
     setAcc((a.data as VivaAccount) || null)
     const dd: Record<string, VivaDay> = {}
     for (const x of (d.data || []) as VivaDay[]) dd[x.day] = x
@@ -208,37 +197,6 @@ export default function Viva() {
                   </div>
                 </div>
               ))}
-          </div>}
-
-          {connected && <div className="card">
-            <h3 style={{ marginTop: 0 }}>{de ? 'Überweisungen und Kontobewegungen' : 'Chuyển khoản và biến động tài khoản'}</h3>
-            {atx.length ? <div className="list">
-              {atx.map((x) => (
-                <div className="it" key={x.id}>
-                  <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="t">{(x.subtype_id != null && SUBTYPE[x.subtype_id]?.[de ? 1 : 0]) || x.description || (de ? 'Buchung' : 'Giao dịch')}</div>
-                    <div className="small muted">{fmtTs(x.created, de)}{x.iban ? ` · ${x.iban}` : ''}{x.description && x.subtype_id != null && SUBTYPE[x.subtype_id] ? ` · ${x.description}` : ''}</div>
-                  </div>
-                  <div className="right"><div className="num" style={{ color: x.amount < 0 ? 'var(--err)' : undefined }}>{eur(x.amount)}</div>
-                    {x.available_after != null && <div className="small muted num">{de ? 'danach' : 'sau đó'} {eur(x.available_after)}</div>}</div>
-                </div>
-              ))}
-            </div> : <div className="small muted">{acc?.last_hook_at
-              ? (de ? 'Keine Bewegungen in diesem Monat.' : 'Tháng này chưa có biến động.')
-              : (de ? 'Noch nicht eingerichtet: Viva schickt Überweisungen per Webhook an die App (siehe unten). Ältere Überweisungen vor der Einrichtung werden nicht angezeigt.' : 'Chưa cài: Viva gửi từng lần chuyển khoản về app qua webhook (xem bên dưới). Các lần chuyển trước khi cài sẽ không hiện.')}</div>}
-            {owner && acc?.webhook_token && <details style={{ marginTop: 10 }}>
-              <summary className="small">{de ? 'Webhook in Viva einrichten' : 'Cài webhook trong Viva'}{acc.last_hook_at ? ` · ✓ ${fmtTs(acc.last_hook_at, de)}` : ''}</summary>
-              <ol className="small" style={{ paddingLeft: 18 }}>
-                <li>{de ? 'Viva-Konto → Einstellungen → API-Zugang → Webhooks → Webhook erstellen' : 'Tài khoản Viva → Einstellungen → API-Zugang → Webhooks → Webhook erstellen'}</li>
-                <li>{de ? 'URL einfügen:' : 'Dán URL này:'}
-                  <div className="row" style={{ gap: 6, marginTop: 4 }}>
-                    <input readOnly value={HOOK_BASE + acc.webhook_token} onFocus={(e) => e.target.select()} style={{ fontSize: '.8rem' }} />
-                    <button className="small" onClick={() => { navigator.clipboard?.writeText(HOOK_BASE + acc.webhook_token).then(() => toast(de ? 'Kopiert' : 'Đã chép')).catch(() => {}) }}>{de ? 'Kopieren' : 'Chép'}</button>
-                  </div></li>
-                <li>{de ? 'Ereignistyp: „Account Transaction Created“ → Speichern. Viva prüft die URL automatisch.' : 'Event Type: „Account Transaction Created“ → lưu. Viva tự kiểm tra URL.'}</li>
-              </ol>
-              <div className="small muted">{de ? 'Die URL ist geheim, nicht weitergeben.' : 'URL này là bí mật, đừng gửi cho người khác.'}</div>
-            </details>}
           </div>}
 
           <MonthBar value={period} onChange={setPeriod} />
