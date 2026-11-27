@@ -15,6 +15,7 @@ import { kbLines, kbPdf, kbTotals, kbXlsx, type KbLine } from '../lib/kassenbuch
 import { docsInRange } from '../lib/data'
 import { Money, Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
 import { MonthBar } from '../components/MonthBar'
+import { useFollowMonth } from '../lib/useMonthParam'
 import { FitTable } from '../components/FitTable'
 import { VivaWeek } from '../components/VivaWeek'
 
@@ -27,6 +28,7 @@ export default function Kassenbuch() {
   const r = useRestaurant(rid)
   const role = useRole(rid)
   const [period, setPeriod] = useState(thisMonth())
+  useFollowMonth(setPeriod)
   const [rows, setRows] = useState<KbLine[] | null>(null)
   const { categories } = useApp()
   const [counts, setCounts] = useState<CashCount[]>([])

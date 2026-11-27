@@ -10,6 +10,7 @@ import { uploadFiles } from '../lib/data'
 import { download } from '../lib/pdf'
 import { Spinner, Top, toast, useRestaurant } from '../components/ui'
 import { MonthBar } from '../components/MonthBar'
+import { useFollowMonth } from '../lib/useMonthParam'
 import PdfSheet from '../components/PdfSheet'
 
 type B = { id: string; period: string; note: string | null; files: string[]; created_at: string }
@@ -22,6 +23,7 @@ export default function Bwa() {
   const r = useRestaurant(rid)
   const role = useRole(rid)
   const [period, setPeriod] = useState(() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7) || thisMonth() })
+  useFollowMonth(setPeriod)
   const [list, setList] = useState<B[] | null>(null)
   const [busy, setBusy] = useState('')
   const [open, setOpen] = useState<Record<string, boolean>>({})

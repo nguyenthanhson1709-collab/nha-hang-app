@@ -1,6 +1,6 @@
 // Hồ sơ nhân viên: form Meldungsbogen PERSONAL (nhân viên mới); hồ sơ đã có xem theo tab, mỗi nhóm một nút Sửa
-import { useEffect, useState, type ReactNode } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase, errMsg } from '../lib/supabase'
 import { canManage, useRole } from '../lib/app'
 import { useLang } from '../lib/i18n'
@@ -25,6 +25,7 @@ import { MOBILE_Q, useMedia } from '../lib/useMedia'
 type K = keyof Employee
 type GroupId = 'personal' | 'work' | 'residence' | 'pay' | 'tax' | 'bank' | 'leave' | 'note'
 type Tab = 'overview' | 'personal' | 'work' | 'residence' | 'pay' | 'leave' | 'docs'
+const TAB_KEYS: Tab[] = ['overview', 'personal', 'work', 'residence', 'pay', 'leave', 'docs']
 type Absence = { id: string; kind: string; from_date: string; to_date: string; note: string | null }
 
 /** Biểu tượng nét mảnh cho các nhóm thông tin */
@@ -123,6 +124,10 @@ export default function EmployeePage() {
   const [pick, setPick] = useState<Record<string, File | null> | null>(null)
   const [fv, setFv] = useState<{ title: string; blob: Blob; name: string; slip?: boolean } | null>(null)
   const [exitF, setExitF] = useState<{ date: string | null; reason: string } | null>(null)
+  // Trợ lý giọng nói mở thẳng: ?slip=YYYY-MM | last (mở bảng lương), ?tab=pay|work|leave|docs…
+  const [sp, setSp] = useSearchParams()
+  const [docsReady, setDocsReady] = useState(false)
+  const autoRef = useRef<((slip: string | null, tab: string | null) => void) | null>(null)
 
   async function loadChildren() {
     if (isNew) return
@@ -131,7 +136,7 @@ export default function EmployeePage() {
       supabase.from('nh_employment_contracts').select('*').eq('employee_id', eid!).order('start_date', { ascending: false }),
       supabase.from('nh_absences').select('id,kind,from_date,to_date,note').eq('employee_id', eid!).order('from_date', { ascending: false }),
     ])
-    setDocs((d.data || []) as EmpDoc[]); setContracts((c.data || []) as never); setAbs((a.data || []) as Absence[])
+    setDocs((d.data || []) as EmpDoc[]); setContracts((c.data || []) as never); setAbs((a.data || []) as Absence[]); setDocsReady(true)
   }
   useEffect(() => {
     if (!rid) return
@@ -147,7 +152,13 @@ export default function EmployeePage() {
   }, [rid, eid]) // eslint-disable-line
   // Trang hồ sơ rộng hơn để lưới 3 cột trên máy tính
   useEffect(() => { const el = document.getElementById('root'); el?.classList.add('xwide'); return () => el?.classList.remove('xwide') }, [])
-  useEffect(() => { setEd(null); setTab('overview'); setOpenSec({}) }, [eid])
+  useEffect(() => { setEd(null); setTab('overview'); setOpenSec({}); setDocsReady(false) }, [eid])
+  useEffect(() => {
+    const slip = sp.get('slip'), tb = sp.get('tab')
+    if ((!slip && !tb) || !docsReady || !e || !autoRef.current) return
+    const next = new URLSearchParams(sp); next.delete('slip'); next.delete('tab'); setSp(next, { replace: true })
+    autoRef.current(slip, tb)
+  }, [sp, docsReady, e]) // eslint-disable-line
   useEffect(() => { if (e?.photo) hrSignedUrl(e.photo).then(setPhotoUrl); else setPhotoUrl('') }, [e?.photo])
 
   if (!r || !canManage(role)) return null
@@ -466,6 +477,15 @@ export default function EmployeePage() {
       const { blob, name } = await loadFile(path, title, slip)
       setFv({ title, slip, blob, name })
     } catch { openHrFile(path) } finally { setBusy(false) }
+  }
+  autoRef.current = (slip, tb) => {
+    const showTab = (k: Tab) => (mobile ? setOpenSec((o) => ({ ...o, [k]: true })) : setTab(k))
+    if (tb && TAB_KEYS.includes(tb as Tab)) showTab(tb as Tab)
+    if (!slip) return
+    const d = slip === 'last' ? slips[0] : slips.find((x) => (x.period || '').startsWith(slip))
+    if (d) { viewFile(d.path, docTitle(d), true); return }
+    showTab('pay')
+    toast(slip === 'last' ? T('Nhân viên này chưa có bảng lương', 'Keine Lohnabrechnung vorhanden') : T(`Chưa có bảng lương tháng ${slip.slice(5, 7)}/${slip.slice(0, 4)}`, `Keine Lohnabrechnung für ${slip.slice(5, 7)}/${slip.slice(0, 4)}`))
   }
   const loadFile = async (path: string, title: string, slip: boolean) => {
       const { data, error } = await supabase.storage.from(HR_BUCKET).download(path)
