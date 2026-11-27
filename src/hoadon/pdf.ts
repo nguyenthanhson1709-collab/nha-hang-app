@@ -4,6 +4,7 @@ import { InvoicePdf } from './InvoicePdf'
 import type { Company, Invoice, InvoiceItem } from './types'
 import { girocodeDataUrl, qrReference } from './girocode'
 import { computeTotals } from './money'
+import { trimLogoUrl } from './logo'
 
 export async function renderInvoicePdf(company: Company, invoice: Invoice, items: InvoiceItem[]): Promise<Blob> {
   const total = computeTotals(items, invoice.price_mode ?? 'gross').gross
@@ -14,8 +15,10 @@ export async function renderInvoicePdf(company: Company, invoice: Invoice, items
       amount: total, reference: qrReference(invoice.invoice_number),
     })
   }
+  // Logo cũ có thể còn viền trắng rộng: cắt trước khi in để logo to đúng khung
+  const co = company.logo_url ? { ...company, logo_url: await trimLogoUrl(company.logo_url) } : company
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return pdf(createElement(InvoicePdf, { company, invoice, items, qrDataUrl: qr }) as any).toBlob()
+  return pdf(createElement(InvoicePdf, { company: co, invoice, items, qrDataUrl: qr }) as any).toBlob()
 }
 
 export { pdfFilename } from './docname'
