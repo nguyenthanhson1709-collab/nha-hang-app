@@ -22,6 +22,7 @@ import Bwa from './pages/Bwa'
 import Settings from './pages/Settings'
 import RestaurantSettings from './pages/RestaurantSettings'
 import Staff from './pages/Staff'
+import Viva from './pages/Viva'
 import EmployeePage from './pages/Employee'
 import Invoices from './hoadon/pages/Invoices'
 import InvoiceEditor from './hoadon/pages/InvoiceEditor'
@@ -128,6 +129,7 @@ function Shell({ session }: { session: Session }) {
           <Route path="/r/:rid/rc/new" element={<RestLayout><RcRecipeEditor key="new" /></RestLayout>} />
           <Route path="/r/:rid/rc/:id" element={<RestLayout><RcRecipeView /></RestLayout>} />
           <Route path="/r/:rid/rc/:id/edit" element={<RestLayout><RcRecipeEditor /></RestLayout>} />
+          <Route path="/r/:rid/viva" element={<RestLayout><Viva /></RestLayout>} />
           <Route path="/r/:rid/settings" element={<RestLayout><RestaurantSettings /></RestLayout>} />
           <Route path="*" element={<Navigate to={start} replace />} />
         </Routes>
