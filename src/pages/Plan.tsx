@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { canManage, useRole } from '../lib/app'
 import { useLang } from '../lib/i18n'
 import { fullName, type Employee, type HrSettings } from '../lib/hr'
-import { hhmm, holidayOf, monthDates, monthLabel, monthStat, shiftClass, tShort, vacDays, weekday, WD_DE, WD_VI, type Shift, type Vacation } from '../lib/hrTime'
+import { hhmm, holidayOf, monthDates, monthLabel, monthStat, noSurcharge, shiftClass, tShort, vacDays, weekday, WD_DE, WD_VI, type Shift, type Vacation } from '../lib/hrTime'
 import { dienstplanPdf } from '../lib/hrTimePdf'
 import { Spinner, Top, useRestaurant } from '../components/ui'
 import { LangSwitch } from '../components/LangSwitch'
@@ -31,6 +31,7 @@ export default function Plan() {
   const [abs, setAbs] = useState<Vacation[]>([])
   const [view, setView] = useState<'sum' | 'grid' | 'list'>('sum')
   const [pdf, setPdf] = useState<Blob | null>(null)
+  const [tick, setTick] = useState(0)
   const pm = useFollowMonth(setYm)
 
   useEffect(() => { const el = document.getElementById('root'); el?.classList.add('xwide'); return () => el?.classList.remove('xwide') }, [])
@@ -55,7 +56,7 @@ export default function Plan() {
       supabase.from('nh_shifts').select('id,employee_id,shift_date,start_time,end_time,break_min,note').eq('restaurant_id', rid).gte('shift_date', `${ym}-01`).lte('shift_date', to).limit(5000),
       supabase.from('nh_absences').select('employee_id,from_date,to_date,kind,note').eq('restaurant_id', rid).lte('from_date', to).gte('to_date', `${ym}-01`).limit(5000),
     ]).then(([s, a]) => { setShifts((s.data || []) as Shift[]); setAbs((a.data || []) as Vacation[]) })
-  }, [rid, ym])
+  }, [rid, ym, tick])
 
   const months = useMemo(() => {
     if (!range) return []
@@ -74,7 +75,7 @@ export default function Plan() {
       const sh = shifts.filter((s) => s.employee_id === e.id).sort((a, b) => a.shift_date.localeCompare(b.shift_date))
       const vac = vacDays(abs.filter((a) => a.employee_id === e.id), ym)
       const contract = e.work_days != null && e.daily_hours != null ? `${String(e.work_days).replace('.', ',')} × ${String(e.daily_hours).replace('.', ',')} h` : ''
-      return { e, sh, vac, st: monthStat(sh, vac), contract }
+      return { e, sh, vac, st: monthStat(sh, vac, noSurcharge(e)), contract }
     }).filter((x) => x.sh.length || x.vac.length).sort((a, b) => (a.e.personnel_no || '').localeCompare(b.e.personnel_no || ''))
   }, [emps, shifts, abs, ym])
   const tot = rows.reduce((t, x) => ({ days: t.days + x.st.days, ist: t.ist + x.st.ist, night: t.night + x.st.night, sun: t.sun + x.st.sun, hol: t.hol + x.st.hol, vac: t.vac + x.st.vac }), { days: 0, ist: 0, night: 0, sun: 0, hol: 0, vac: 0 })
@@ -96,10 +97,10 @@ export default function Plan() {
             <button className={view === 'grid' ? 'sel' : ''} onClick={() => setView('grid')}>{T('Lịch theo ngày', 'Monatsübersicht')}</button>
             <button className={view === 'list' ? 'sel' : ''} onClick={() => setView('list')}>{T('Lịch làm nhân viên', 'Mitarbeiterliste')}</button>
           </div>
-          {view !== 'list' && <button className="st-btn" disabled={!rows.length} onClick={() => setPdf(dienstplanPdf({ company, ym: ym!, rows: rows.map((x) => ({ name: `${x.e.last_name}, ${x.e.first_name}`, pnr: pnr(x.e), contract: x.contract, shifts: x.sh, vac: x.vac })) }))}>PDF</button>}
+          {view !== 'list' && <button className="st-btn" disabled={!rows.length} onClick={() => setPdf(dienstplanPdf({ company, ym: ym!, rows: rows.map((x) => ({ name: `${x.e.last_name}, ${x.e.first_name}`, pnr: pnr(x.e), contract: x.contract, shifts: x.sh, vac: x.vac, noZ: noSurcharge(x.e) })) }))}>PDF</button>}
         </div>
 
-        {!shifts ? <Spinner /> : view === 'list' ? <StaffMonth rid={rid!} ym={ym!} emps={emps} shifts={shifts} abs={abs} company={company} de={de} /> : !rows.length ? <div className="card muted">{T('Tháng này chưa có lịch làm việc', 'Für diesen Monat ist kein Dienstplan erfasst')}</div> : view === 'sum' ? (
+        {!shifts ? <Spinner /> : view === 'list' ? <StaffMonth rid={rid!} ym={ym!} emps={emps} shifts={shifts} abs={abs} company={company} de={de} onSaved={() => setTick((x) => x + 1)} /> : !rows.length ? <div className="card muted">{T('Tháng này chưa có lịch làm việc', 'Für diesen Monat ist kein Dienstplan erfasst')}</div> : view === 'sum' ? (
           <>
             <div className="st-stats pl-kpi">
               <div className="st-stat"><span>{T('Nhân viên', 'Mitarbeiter')}</span><b>{rows.length}</b></div>

@@ -694,3 +694,10 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .sm-tab td:nth-child(17) { font-variant-numeric: tabular-nums; font-size: .74rem; letter-spacing: -.01em; }
 .sm-tab td.sm-chk { cursor: pointer; text-align: center; }
 .sm-tab td.sm-chk .pick-box { margin: 0; width: 22px; height: 22px; }
+/* Xếp lịch tự động: xem trước */
+.sheet.sched { max-width: 640px; }
+.sheet.sched h3 { margin: 0 0 6px; }
+.sheet.sched .warn, .sheet.sched td.warn { color: var(--warn); }
+.sheet.sched ul.warn { margin: 6px 0 10px; padding-left: 18px; }
+.sheet.sched .pl-sum { width: 100%; margin: 8px 0; }
+.sched-f { display: flex; gap: 8px; justify-content: flex-end; position: sticky; bottom: 0; background: var(--card); padding-top: 8px; }

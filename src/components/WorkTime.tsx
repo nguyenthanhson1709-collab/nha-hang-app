@@ -7,8 +7,8 @@ import { stundenzettelPdf } from '../lib/hrTimePdf'
 import PdfSheet from './PdfSheet'
 import { Spinner } from './ui'
 
-export default function WorkTime({ eid, name, pnr, company, contract, de, download }: {
-  eid: string; name: string; pnr: string | null; company: string; contract: string | null; de: boolean; download: (b: Blob, n: string) => void
+export default function WorkTime({ eid, name, pnr, company, contract, de, download, noZ = false }: {
+  eid: string; name: string; pnr: string | null; company: string; contract: string | null; de: boolean; download: (b: Blob, n: string) => void; noZ?: boolean
 }) {
   const T = (vi: string, g: string) => (de ? g : vi)
   const [shifts, setShifts] = useState<Shift[] | null>(null)
@@ -38,7 +38,7 @@ export default function WorkTime({ eid, name, pnr, company, contract, de, downlo
   if (!ym) return (
     <div className="list">
       {months.map((m) => {
-        const st = monthStat(ofMonth(m), vacDays(abs, m))
+        const st = monthStat(ofMonth(m), vacDays(abs, m), noZ)
         return (
           <button key={m} className="it wt-month" onClick={() => setYm(m)}>
             <span className="wt-ic" aria-hidden>📁</span>
@@ -53,8 +53,8 @@ export default function WorkTime({ eid, name, pnr, company, contract, de, downlo
     </div>
   )
 
-  const list = ofMonth(ym), vac = vacDays(abs, ym), st = monthStat(list, vac), by = new Map(list.map((s) => [s.shift_date, s]))
-  const makePdf = () => stundenzettelPdf({ name, pnr, company, ym, contract, shifts: list, vac })
+  const list = ofMonth(ym), vac = vacDays(abs, ym), st = monthStat(list, vac, noZ), by = new Map(list.map((s) => [s.shift_date, s]))
+  const makePdf = () => stundenzettelPdf({ name, pnr, company, ym, contract, shifts: list, vac, noZ })
   const fileName = `Stundenzettel_${ym}_${name}`.replace(/\s+/g, '_') + '.pdf'
   return (
     <div className="wt">

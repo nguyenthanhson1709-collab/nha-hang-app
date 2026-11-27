@@ -46,9 +46,15 @@ export function calc(s: Shift): Calc {
 }
 
 export type MonthStat = { days: number; ist: number; night: number; sun: number; hol: number; vac: number }
-export function monthStat(shifts: Shift[], vacDates: string[]): MonthStat {
+/** Không có phụ cấp (đêm / Chủ nhật / lễ) khi giờ làm theo hợp đồng ≤ 10 giờ/tuần (quy tắc quán) */
+export const noSurcharge = (e: { weekly_hours?: number | string | null; work_days?: number | string | null; daily_hours?: number | string | null }) => {
+  const w = e.weekly_hours != null ? Number(e.weekly_hours) : e.work_days != null && e.daily_hours != null ? Number(e.work_days) * Number(e.daily_hours) : NaN
+  return Number.isFinite(w) && w > 0 && w <= 10
+}
+export function monthStat(shifts: Shift[], vacDates: string[], noZ = false): MonthStat {
   const r = { days: 0, ist: 0, night: 0, sun: 0, hol: 0, vac: vacDates.length }
   for (const s of shifts) { const c = calc(s); r.days++; r.ist += c.ist; r.night += c.night; r.sun += c.sun; r.hol += c.hol }
+  if (noZ) { r.night = 0; r.sun = 0; r.hol = 0 }
   return r
 }
 /** Danh sách ngày phép (YYYY-MM-DD) trong tháng từ các khoảng nghỉ phép */

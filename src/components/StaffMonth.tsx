@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase'
 import { toast } from './ui'
 import { dmy } from '../lib/format'
 import { isActive, type Employee } from '../lib/hr'
-import { monthDates, monthStat, vacDays, type Shift, type Vacation } from '../lib/hrTime'
+import { monthDates, monthStat, noSurcharge, vacDays, type Shift, type Vacation } from '../lib/hrTime'
+import { buildSchedule, defaultSun, SUN_RULES, type SchedResult, type SunRule } from '../lib/scheduler'
 
 /**
  * Lịch làm nhân viên (Mitarbeiterliste je Monat): bảng theo tháng giống file Excel gửi văn phòng lương.
@@ -11,7 +12,7 @@ import { monthDates, monthStat, vacDays, type Shift, type Vacation } from '../li
  * trong nh_staff_month.data (xoá trống = quay về giá trị tự tính). Anrede, Fahrgeld, Gutschein lấy lại từ tháng trước.
  */
 type Emp = Employee & { id: string }
-type Col = { k: string; de: string; vi: string; w?: number; num?: boolean; sticky?: boolean; check?: boolean; opts?: string[]; auto?: (e: Emp, st: ReturnType<typeof monthStat>) => string }
+type Col = { k: string; de: string; vi: string; w?: number; num?: boolean; sticky?: boolean; check?: boolean; noXlsx?: boolean; opts?: string[]; auto?: (e: Emp, st: ReturnType<typeof monthStat>) => string }
 const n = (v: number | null | undefined) => (v == null ? '' : String(v).replace('.', ','))
 const h = (m: number) => (m ? n(Math.round((m / 60) * 100) / 100) : '')
 const COLS: Col[] = [
@@ -36,17 +37,24 @@ const COLS: Col[] = [
   { k: 'resturlaub', de: 'Resturlaub', vi: 'Phép còn lại', w: 70, num: true, auto: (e) => n(e.vacation_left) },
   { k: 'anwesend', de: 'Anwesenheitstage', vi: 'Ngày đi làm', w: 70, num: true, auto: (_e, s) => (s.days ? String(s.days) : '') },
   { k: 'ist', de: 'Ist-Std gesamt', vi: 'Tổng giờ', w: 70, num: true, auto: (_e, s) => h(s.ist) },
+  // Quy tắc Chủ nhật cho bộ xếp lịch (không xuất Excel)
+  { k: 'sonntagsregel', de: 'Sonntage', vi: 'Quy tắc Chủ nhật', w: 80, sticky: true, noXlsx: true, opts: SUN_RULES, auto: (e) => defaultSun(e.work_days) },
 ]
+const XCOLS = COLS.filter((c) => !c.noXlsx)
+const ymNow = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
+const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 type Data = Record<string, string>
 
-export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de }: {
-  rid: string; ym: string; emps: Emp[]; shifts: Shift[]; abs: Vacation[]; company: string; de: boolean
+export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, onSaved }: {
+  rid: string; ym: string; emps: Emp[]; shifts: Shift[]; abs: Vacation[]; company: string; de: boolean; onSaved?: () => void
 }) {
   const T = (vi: string, g: string) => (de ? g : vi)
   const [saved, setSaved] = useState<Record<string, Data> | null>(null)
   const [prev, setPrev] = useState<Record<string, Data>>({})
   const [showPay, setShowPay] = useState(false)
   const [edit, setEdit] = useState<{ id: string; k: string; v: string } | null>(null)
+  const [plan, setPlan] = useState<(SchedResult & { from: string; replace: number }) | null>(null)
+  const [busy, setBusy] = useState(false)
 
   // Bảng rộng: dùng hết chiều rộng màn hình máy tính
   useEffect(() => { const el = document.getElementById('root'); el?.classList.add('xfull'); return () => el?.classList.remove('xfull') }, [])
@@ -70,7 +78,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de }: 
       .filter((e) => shifts.some((s) => s.employee_id === e.id) || ((!e.entry_date || e.entry_date <= last) && isActive(e, first)))
       .map((e) => {
         const sh = shifts.filter((s) => s.employee_id === e.id)
-        return { e, st: monthStat(sh, vacDays(abs.filter((a) => a.employee_id === e.id), ym)) }
+        return { e, st: monthStat(sh, vacDays(abs.filter((a) => a.employee_id === e.id), ym), noSurcharge(e)) }
       })
       .sort((a, b) => (a.e.personnel_no || '').localeCompare(b.e.personnel_no || ''))
   }, [emps, shifts, abs, ym])
@@ -78,14 +86,14 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de }: 
   const val = (e: Emp, st: ReturnType<typeof monthStat>, c: Col) => {
     const o = saved?.[e.id]?.[c.k]
     if (o != null) return { v: o, own: true }
-    if (c.sticky) return { v: prev[e.id]?.[c.k] ?? '', own: false }
+    if (c.sticky) return { v: prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : ''), own: false }
     return { v: c.auto ? c.auto(e, st) : '', own: false }
   }
 
   async function commit(e: Emp, st: ReturnType<typeof monthStat>, c: Col, raw: string) {
     setEdit(null)
     const v = raw.trim()
-    const base = c.sticky ? (prev[e.id]?.[c.k] ?? '') : c.auto ? c.auto(e, st) : ''
+    const base = c.sticky ? (prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : '')) : c.auto ? c.auto(e, st) : ''
     const cur = { ...(saved?.[e.id] || {}) }
     if (v === base && !(c.sticky && v)) delete cur[c.k]; else cur[c.k] = v
     if (JSON.stringify(cur) === JSON.stringify(saved?.[e.id] || {})) return
@@ -94,14 +102,55 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de }: 
     if (error) toast(error.message)
   }
 
+  // Xếp lịch tự động: tháng tới xếp cả tháng, tháng đang chạy xếp từ ngày mai (ca trước đó giữ nguyên)
+  const canPlan = ym >= ymNow()
+  async function makePlan() {
+    setBusy(true)
+    const dates = monthDates(ym), first = dates[0], last = dates.at(-1)!
+    const tm = new Date(); tm.setDate(tm.getDate() + 1)
+    const from = isoDay(tm) > first ? isoDay(tm) : first
+    if (from > last) { setBusy(false); return }
+    const back = new Date(`${first}T12:00:00`); back.setDate(back.getDate() - 14)
+    const { data, error } = await supabase.from('nh_shifts').select('employee_id,shift_date,start_time,end_time').eq('restaurant_id', rid)
+      .gte('shift_date', isoDay(back)).lt('shift_date', from).limit(5000)
+    setBusy(false)
+    if (error) { toast(error.message); return }
+    const vac: Record<string, Set<string>> = {}
+    for (const a of abs) for (const d of dates) if (d >= a.from_date && d <= a.to_date) (vac[a.employee_id] ||= new Set()).add(d)
+    const list = rows.map(({ e, st }) => e.work_days && e.daily_hours ? {
+      id: e.id, name: `${(e.personnel_no || '').replace(/^0+(?=\d)/, '')} ${e.first_name || ''} ${e.last_name || ''}`.trim(),
+      hours: Number(e.daily_hours), days: Number(e.work_days), entry: e.entry_date || null, exit: e.exit_date || null,
+      sun: (val(e, st, COLS.find((c) => c.k === 'sonntagsregel')!).v || defaultSun(e.work_days)) as SunRule,
+    } : null).filter((x) => !!x)
+    const r = buildSchedule(ym, list, vac, (data || []) as never, from)
+    const missing = rows.filter(({ e }) => !e.work_days || !e.daily_hours).map(({ e }) => `${e.first_name || ''} ${e.last_name || ''}`.trim())
+    if (missing.length) r.warnings.unshift(T(`Chưa có số ngày/giờ hợp đồng, không xếp: ${missing.join(', ')}`, `Ohne Vertragstage/-stunden, nicht eingeplant: ${missing.join(', ')}`))
+    setPlan({ ...r, from, replace: shifts.filter((s) => s.shift_date >= from).length })
+  }
+  async function savePlan() {
+    if (!plan) return
+    setBusy(true)
+    const last = monthDates(ym).at(-1)!
+    const del = await supabase.from('nh_shifts').delete().eq('restaurant_id', rid).gte('shift_date', plan.from).lte('shift_date', last)
+    if (del.error) { setBusy(false); toast(del.error.message); return }
+    const rowsIns = plan.shifts.map((s) => ({ restaurant_id: rid, ...s }))
+    for (let i = 0; i < rowsIns.length; i += 500) {
+      const { error } = await supabase.from('nh_shifts').insert(rowsIns.slice(i, i + 500))
+      if (error) { setBusy(false); toast(error.message); return }
+    }
+    setBusy(false); setPlan(null)
+    toast(T(`Đã lưu ${rowsIns.length} ca`, `${rowsIns.length} Schichten gespeichert`))
+    onSaved?.()
+  }
+
   async function exportXlsx() {
     const XLSX = await import('xlsx')
     const title = `${company} ${ym.slice(5, 7)}/${ym.slice(2, 4)}`
-    const aoa: (string | number)[][] = [[title], COLS.map((c) => c.de)]
-    for (const { e, st } of rows) aoa.push(COLS.map((c) => { const { v } = val(e, st, c); const x = c.num && v ? Number(v.replace(',', '.')) : NaN; return Number.isFinite(x) ? x : v }))
+    const aoa: (string | number)[][] = [[title], XCOLS.map((c) => c.de)]
+    for (const { e, st } of rows) aoa.push(XCOLS.map((c) => { const { v } = val(e, st, c); const x = c.num && v ? Number(v.replace(',', '.')) : NaN; return Number.isFinite(x) ? x : v }))
     const ws = XLSX.utils.aoa_to_sheet(aoa)
-    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: COLS.length - 1 } }]
-    ws['!cols'] = COLS.map((c) => ({ wch: Math.max(8, Math.round((c.w || 70) / 7)) }))
+    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: XCOLS.length - 1 } }]
+    ws['!cols'] = XCOLS.map((c) => ({ wch: Math.max(8, Math.round((c.w || 70) / 7)) }))
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, `${ym.slice(5, 7)}-${ym.slice(2, 4)}`)
     XLSX.writeFile(wb, `Mitarbeiterliste_${ym.slice(5, 7)}-${ym.slice(0, 4)}.xlsx`)
@@ -111,6 +160,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de }: 
   return (
     <>
       <div className="sm-bar">
+        {canPlan && <button className="st-btn primary" disabled={busy || !rows.length} onClick={makePlan}>{busy && !plan ? '…' : T('Xếp lịch', 'Dienstplan erstellen')}</button>}
         <span className="small muted">{T('Ô tự điền từ hồ sơ và lịch làm. Bấm vào ô để sửa; ô đã sửa có vạch cam bên trái, xoá trống để quay về giá trị tự tính.', 'Felder werden aus Personalakte und Dienstplan übernommen. Zum Ändern anklicken; geänderte Felder sind orange markiert, leeren = automatischer Wert.')}</span>
         <button className="st-btn" onClick={() => setShowPay(!showPay)}>{showPay ? T('Ẩn lương', 'Entgelt ausblenden') : T('Xem lương', 'Entgelt anzeigen')}</button>
         <button className="st-btn" disabled={!rows.length} onClick={exportXlsx}>Excel</button>
@@ -151,6 +201,27 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de }: 
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {plan && (
+        <div className="sheet-bg" onClick={(ev) => { if (ev.target === ev.currentTarget && !busy) setPlan(null) }}>
+          <div className="sheet sched">
+            <h3>{T('Lịch tự xếp', 'Dienstplan-Vorschlag')} · {ym.slice(5, 7)}/{ym.slice(0, 4)}</h3>
+            <p className="small muted">{T(`Từ ${plan.from.slice(8)}.${plan.from.slice(5, 7)}: ${plan.shifts.length} ca. Chưa đủ người so với mục tiêu: ${String(plan.gapHours).replace('.', ',')} giờ-người.`,
+              `Ab ${plan.from.slice(8)}.${plan.from.slice(5, 7)}: ${plan.shifts.length} Schichten. Unterbesetzung gegenüber Ziel: ${String(plan.gapHours).replace('.', ',')} Personenstunden.`)}</p>
+            {plan.replace > 0 && <p className="small warn">{T(`${plan.replace} ca đã có trong khoảng này sẽ được thay bằng lịch mới.`, `${plan.replace} vorhandene Schichten in diesem Zeitraum werden ersetzt.`)}</p>}
+            {plan.warnings.length > 0 && <ul className="small warn">{plan.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
+            <table className="pl-sum">
+              <thead><tr><th className="l">{T('Nhân viên', 'Mitarbeiter')}</th><th>{T('Ngày', 'Tage')}</th><th>{T('Giờ', 'Std')}</th></tr></thead>
+              <tbody>{rows.filter(({ e }) => plan.perEmp[e.id]).map(({ e }) => { const p = plan.perEmp[e.id]; return (
+                <tr key={e.id}><td className="l">{(e.personnel_no || '').replace(/^0+(?=\d)/, '')} {e.first_name} {e.last_name}</td>
+                  <td className={p.days < p.need ? 'warn' : ''}>{p.days}{p.days < p.need ? ` / ${p.need}` : ''}</td><td>{n(Math.round(p.minutes / 6) / 10)}</td></tr>) })}</tbody>
+            </table>
+            <div className="sched-f">
+              <button className="st-btn" disabled={busy} onClick={() => setPlan(null)}>{T('Huỷ', 'Abbrechen')}</button>
+              <button className="st-btn primary" disabled={busy || !plan.shifts.length} onClick={savePlan}>{busy ? '…' : T('Lưu vào lịch', 'In Dienstplan übernehmen')}</button>
+            </div>
+          </div>
         </div>
       )}
     </>
