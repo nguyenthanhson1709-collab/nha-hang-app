@@ -727,7 +727,7 @@ html.gembed main,html.gembed .wrap,html.gembed #app{padding:0!important;margin:0
 html.gembed .guest{display:block!important;padding:0!important;margin:0!important}
 html.gembed .gcard{margin:0!important;border-radius:20px}
 /* inapp=1: nằm trong app nhà hàng (ô Bàn đặt), dùng chung phiên đăng nhập; ẩn đầu trang, chân trang, nút đăng xuất */
-html.inapp header.topbar,html.inapp .site-foot,html.inapp .staffbar{display:none!important}
+html.inapp header.topbar,html.inapp .site-foot,html.inapp .sb-user{display:none!important}
 html.inapp main{padding-top:12px!important;padding-bottom:96px!important}
 html.inapp.gdark .gbg{background-image:url(img/bg-s.jpg)}
 html.sdark .who-pop{background:#2a1d12;color:#fff;border:1px solid rgba(242,140,40,.55)}
@@ -1612,7 +1612,7 @@ function renderStaff(){
   const tabs=[["book",t("tBook")],["floor",t("tFloor")]];if(isOwner())tabs.push(["settings",t("tSettings")],["team",t("tTeam")],["reviews",PL({de:"Bewertungen",en:"Reviews",vi:"Đánh giá"})]);else if(ui.tab==="team"||ui.tab==="settings"||ui.tab==="reviews")ui.tab="book";
   const pend=S.bookings.filter(b=>b.status==="pending"&&b.date>=todayS()).length;
   let body=ui.tab==="book"?renderBook():ui.tab==="floor"?renderFloor():ui.tab==="settings"?renderSettings():ui.tab==="reviews"?renderReviews():renderTeam();
-  return `<div class="staffbar"><div class="grow muted" style="font-size:14px">${esc(me().name)} · ${t("roles")[me().role]}</div><button class="btn small" data-act="logout">${t("logout")}</button></div>
+  return `<div class="staffbar sb-user"><div class="grow muted" style="font-size:14px">${esc(me().name)} · ${t("roles")[me().role]}</div><button class="btn small" data-act="logout">${t("logout")}</button></div>
   <div class="tabs" role="tablist">${tabs.map(([k,v])=>`<button role="tab" data-act="tab" data-v="${k}" aria-selected="${ui.tab===k}">${v}${k==="book"&&pend&&!S.settings.autoConfirm?` <span class="pill st-pending">${pend}</span>`:""}</button>`).join("")}</div>${body}`;
 }
 function renderLogin(){
