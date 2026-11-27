@@ -28,6 +28,10 @@ export async function saveCompany(rid: string, c: Partial<Company>) {
   check(await supabase.from('nh_inv_company').update(row).eq('restaurant_id', rid))
 }
 
+export async function saveLogo(rid: string, logo: string | null) {
+  check(await supabase.from('nh_inv_company').update({ logo_url: logo }).eq('restaurant_id', rid))
+}
+
 /** Lưu danh sách câu mẫu (lời mở đầu / lời kết) của quán */
 export async function saveTextPresets(rid: string, presets: TextPresets) {
   check(await supabase.from('nh_inv_company').update({ text_presets: presets }).eq('restaurant_id', rid))
