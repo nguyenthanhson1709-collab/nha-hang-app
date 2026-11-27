@@ -47,7 +47,9 @@ export function calc(s: Shift): Calc {
 
 export type MonthStat = { days: number; ist: number; night: number; sun: number; hol: number; vac: number }
 /** Không có phụ cấp (đêm / Chủ nhật / lễ) khi giờ làm theo hợp đồng ≤ 10 giờ/tuần (quy tắc quán) */
-export const noSurcharge = (e: { weekly_hours?: number | string | null; work_days?: number | string | null; daily_hours?: number | string | null }) => {
+export const noSurcharge = (e: { weekly_hours?: number | string | null; work_days?: number | string | null; daily_hours?: number | string | null; surcharge_eligible?: boolean | null }) => {
+  if (e.surcharge_eligible === false) return true
+  if (e.surcharge_eligible === true) return false
   const w = e.weekly_hours != null ? Number(e.weekly_hours) : e.work_days != null && e.daily_hours != null ? Number(e.work_days) * Number(e.daily_hours) : NaN
   return Number.isFinite(w) && w > 0 && w <= 10
 }

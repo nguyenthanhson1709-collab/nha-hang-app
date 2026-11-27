@@ -336,7 +336,7 @@ export default function EmployeePage() {
     if (k === 'birth_date' || k === 'entry_date' || k === 'residence_permit_until') return dmy(v as string)
     if (k === 'gross_monthly' || k === 'hourly_wage') return eur(Number(v))
     if (k === 'employment_type') return EMP_TYPES[v as EmpType][li]
-    if (k === 'work_permitted' || k === 'multiple_employment') return v ? T('Có', 'Ja') : T('Không', 'Nein')
+    if (k === 'work_permitted' || k === 'multiple_employment' || k === 'surcharge_eligible') return v ? T('Có', 'Ja') : T('Không', 'Nein')
     if (k === 'job_title') return de || !jobInfo(String(v)) ? String(v) : `${jobInfo(String(v))![1]} · ${v}`
     if (k === 'weekly_hours') return `${String(v).replace('.', ',')} ${T('giờ / tuần', 'Std. / Woche')}`
     if (k === 'work_days') return `${String(v).replace('.', ',')} ${T('ngày / tuần', 'Tage / Woche')}`
@@ -352,7 +352,7 @@ export default function EmployeePage() {
     residence_permit: L('Giấy phép cư trú', 'Aufenthaltstitel'), residence_permit_until: L('Hết hạn ngày', 'gültig bis'), work_permitted: L('Được phép làm việc', 'Erwerbstätigkeit gestattet'),
     company: L('Công ty', 'Firma'), personnel_no: L('Mã nhân viên', 'Personal-Nr.'), entry_date: L('Ngày vào làm', 'Eintrittsdatum'), job_title: L('Vị trí', 'Tätigkeit'),
     employment_type: L('Hợp đồng', 'Beschäftigungsart'), weekly_hours: L('Giờ làm', 'Arbeitszeit'), work_days: L('Ngày làm', 'Arbeitstage'), daily_hours: L('Giờ mỗi ngày', 'tägl. Arbeitszeit'), gross_monthly: L('Lương tháng', 'Monatslohn'),
-    hourly_wage: L('Lương giờ', 'Stundenlohn'), vacation_days: L('Ngày phép', 'Urlaubsanspruch'), vacation_year: L('Phép năm nay', 'Jahresurlaub'), vacation_left: L('Phép còn lại', 'Resturlaub'), multiple_employment: L('Làm thêm nơi khác', 'Mehrfachbeschäftigung'),
+    hourly_wage: L('Lương giờ', 'Stundenlohn'), vacation_days: L('Ngày phép', 'Urlaubsanspruch'), vacation_year: L('Phép năm nay', 'Jahresurlaub'), vacation_left: L('Phép còn lại', 'Resturlaub'), multiple_employment: L('Làm thêm nơi khác', 'Mehrfachbeschäftigung'), surcharge_eligible: L('Được phụ cấp đêm/CN/lễ', 'Zuschlagsberechtigt'),
     tax_id: L('Mã số thuế', 'Steuer-ID'), pension_no: L('Số BH hưu trí', 'RV-Nummer'), tax_class: L('Bậc thuế', 'Steuerklasse'),
     health_insurance: L('Bảo hiểm y tế', 'Krankenkasse'), iban: 'IBAN', bic: 'BIC', bank_name: L('Ngân hàng', 'Bank'), note: L('Ghi chú', 'Notiz'),
   }
@@ -373,7 +373,7 @@ export default function EmployeePage() {
     residence: { title: T('Cư trú và lao động', 'Aufenthalt und Erwerbstätigkeit'), icon: 'shield', fields: [
       { k: 'residence_permit' }, { k: 'residence_permit_until' }, { k: 'work_permitted' }] },
     pay: { title: T('Lương và giờ làm', 'Vergütung und Arbeitszeit'), icon: 'wallet', fields: [
-      { k: 'gross_monthly' }, { k: 'hourly_wage' }, { k: 'weekly_hours' }, { k: 'work_days' }, { k: 'daily_hours' }] },
+      { k: 'gross_monthly' }, { k: 'hourly_wage' }, { k: 'weekly_hours' }, { k: 'work_days' }, { k: 'daily_hours' }, { k: 'surcharge_eligible' }] },
     tax: { title: T('Thuế và bảo hiểm', 'Steuer und Sozialversicherung'), icon: 'shield', fields: [
       { k: 'tax_id', fixed: true }, { k: 'pension_no', fixed: true }, { k: 'tax_class' }, { k: 'health_insurance' }] },
     bank: { title: T('Tài khoản ngân hàng', 'Bankverbindung'), icon: 'bank', fields: [{ k: 'iban' }, { k: 'bic' }, { k: 'bank_name' }] },
@@ -441,7 +441,7 @@ export default function EmployeePage() {
     switch (k) {
       case 'birth_date': return <input type="date" value={(v as string) || ''} onChange={(ev) => sv(ev.target.value)} />
       case 'entry_date': case 'residence_permit_until': return <DateField allowEmpty value={(v as string) || null} onChange={(x) => up({ [k]: x } as Partial<Employee>)} />
-      case 'work_permitted': case 'multiple_employment': return (
+      case 'work_permitted': case 'multiple_employment': case 'surcharge_eligible': return (
         <div className="seg">
           <button className={v === true ? 'sel' : ''} onClick={() => up({ [k]: v === true ? null : true } as Partial<Employee>)}>{T('Có', 'Ja')}</button>
           <button className={v === false ? 'sel' : ''} onClick={() => up({ [k]: v === false ? null : false } as Partial<Employee>)}>{T('Không', 'Nein')}</button>
