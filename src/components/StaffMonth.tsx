@@ -11,7 +11,7 @@ import { monthDates, monthStat, vacDays, type Shift, type Vacation } from '../li
  * trong nh_staff_month.data (xoá trống = quay về giá trị tự tính). Anrede, Fahrgeld, Gutschein lấy lại từ tháng trước.
  */
 type Emp = Employee & { id: string }
-type Col = { k: string; de: string; vi: string; w?: number; num?: boolean; sticky?: boolean; opts?: string[]; auto?: (e: Emp, st: ReturnType<typeof monthStat>) => string }
+type Col = { k: string; de: string; vi: string; w?: number; num?: boolean; sticky?: boolean; check?: boolean; opts?: string[]; auto?: (e: Emp, st: ReturnType<typeof monthStat>) => string }
 const n = (v: number | null | undefined) => (v == null ? '' : String(v).replace('.', ','))
 const h = (m: number) => (m ? n(Math.round((m / 60) * 100) / 100) : '')
 const COLS: Col[] = [
@@ -30,7 +30,7 @@ const COLS: Col[] = [
   { k: 'feiertag', de: 'Feiertagszuschlag (Std)', vi: 'Giờ ngày lễ', w: 70, num: true, auto: (_e, s) => h(s.hol) },
   { k: 'fahrgeld', de: 'Fahrgeld', vi: 'Tiền đi lại', w: 70, sticky: true, opts: ['ja', 'nein'] },
   { k: 'urlaub', de: 'Urlaubstage', vi: 'Ngày phép tháng', w: 70, num: true, auto: (_e, s) => (s.vac ? String(s.vac) : '') },
-  { k: 'gutschein', de: 'Gutschein 50€', vi: 'Gutschein 50€', w: 70, sticky: true },
+  { k: 'gutschein', de: 'Gutschein 50€', vi: 'Gutschein 50€', w: 70, check: true },
   { k: 'bank', de: 'Bank', vi: 'Ngân hàng / IBAN', w: 210, auto: (e) => e.iban || e.bank_name || '' },
   { k: 'jahresurlaub', de: 'Jahresurlaub', vi: 'Phép năm', w: 70, num: true, auto: (e) => n(e.vacation_year) },
   { k: 'resturlaub', de: 'Resturlaub', vi: 'Phép còn lại', w: 70, num: true, auto: (e) => n(e.vacation_left) },
@@ -136,6 +136,11 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de }: 
                           <input autoFocus inputMode={c.num ? 'decimal' : undefined} value={edit.v} onChange={(ev) => setEdit({ ...edit, v: ev.target.value })}
                             onBlur={() => commit(e, st, c, edit.v)} onKeyDown={(ev) => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); if (ev.key === 'Escape') setEdit(null) }} />
                         )}
+                      </td>)
+                    // Gutschein: ô tích, mỗi tháng bắt đầu trống; tích = V
+                    if (c.check) return (
+                      <td key={c.k} className="sm-chk" onClick={() => commit(e, st, c, v ? '' : 'V')}>
+                        <span className={`pick-box${v ? ' on' : ''}`} role="checkbox" aria-checked={!!v} aria-label={c.de}>{v && '✓'}</span>
                       </td>)
                     return (
                       <td key={c.k} className={cls} onClick={() => setEdit({ id: e.id, k: c.k, v })}>
