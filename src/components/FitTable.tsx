@@ -34,7 +34,7 @@ export function FitTable({ children, deps }: { children: ReactNode; deps: unknow
         <button className="zoom-btn" disabled={z >= 2} onClick={() => setUser((u) => u * 1.25)}>+</button>
         {user > 1 && <button className="zoom-btn" onClick={() => setUser(1)}>⤢</button>}
       </div>
-      <div className="tbl-wrap" ref={wrap}>
+      <div className="tbl-wrap fit-wrap" ref={wrap}>
         <div ref={inner} style={{ zoom: z, width: 'max-content', minWidth: '100%' }}>{children}</div>
       </div>
     </>
