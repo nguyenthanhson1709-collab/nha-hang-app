@@ -22,6 +22,7 @@ import Bwa from './pages/Bwa'
 import Settings from './pages/Settings'
 import RestaurantSettings from './pages/RestaurantSettings'
 import Staff from './pages/Staff'
+import HrHub from './pages/HrHub'
 import Viva from './pages/Viva'
 import Bank, { BankCallback } from './pages/Bank'
 import EmployeePage from './pages/Employee'
@@ -59,7 +60,7 @@ function HomeNav({ start }: { start: string }) {
   const path = useLocation().pathname
   const m = path.match(/^\/r\/([^/]+)/)
   // Hồ sơ nhân viên trên điện thoại: ẩn logo để không che nội dung (người dùng yêu cầu 26/11/2026)
-  return <BottomNav to={m ? `/r/${m[1]}` : start} hideMobile={/^\/r\/[^/]+\/hr\/[^/]+$/.test(path)} />
+  return <BottomNav to={m ? `/r/${m[1]}` : start} hideMobile={/^\/r\/[^/]+\/hr\/(?!list$)[^/]+$/.test(path)} />
 }
 
 function RestLayout({ children }: { children: React.ReactNode }) {
@@ -116,7 +117,8 @@ function Shell({ session }: { session: Session }) {
           <Route path="/r/:rid/reports" element={<RestLayout><Reports /></RestLayout>} />
           <Route path="/r/:rid/bwa" element={<RestLayout><Bwa /></RestLayout>} />
           <Route path="/r/:rid/plan" element={<RestLayout><Plan /></RestLayout>} />
-          <Route path="/r/:rid/hr" element={<RestLayout><Staff /></RestLayout>} />
+          <Route path="/r/:rid/hr" element={<RestLayout><HrHub /></RestLayout>} />
+          <Route path="/r/:rid/hr/list" element={<RestLayout><Staff /></RestLayout>} />
           <Route path="/r/:rid/hr/:eid" element={<RestLayout><EmployeePage /></RestLayout>} />
           <Route path="/r/:rid/inv" element={<RestLayout><Invoices key="i" /></RestLayout>} />
           <Route path="/r/:rid/inv/new" element={<RestLayout><InvoiceEditor key="in" /></RestLayout>} />

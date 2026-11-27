@@ -146,7 +146,7 @@ export default function Assistant() {
   const restName = (rid: string) => app.restaurants.find((r) => r.id === rid)?.name || ''
 
   return <>
-    <button className={`as-fab${/^\/r\/[^/]+\/hr\/[^/]+$/.test(path) ? ' hide-m' : ''}`} onClick={openIt} aria-label={T('Trợ lý giọng nói', 'Sprachassistent')} title={T('Trợ lý giọng nói (Ctrl+K)', 'Sprachassistent (Strg+K)')}>
+    <button className={`as-fab${/^\/r\/[^/]+\/hr\/(?!list$)[^/]+$/.test(path) ? ' hide-m' : ''}`} onClick={openIt} aria-label={T('Trợ lý giọng nói', 'Sprachassistent')} title={T('Trợ lý giọng nói (Ctrl+K)', 'Sprachassistent (Strg+K)')}>
       <MicIcon />
     </button>
     {open && (
