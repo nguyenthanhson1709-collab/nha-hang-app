@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from './ui'
 import { dmy } from '../lib/format'
 import { isActive, type Employee } from '../lib/hr'
-import { monthDates, monthStat, noSurcharge, vacDays, type Shift, type Vacation } from '../lib/hrTime'
+import { holidayOf, monthDates, monthStat, noSurcharge, vacDays, type Shift, type Vacation } from '../lib/hrTime'
 import PlanNotes from './PlanNotes'
 import { buildSchedule, defaultSun, SUN_RULES, type SchedEmp, type SchedResult, type SunRule } from '../lib/scheduler'
 
@@ -124,10 +124,15 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
     const from = isoDay(tm) > first ? isoDay(tm) : first
     if (from > last) { setBusy(false); return }
     const back = new Date(`${first}T12:00:00`); back.setDate(back.getDate() - 14)
-    const { data, error } = await supabase.from('nh_shifts').select('employee_id,shift_date,start_time,end_time').eq('restaurant_id', rid)
-      .gte('shift_date', isoDay(back)).lt('shift_date', from).limit(5000)
+    const asOfMin = rows.reduce((m, { e }) => (e.vacation_as_of && e.vacation_as_of < m ? e.vacation_as_of : m), ym)
+    const [{ data, error }, cl, va] = await Promise.all([
+      supabase.from('nh_shifts').select('employee_id,shift_date,start_time,end_time').eq('restaurant_id', rid).gte('shift_date', isoDay(back)).lt('shift_date', from).limit(5000),
+      supabase.from('nh_closed_days').select('day').eq('restaurant_id', rid).gte('day', first).lte('day', last),
+      supabase.from('nh_absences').select('employee_id,from_date,to_date').eq('restaurant_id', rid).eq('kind', 'vacation').gte('to_date', `${asOfMin}-01`).lte('from_date', last).limit(5000),
+    ])
     setBusy(false)
-    if (error) { toast(error.message); return }
+    if (error || cl.error || va.error) { toast((error || cl.error || va.error)!.message); return }
+    const closed = (cl.data || []).map((x: { day: string }) => x.day)
     const vac: Record<string, Set<string>> = {}
     // Urlaub / Krank / Unbezahlt: tính vào số ngày của tuần; Wunschfrei (other): chỉ không xếp ca
     const off: Record<string, Set<string>> = {}
@@ -144,7 +149,28 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
       list.push({ id: e.id, name, hours, days, entry: isoOf(val(e, st, col('eintritt')).v), exit: isoOf(val(e, st, col('austritt')).v),
         sun: (val(e, st, col('sonntagsregel')).v || defaultSun(days)) as SunRule })
     }
-    const r = buildSchedule(ym, list, vac, (data || []) as never, from, off)
+    // Phép còn lại chưa ghi chú: Resturlaub (tính đến tháng vacation_as_of) trừ ngày phép đã ghi sau đó đến hết tháng này.
+    // Tháng 12 hoặc tháng nghỉ việc: xếp hết; tháng khác: chia đều cho các tháng còn lại trong năm.
+    const autoVac: Record<string, number> = {}
+    const monthEnd = (m: string) => monthDates(m).at(-1)!
+    for (const se of list) {
+      const x = rows.find((r0) => r0.e.id === se.id)!
+      const left = Number(val(x.e, x.st, col('resturlaub')).v.replace(',', '.'))
+      if (!Number.isFinite(left) || left <= 0) continue
+      const after = x.e.vacation_as_of ? monthEnd(x.e.vacation_as_of) : isoDay(new Date(new Date(`${first}T12:00:00`).getTime() - 864e5))
+      const used = new Set<string>()
+      for (const a of (va.data || []) as { employee_id: string; from_date: string; to_date: string }[]) {
+        if (a.employee_id !== se.id) continue
+        for (let d = new Date(`${a.from_date}T12:00:00`); isoDay(d) <= a.to_date; d.setDate(d.getDate() + 1)) {
+          const k = isoDay(d); if (k > after && k <= last && !closed.includes(k) && !holidayOf(k)) used.add(k)
+        }
+      }
+      const rest = left - used.size
+      if (rest <= 0) continue
+      const mo = Number(ym.slice(5, 7)), exitHere = !!se.exit && se.exit <= last
+      autoVac[se.id] = mo === 12 || exitHere ? rest : Math.round(rest / (13 - mo))
+    }
+    const r = buildSchedule(ym, list, vac, (data || []) as never, { from, off, closed, autoVac })
     if (missing.length) r.warnings.unshift(T(`Chưa có giờ/ngày hoặc ngày/tuần, không xếp: ${missing.join(', ')}`, `Ohne Std./Tag oder Tage/Woche, nicht eingeplant: ${missing.join(', ')}`))
     setPlan({ ...r, from, replace: shifts.filter((s) => s.shift_date >= from).length })
   }
@@ -154,6 +180,14 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
     const last = monthDates(ym).at(-1)!
     const del = await supabase.from('nh_shifts').delete().eq('restaurant_id', rid).gte('shift_date', plan.from).lte('shift_date', last)
     if (del.error) { setBusy(false); toast(del.error.message); return }
+    // Phép tự xếp: ghi vào nh_absences (gộp các ngày liền nhau)
+    const absIns: { restaurant_id: string; employee_id: string; kind: string; from_date: string; to_date: string; note: string }[] = []
+    for (const [eid, ds] of Object.entries(plan.autoVac)) for (const d of ds) {
+      const prevRow = absIns.at(-1), y = new Date(`${d}T12:00:00`); y.setDate(y.getDate() - 1)
+      if (prevRow && prevRow.employee_id === eid && prevRow.to_date === isoDay(y)) prevRow.to_date = d
+      else absIns.push({ restaurant_id: rid, employee_id: eid, kind: 'vacation', from_date: d, to_date: d, note: 'Urlaub (automatisch geplant)' })
+    }
+    if (absIns.length) { const { error } = await supabase.from('nh_absences').insert(absIns); if (error) { setBusy(false); toast(error.message); return } }
     const rowsIns = plan.shifts.map((s) => ({ restaurant_id: rid, ...s }))
     for (let i = 0; i < rowsIns.length; i += 500) {
       const { error } = await supabase.from('nh_shifts').insert(rowsIns.slice(i, i + 500))
@@ -234,10 +268,11 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
             {plan.replace > 0 && <p className="small warn">{T(`${plan.replace} ca đã có trong khoảng này sẽ được thay bằng lịch mới.`, `${plan.replace} vorhandene Schichten in diesem Zeitraum werden ersetzt.`)}</p>}
             {plan.warnings.length > 0 && <ul className="small warn">{plan.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
             <table className="pl-sum">
-              <thead><tr><th className="l">{T('Nhân viên', 'Mitarbeiter')}</th><th>{T('Ngày', 'Tage')}</th><th>{T('Giờ', 'Std')}</th></tr></thead>
+              <thead><tr><th className="l">{T('Nhân viên', 'Mitarbeiter')}</th><th>{T('Ngày', 'Tage')}</th><th>{T('Giờ', 'Std')}</th><th>{T('Phép tự xếp', 'Urlaub geplant')}</th></tr></thead>
               <tbody>{rows.filter(({ e }) => plan.perEmp[e.id]).map(({ e }) => { const p = plan.perEmp[e.id]; return (
                 <tr key={e.id}><td className="l">{(e.personnel_no || '').replace(/^0+(?=\d)/, '')} {e.first_name} {e.last_name}</td>
-                  <td className={p.days < p.need ? 'warn' : ''}>{p.days}{p.days < p.need ? ` / ${p.need}` : ''}</td><td>{n(Math.round(p.minutes / 6) / 10)}</td></tr>) })}</tbody>
+                  <td className={p.days < p.need ? 'warn' : ''}>{p.days}{p.days < p.need ? ` / ${p.need}` : ''}</td><td>{n(Math.round(p.minutes / 6) / 10)}</td>
+                  <td className="l small">{(plan.autoVac[e.id] || []).length ? `${plan.autoVac[e.id].length}: ${plan.autoVac[e.id].map((d) => d.slice(8)).join(', ')}.${ym.slice(5, 7)}` : ''}</td></tr>) })}</tbody>
             </table>
             <div className="sched-f">
               <button className="st-btn" disabled={busy} onClick={() => setPlan(null)}>{T('Huỷ', 'Abbrechen')}</button>

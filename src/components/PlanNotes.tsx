@@ -1,10 +1,10 @@
 // Ghi chú xếp lịch của tháng: ai nghỉ phép, ốm, xin nghỉ ngày nào. Lưu vào nh_absences để bộ xếp lịch,
 // Tổng hợp và hồ sơ nhân viên cùng dùng. Urlaub/Krank/Unbezahlt tính vào số ngày của tuần; Wunschfrei chỉ không xếp ca.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { toast } from './ui'
 import { dmy } from '../lib/format'
-import type { Vacation } from '../lib/hrTime'
+import { monthDates, type Vacation } from '../lib/hrTime'
 import type { Employee } from '../lib/hr'
 
 type Emp = Employee & { id: string }
@@ -24,6 +24,29 @@ export default function PlanNotes({ rid, ym, emps, abs, de, onChanged }: {
   const blank = (): Form => ({ employee_id: '', kind: 'vacation', from: first, to: first, note: '' })
   const [f, setF] = useState<Form>(blank)
   const [busy, setBusy] = useState(false)
+  // Ngày quán đóng cửa trong tháng
+  const [closed, setClosed] = useState<{ day: string; note: string | null }[]>([])
+  const [cd, setCd] = useState({ day: first, note: '' })
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    supabase.from('nh_closed_days').select('day,note').eq('restaurant_id', rid).gte('day', `${ym}-01`).lte('day', monthDates(ym).at(-1)!).order('day')
+      .then(({ data }) => setClosed((data || []) as { day: string; note: string | null }[]))
+  }, [rid, ym, tick])
+  async function addClosed() {
+    if (!cd.day) return
+    setBusy(true)
+    const { error } = await supabase.from('nh_closed_days').upsert({ restaurant_id: rid, day: cd.day, note: cd.note.trim() || null })
+    setBusy(false)
+    if (error) { toast(error.message); return }
+    setCd({ day: cd.day, note: '' }); setTick((x) => x + 1)
+  }
+  async function delClosed(day: string) {
+    setBusy(true)
+    const { error } = await supabase.from('nh_closed_days').delete().eq('restaurant_id', rid).eq('day', day)
+    setBusy(false)
+    if (error) { toast(error.message); return }
+    setTick((x) => x + 1)
+  }
   const name = (id: string) => { const e = emps.find((x) => x.id === id); return e ? `${(e.personnel_no || '').replace(/^0+(?=\d)/, '')} ${e.first_name || ''} ${e.last_name || ''}`.trim() : '—' }
   const kindLabel = (k: string) => { const x = KINDS.find((y) => y.k === k); return x ? (de ? x.de : x.vi) : k }
   const list = [...abs].filter((a) => a.id).sort((a, b) => a.from_date.localeCompare(b.from_date) || name(a.employee_id).localeCompare(name(b.employee_id)))
@@ -78,6 +101,19 @@ export default function PlanNotes({ rid, ym, emps, abs, de, onChanged }: {
         <input className="pn-note" placeholder={T('Ghi chú (tuỳ chọn)', 'Notiz (optional)')} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') save() }} />
         <button className="st-btn primary" disabled={busy} onClick={save}>{f.id ? T('Lưu', 'Speichern') : T('Thêm', 'Hinzufügen')}</button>
         {f.id && <button className="st-btn" disabled={busy} onClick={() => setF(blank())}>{T('Huỷ', 'Abbrechen')}</button>}
+      </div>
+      <h4 className="pn-h">{T('Ngày quán đóng cửa', 'Betriebsruhe')}</h4>
+      <p className="small muted">{T('Những ngày này không xếp ca cho ai.', 'An diesen Tagen werden keine Schichten geplant.')}</p>
+      {closed.length > 0 && (
+        <div className="pn-chips">{closed.map((c) => (
+          <span key={c.day} className="pn-chip">{dmy(c.day)}{c.note ? ` · ${c.note}` : ''}
+            <button className="pn-del" disabled={busy} aria-label={T('Xoá', 'Löschen')} onClick={() => delClosed(c.day)}>✕</button></span>))}
+        </div>
+      )}
+      <div className="pn-form">
+        <label><span>{T('Ngày', 'Datum')}</span><input type="date" value={cd.day} onChange={(e) => setCd({ ...cd, day: e.target.value })} /></label>
+        <input className="pn-note" placeholder={T('Lý do (tuỳ chọn), ví dụ Weihnachten', 'Grund (optional), z. B. Weihnachten')} value={cd.note} onChange={(e) => setCd({ ...cd, note: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') addClosed() }} />
+        <button className="st-btn primary" disabled={busy} onClick={addClosed}>{T('Thêm ngày đóng cửa', 'Ruhetag hinzufügen')}</button>
       </div>
     </div>
   )
