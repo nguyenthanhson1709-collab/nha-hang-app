@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { dmy } from '../lib/format'
-import { calc, hhmm, holidayOf, monthDates, monthLabel, monthStat, shiftClass, tFull, vacDays, weekday, WD_DE, WD_VI, type Shift, type Vacation } from '../lib/hrTime'
+import { calc, hhmm, holidayOf, monthDates, monthLabel, monthStat, shiftClass, tFull, vacDays, weekday, WD_DE, WD_VI, zNote, type Shift, type Vacation } from '../lib/hrTime'
 import { stundenzettelPdf } from '../lib/hrTimePdf'
 import PdfSheet from './PdfSheet'
 import { Spinner } from './ui'
@@ -68,7 +68,8 @@ export default function WorkTime({ eid, name, pnr, company, contract, de, downlo
         <div><span>{T('Tổng giờ', 'Ist')}</span><b>{hhmm(st.ist)}</b></div>
         <div><span>{T('Giờ đêm', 'Nacht')}</span><b>{hhmm(st.night)}</b></div>
         <div><span>{T('Chủ nhật', 'Sonntag')}</span><b>{hhmm(st.sun)}</b></div>
-        <div><span>{T('Ngày lễ', 'Feiertag')}</span><b>{hhmm(st.hol)}</b></div>
+        <div><span>{T('Lễ 125 %', 'Feiertag 125 %')}</span><b>{hhmm(st.hol)}</b></div>
+        {st.hol150 > 0 && <div><span>{T('Lễ 150 %', 'Feiertag 150 %')}</span><b>{hhmm(st.hol150)}</b></div>}
         <div><span>{T('Nghỉ phép', 'Urlaub')}</span><b>{st.vac} {T('ngày', 'Tage')}</b></div>
       </div>
       <div className="wt-table" role="table">
@@ -76,7 +77,7 @@ export default function WorkTime({ eid, name, pnr, company, contract, de, downlo
         {monthDates(ym).map((d) => {
           const s = by.get(d), wd = weekday(d), hol = holidayOf(d), u = vac.includes(d)
           const c = s ? calc(s) : null
-          const note = s ? [s.note, c!.holiday ? `${c!.holiday}: ${hhmm(c!.hol)}` : c!.sunday ? `${T('CN', 'So')}: ${hhmm(c!.sun)}` : c!.night ? `${T('Đêm', 'Nacht')}: ${hhmm(c!.night)}` : ''].filter(Boolean).join(' · ')
+          const note = s ? [s.note, ...zNote(c!, de)].filter(Boolean).join(' · ')
             : u ? T('Nghỉ phép', 'Urlaub') : hol ? `${hol}` : T('Nghỉ', 'frei')
           return (
             <div key={d} className={`wt-tr ${s ? `on ${shiftClass(s)}` : u ? 'u' : 'off'}`} role="row">

@@ -80,7 +80,7 @@ export default function Plan() {
       return { e, sh, vac, st: monthStat(sh, vac, noSurcharge(e)), contract }
     }).filter((x) => x.sh.length || x.vac.length).sort((a, b) => (a.e.personnel_no || '').localeCompare(b.e.personnel_no || ''))
   }, [emps, shifts, abs, ym])
-  const tot = rows.reduce((t, x) => ({ days: t.days + x.st.days, ist: t.ist + x.st.ist, night: t.night + x.st.night, sun: t.sun + x.st.sun, hol: t.hol + x.st.hol, vac: t.vac + x.st.vac }), { days: 0, ist: 0, night: 0, sun: 0, hol: 0, vac: 0 })
+  const tot = rows.reduce((t, x) => ({ days: t.days + x.st.days, ist: t.ist + x.st.ist, night: t.night + x.st.night, sun: t.sun + x.st.sun, hol: t.hol + x.st.hol, hol150: t.hol150 + x.st.hol150, vac: t.vac + x.st.vac }), { days: 0, ist: 0, night: 0, sun: 0, hol: 0, hol150: 0, vac: 0 })
 
   if (!r || !canManage(role)) return null
   const company = hs?.company_name || r.name
@@ -120,17 +120,17 @@ export default function Plan() {
             </div>
             <div className="pl-scroll">
               <table className="pl-sum">
-                <thead><tr><th>{T('Mã NV', 'PNR')}</th><th className="l">{T('Họ và tên', 'Name')}</th><th>{T('Hợp đồng', 'Vertrag')}</th><th>{T('Ngày', 'Tage')}</th><th>Ist</th><th>{T('Đêm', 'Nacht')}</th><th>{T('Chủ nhật', 'Sonntag')}</th><th>{T('Lễ', 'Feiertag')}</th><th>{T('Phép', 'Urlaub')}</th></tr></thead>
+                <thead><tr><th>{T('Mã NV', 'PNR')}</th><th className="l">{T('Họ và tên', 'Name')}</th><th>{T('Hợp đồng', 'Vertrag')}</th><th>{T('Ngày', 'Tage')}</th><th>Ist</th><th>{T('Đêm', 'Nacht')}</th><th>{T('Chủ nhật', 'Sonntag')}</th><th>{T('Lễ 125 %', 'FT 125 %')}</th><th>{T('Lễ 150 %', 'FT 150 %')}</th><th>{T('Phép', 'Urlaub')}</th></tr></thead>
                 <tbody>
                   {rows.map((x) => (
                     <tr key={x.e.id} onClick={() => nav(`/r/${rid}/hr/${x.e.id}`)}>
                       <td className="m">{pnr(x.e)}</td><td className="l">{fullName(x.e)}</td><td className="m">{x.contract || '—'}</td>
-                      <td>{x.st.days}</td><td className="b">{hhmm(x.st.ist)}</td><td>{hhmm(x.st.night)}</td><td>{hhmm(x.st.sun)}</td><td>{hhmm(x.st.hol)}</td>
+                      <td>{x.st.days}</td><td className="b">{hhmm(x.st.ist)}</td><td>{hhmm(x.st.night)}</td><td>{hhmm(x.st.sun)}</td><td>{hhmm(x.st.hol)}</td><td>{hhmm(x.st.hol150)}</td>
                       <td className={x.st.vac ? 'v' : ''}>{x.st.vac || ''}</td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot><tr><td colSpan={3} className="l">{T('Tổng cộng', 'Gesamt')}</td><td>{tot.days}</td><td className="b">{hhmm(tot.ist)}</td><td>{hhmm(tot.night)}</td><td>{hhmm(tot.sun)}</td><td>{hhmm(tot.hol)}</td><td>{tot.vac}</td></tr></tfoot>
+                <tfoot><tr><td colSpan={3} className="l">{T('Tổng cộng', 'Gesamt')}</td><td>{tot.days}</td><td className="b">{hhmm(tot.ist)}</td><td>{hhmm(tot.night)}</td><td>{hhmm(tot.sun)}</td><td>{hhmm(tot.hol)}</td><td>{hhmm(tot.hol150)}</td><td>{tot.vac}</td></tr></tfoot>
               </table>
             </div>
           </>

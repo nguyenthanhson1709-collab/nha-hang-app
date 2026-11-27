@@ -1,5 +1,6 @@
 // Giờ làm (nh_shifts) và ngày phép (nh_absences): tính Ist, Nacht, Sonntag, Feiertag theo quy ước của quán
-// Nacht +25 % ab 20:00 (nicht an So/FT) · So/FT: ganze Schicht · Pause đã trừ trong Ist
+// Zuschläge nach § 3b EStG: Nacht +25 % 20–24 Uhr (Mo–Sa và ngày lễ, không cộng vào Chủ nhật thường) · So 50 % ·
+// Feiertag 125 % (cả Silvester từ 14 Uhr) · 150 % cho Heiligabend từ 14 Uhr, 25./26.12 và 1.5 · Pause đã trừ trong Ist
 
 export type Shift = { id: string; employee_id: string; shift_date: string; start_time: string; end_time: string; break_min: number; note: string | null }
 export type Vacation = { id?: string; employee_id: string; from_date: string; to_date: string; kind: string; note: string | null }
@@ -34,18 +35,39 @@ export const hhmm = (m: number) => `${Math.floor(m / 60)}:${String(Math.round(m 
 export const tShort = (t: string) => { const [h, m] = t.split(':'); const hh = h === '00' ? '24' : String(Number(h)); return m === '00' ? hh : `${hh}:${m}` }
 export const tFull = (t: string) => { const [h, m] = t.split(':'); return `${h === '00' ? '24' : h}:${m}` }
 
-export type Calc = { ist: number; night: number; sun: number; hol: number; holiday: string | null; sunday: boolean }
+export type Calc = { ist: number; night: number; sun: number; hol: number; hol150: number; holiday: string | null; sunday: boolean }
+/** Phụ cấp lễ theo § 3b EStG: từ phút nào trong ngày, mức bao nhiêu % */
+export function feiertagZone(date: string): { from: number; pct: 125 | 150; name: string } | null {
+  const md = date.slice(5)
+  if (md === '12-24') return { from: 14 * 60, pct: 150, name: 'Heiligabend ab 14 Uhr' }
+  if (md === '12-31') return { from: 14 * 60, pct: 125, name: 'Silvester ab 14 Uhr' }
+  const h = holidayOf(date)
+  if (!h) return null
+  return { from: 0, pct: md === '12-25' || md === '12-26' || md === '05-01' ? 150 : 125, name: h }
+}
+const overlap = (a: number, b: number, x: number, y: number) => Math.max(0, Math.min(b, y) - Math.max(a, x))
 export function calc(s: Shift): Calc {
   const a = mins(s.start_time)
   let b = mins(s.end_time); if (b <= a) b += 24 * 60
   const ist = Math.max(0, b - a - (s.break_min || 0))
-  const holiday = holidayOf(s.shift_date), sunday = weekday(s.shift_date) === 0
-  if (holiday) return { ist, night: 0, sun: 0, hol: ist, holiday, sunday }
-  if (sunday) return { ist, night: 0, sun: ist, hol: 0, holiday, sunday }
-  return { ist, night: Math.max(0, b - Math.max(a, 20 * 60)), sun: 0, hol: 0, holiday, sunday }
+  const sunday = weekday(s.shift_date) === 0, z = feiertagZone(s.shift_date)
+  // Giờ lễ: phần ca trong khung lễ (Pause tính vào phần ngoài khung lễ trước)
+  const fz = z ? Math.min(ist, overlap(a, b, z.from, 24 * 60)) : 0
+  const holiday = fz > 0 ? z!.name : null
+  // Giờ đêm 20–24: ngày thường và ngày lễ (cộng dồn với phụ cấp lễ), không tính Chủ nhật thường
+  const night = !sunday || fz > 0 ? overlap(a, b, 20 * 60, 24 * 60) : 0
+  return { ist, night, sun: sunday ? ist - fz : 0, hol: z?.pct === 125 ? fz : 0, hol150: z?.pct === 150 ? fz : 0, holiday, sunday }
 }
 
-export type MonthStat = { days: number; ist: number; night: number; sun: number; hol: number; vac: number }
+/** Ghi chú phụ cấp của một ca: lễ (125/150 %), Chủ nhật, đêm */
+export function zNote(c: Calc, de: boolean): string[] {
+  const o: string[] = []
+  if (c.hol || c.hol150) o.push(`${c.holiday}: ${hhmm(c.hol + c.hol150)} (${c.hol150 ? 150 : 125} %)`)
+  if (c.sun) o.push(`${de ? 'So' : 'CN'}: ${hhmm(c.sun)}`)
+  if (c.night) o.push(`${de ? 'Nacht' : 'Đêm'}: ${hhmm(c.night)}`)
+  return o
+}
+export type MonthStat = { days: number; ist: number; night: number; sun: number; hol: number; hol150: number; vac: number }
 /** Không có phụ cấp (đêm / Chủ nhật / lễ) khi giờ làm theo hợp đồng ≤ 10 giờ/tuần (quy tắc quán) */
 export const noSurcharge = (e: { weekly_hours?: number | string | null; work_days?: number | string | null; daily_hours?: number | string | null; surcharge_eligible?: boolean | null }) => {
   if (e.surcharge_eligible === false) return true
@@ -54,9 +76,9 @@ export const noSurcharge = (e: { weekly_hours?: number | string | null; work_day
   return Number.isFinite(w) && w > 0 && w <= 10
 }
 export function monthStat(shifts: Shift[], vacDates: string[], noZ = false): MonthStat {
-  const r = { days: 0, ist: 0, night: 0, sun: 0, hol: 0, vac: vacDates.length }
-  for (const s of shifts) { const c = calc(s); r.days++; r.ist += c.ist; r.night += c.night; r.sun += c.sun; r.hol += c.hol }
-  if (noZ) { r.night = 0; r.sun = 0; r.hol = 0 }
+  const r = { days: 0, ist: 0, night: 0, sun: 0, hol: 0, hol150: 0, vac: vacDates.length }
+  for (const s of shifts) { const c = calc(s); r.days++; r.ist += c.ist; r.night += c.night; r.sun += c.sun; r.hol += c.hol; r.hol150 += c.hol150 }
+  if (noZ) { r.night = 0; r.sun = 0; r.hol = 0; r.hol150 = 0 }
   return r
 }
 /** Danh sách ngày phép (YYYY-MM-DD) trong tháng từ các khoảng nghỉ phép */
