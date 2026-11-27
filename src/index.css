@@ -132,6 +132,9 @@ input, select, textarea { min-width: 0; max-width: 100%; box-sizing: border-box;
 input[type=date], input[type=month], input[type=time] { -webkit-appearance: none; appearance: none; display: block; text-align: left; }
 input[type=date]::-webkit-date-and-time-value, input[type=month]::-webkit-date-and-time-value { text-align: left; }
 table.kb td, table.kb th { white-space: nowrap; padding-left: 8px; padding-right: 8px; }
+/* Kassenbuch: bảng cuộn trong khung, dòng tiêu đề luôn nằm trên khi kéo xuống */
+.fit-wrap { max-height: calc(100dvh - 90px); overflow: auto; overscroll-behavior: contain; }
+table.kb thead th { position: sticky; top: 0; z-index: 2; background: var(--card); box-shadow: inset 0 -1px 0 var(--line); }
 select.cat-sel { margin-top: 4px; min-height: 32px; padding: 4px 8px; font-size: .85rem; width: auto; max-width: 100%; }
 #root.wide { max-width: 1500px; }
 .zoom-btn { min-height: 34px; min-width: 40px; padding: 4px 10px; font-weight: 700; }
