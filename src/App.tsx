@@ -23,6 +23,7 @@ import Settings from './pages/Settings'
 import RestaurantSettings from './pages/RestaurantSettings'
 import Staff from './pages/Staff'
 import Viva from './pages/Viva'
+import Bank, { BankCallback } from './pages/Bank'
 import EmployeePage from './pages/Employee'
 import Invoices from './hoadon/pages/Invoices'
 import InvoiceEditor from './hoadon/pages/InvoiceEditor'
@@ -46,6 +47,7 @@ function openFresh(start: string) {
     if (sessionStorage.getItem('nh-open')) return
     sessionStorage.setItem('nh-open', '1')
   } catch { return }
+  if (location.hash.startsWith('#/bank-callback')) return
   if (location.hash.startsWith('#/') && location.hash !== `#${start}`) history.replaceState(null, '', `${location.pathname}${location.search}#${start}`)
 }
 
@@ -130,6 +132,8 @@ function Shell({ session }: { session: Session }) {
           <Route path="/r/:rid/rc/:id" element={<RestLayout><RcRecipeView /></RestLayout>} />
           <Route path="/r/:rid/rc/:id/edit" element={<RestLayout><RcRecipeEditor /></RestLayout>} />
           <Route path="/r/:rid/viva" element={<RestLayout><Viva /></RestLayout>} />
+          <Route path="/r/:rid/bank" element={<RestLayout><Bank /></RestLayout>} />
+          <Route path="/bank-callback" element={<BankCallback />} />
           <Route path="/r/:rid/settings" element={<RestLayout><RestaurantSettings /></RestLayout>} />
           <Route path="*" element={<Navigate to={start} replace />} />
         </Routes>
