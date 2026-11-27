@@ -65,7 +65,7 @@ function addDays(d: string, n: number) { return new Date(new Date(d + "T12:00:00
  *  - Dòng nhập tay sẵn có (geldtransit, cùng số tiền, ±4 ngày) thì chỉ nối lại, không ghi thêm.
  *  - Tháng đã khoá sổ: không ghi. */
 async function bookDeposits(db: SupabaseClient, rid: string, only?: string[]) {
-  const minDay = ym(isoDay(0)) + "-01"; // tự động: chỉ tháng này (tháng cũ dùng nút trong app)
+  const minDay = ym(isoDay(-5)) + "-01"; // tự động: tháng này (và tháng trước trong 5 ngày đầu tháng); tháng cũ hơn dùng nút trong app
   let q = db.from("nh_bank_tx").select("id, iban, booking_date, amount, purpose, raw, kb_state").eq("restaurant_id", rid).gt("amount", 0).is("kb_state", null);
   q = only?.length ? q.in("id", only) : q.gte("booking_date", minDay);
   const { data: txs } = await q;
