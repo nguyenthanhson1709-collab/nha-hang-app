@@ -25,7 +25,7 @@ const NOTE_ZONE = 17.7 * MM
 const s = StyleSheet.create({
   page: { paddingTop: TOP, paddingBottom: 44 * MM, paddingHorizontal: SIDE, fontSize: 9.5, fontFamily: 'Helvetica', color: INK, lineHeight: 1.3 },
   header: { height: ADDR_TOP - TOP, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  logo: { width: 42 * MM, height: 21 * MM, objectFit: 'contain', objectPosition: 'left top' },
+  logo: { width: 50 * MM, height: 25 * MM, objectFit: 'contain', objectPosition: 'left top' },
   titleBox: { alignItems: 'flex-end' },
   title: { fontSize: 24, fontFamily: 'Helvetica-Bold', letterSpacing: 1, lineHeight: 1 },
   titleNr: { fontSize: 10, color: MUTED, marginTop: 6 },
