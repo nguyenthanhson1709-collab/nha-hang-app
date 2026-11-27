@@ -1,6 +1,6 @@
 // Kiểm tra hàm thuần của nh-bank (Enable Banking). npx tsx tests/bank.mts
 import { generateKeyPairSync, createVerify } from 'node:crypto'
-import { isPem, makeJwt, pemToPkcs8, pickBalance, psuHeaders, toTxRow } from '../supabase/functions/nh-bank/bank.ts'
+import { depositDate, isCashDeposit, isPem, makeJwt, pemToPkcs8, pickBalance, psuHeaders, toTxRow } from '../supabase/functions/nh-bank/bank.ts'
 
 let fail = 0
 const ok = (c: unknown, m: string) => { if (!c) { fail++; console.error('✗', m) } else console.log('✓', m) }
@@ -42,5 +42,13 @@ ok(again.id === out.id && inn.id !== out.id, 'mã giao dịch ổn định, khô
 ok(Object.keys(psuHeaders([], { ip: null, ua: 'x' })).length === 0, 'không có IP -> chạy nền, không gửi PSU')
 ok(psuHeaders(['Psu-Ip-Address', 'Psu-User-Agent'], { ip: '1.2.3.4', ua: 'UA' })['Psu-Ip-Address'] === '1.2.3.4', 'gửi đủ tiêu đề PSU')
 ok(Object.keys(psuHeaders(['Psu-Ip-Address', 'Psu-Geo-Location'], { ip: '1.2.3.4', ua: 'UA' })).length === 0, 'thiếu tiêu đề bắt buộc -> không gửi gì')
+
+const dep = { amount: 5000, booking_date: '2026-11-23', purpose: 'BERLINER VB BERLIN SB Kurfürstenstr./Berlin/DE21.11.2026/11:34 girocard GA 10090', raw: { bank_transaction_code: { code: 'NTAV', sub_code: 'NTAV', description: 'XTND' } } }
+ok(isCashDeposit(dep), 'nhận ra nộp tiền mặt bằng girocard')
+ok(depositDate(dep) === '2026-11-21', 'ngày nộp lấy từ nội dung')
+ok(!isCashDeposit({ amount: -47.06, purpose: 'Kapitalertragsteuer', raw: { bank_transaction_code: { code: 'NTAV' } } }), 'thuế lãi không phải nộp tiền')
+ok(!isCashDeposit({ amount: 800, purpose: 'RE 123 Catering', raw: { bank_transaction_code: { code: 'RCDT' } } }), 'chuyển khoản đến không phải nộp tiền')
+ok(isCashDeposit({ amount: 300, purpose: 'Bareinzahlung Filiale', raw: {} }), 'chữ Bareinzahlung')
+ok(depositDate({ booking_date: '2026-10-02', purpose: 'Einzahlung' }) === '2026-10-02', 'không có ngày trong nội dung -> ngày ghi sổ')
 
 if (fail) { console.error(`${fail} lỗi`); process.exit(1) }

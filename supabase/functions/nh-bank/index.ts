@@ -5,7 +5,7 @@
 // Gọi từ app (đăng nhập): { action: 'config_save' | 'aspsps' | 'connect' | 'callback' | 'sync' | 'remove', ... }
 // Gọi từ pg_cron (header x-sync-secret = nh_viva_cron_secret): {} -> mọi kết nối đang hoạt động, 5 ngày gần nhất.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { isPem, makeJwt, pickBalance, psuHeaders, toTxRow } from "./bank.ts";
+import { depositDate, isCashDeposit, isPem, makeJwt, pickBalance, psuHeaders, toTxRow } from "./bank.ts";
 
 const API = "https://api.enablebanking.com";
 const cors = {
@@ -56,6 +56,52 @@ function eb(appId: string, pem: string) {
 }
 type Call = ReturnType<typeof eb>;
 
+const DEP_TEXT = "Einzahlung";
+const ym = (d: string) => d.slice(0, 7);
+function addDays(d: string, n: number) { return new Date(new Date(d + "T12:00:00Z").getTime() + n * 86400000).toISOString().slice(0, 10); }
+
+/** Nộp tiền mặt (Einzahlung) -> dòng "Geldtransit an Bank" trong Kassenbuch.
+ *  - only: chỉ xử lý các giao dịch này (nút trong app); không có thì tự xử lý giao dịch từ tháng trước trở đi.
+ *  - Dòng nhập tay sẵn có (geldtransit, cùng số tiền, ±4 ngày) thì chỉ nối lại, không ghi thêm.
+ *  - Tháng đã khoá sổ: không ghi. */
+async function bookDeposits(db: SupabaseClient, rid: string, only?: string[]) {
+  const minDay = ym(isoDay(0)) + "-01"; // tự động: chỉ tháng này (tháng cũ dùng nút trong app)
+  let q = db.from("nh_bank_tx").select("id, iban, booking_date, amount, purpose, raw, kb_state").eq("restaurant_id", rid).gt("amount", 0).is("kb_state", null);
+  q = only?.length ? q.in("id", only) : q.gte("booking_date", minDay);
+  const { data: txs } = await q;
+  const { data: accs } = await db.from("nh_bank_accounts").select("iban, enabled").eq("restaurant_id", rid);
+  const off = new Set((accs || []).filter((a) => !a.enabled && !(accs || []).some((b) => b.enabled && b.iban === a.iban)).map((a) => a.iban));
+  const deps = (txs || []).filter((t) => !off.has(t.iban) && isCashDeposit(t as never));
+  const out = { booked: 0, matched: 0, locked: 0 };
+  if (!deps.length) return out;
+  const days = deps.map((t) => depositDate(t as never) || t.booking_date).filter(Boolean) as string[];
+  const lo = addDays(days.reduce((a, b) => (a < b ? a : b)), -5), hi = addDays(days.reduce((a, b) => (a > b ? a : b)), 5);
+  const { data: lk } = await db.from("nh_periods").select("period").eq("restaurant_id", rid);
+  const locked = new Set((lk || []).map((x) => x.period as string));
+  const { data: moves } = await db.from("nh_cash_moves").select("id, move_date, amount, bank_tx_id, channel").eq("restaurant_id", rid).eq("type", "geldtransit").gte("move_date", lo).lte("move_date", hi);
+  const free = (moves || []).filter((m) => !m.bank_tx_id && m.channel !== "viva");
+  for (const t of deps) {
+    const day = depositDate(t as never) || t.booking_date!;
+    // dòng nhập tay sẵn có: cùng số tiền, gần ngày nhất
+    const cand = free.filter((m) => Number(m.amount) === Number(t.amount) && Math.abs(new Date(m.move_date).getTime() - new Date(day).getTime()) <= 4 * 86400000)
+      .sort((a, b) => Math.abs(new Date(a.move_date).getTime() - new Date(day).getTime()) - Math.abs(new Date(b.move_date).getTime() - new Date(day).getTime()))[0];
+    if (cand) {
+      free.splice(free.indexOf(cand), 1);
+      if (!locked.has(cand.move_date.slice(0, 7))) await db.from("nh_cash_moves").update({ bank_tx_id: t.id }).eq("id", cand.id);
+      await db.from("nh_bank_tx").update({ kb_state: "matched", kb_move_id: cand.id }).eq("id", t.id);
+      out.matched++; continue;
+    }
+    if (locked.has(ym(day))) { out.locked++; continue; }
+    const { data: mv, error } = await db.from("nh_cash_moves").insert({
+      restaurant_id: rid, move_date: day, period: ym(day), type: "geldtransit", amount: Number(t.amount), description: DEP_TEXT, channel: "bank", bank_tx_id: t.id,
+    }).select("id").single();
+    if (error) throw new Error(error.message);
+    await db.from("nh_bank_tx").update({ kb_state: "booked", kb_move_id: mv.id }).eq("id", t.id);
+    out.booked++;
+  }
+  return out;
+}
+
 async function storeError(db: SupabaseClient, linkId: string, e: unknown) {
   const expired = e instanceof BankError && e.code === "expired";
   await db.from("nh_bank_links").update({
@@ -100,7 +146,9 @@ async function syncLink(db: SupabaseClient, call: Call, link: Link, headers: Rec
       }).eq("uid", a.uid);
     }
     await db.from("nh_bank_links").update({ last_sync_at: new Date().toISOString(), last_error: null, status: "active" }).eq("id", link.id);
-    return { accounts: (accs || []).length, tx: nTx };
+    let kassenbuch: unknown = null;
+    try { kassenbuch = await bookDeposits(db, link.restaurant_id); } catch (e) { kassenbuch = { error: String((e as Error).message || e) }; }
+    return { accounts: (accs || []).length, tx: nTx, kassenbuch };
   } catch (e) { await storeError(db, link.id, e); throw e; }
 }
 
@@ -265,6 +313,15 @@ Deno.serve(async (req) => {
         catch (e) { syncError = String((e as Error).message || e); }
       }
       return json({ ok: true, synced, sync_error: syncError });
+    }
+
+    if (body.action === "book_deposit") {
+      // nút "→ Kassenbuch" trên một giao dịch nộp tiền
+      const rid = String(body.restaurant_id || "");
+      if (!rid || !(await canManage(rid))) return json({ error: "forbidden" }, 403);
+      const ids = ((body.tx_ids || []) as unknown[]).map(String).filter(Boolean);
+      if (!ids.length) return json({ error: "invalid_input" }, 400);
+      return json(await bookDeposits(db, rid, ids));
     }
 
     if (body.action === "remove") {
