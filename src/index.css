@@ -553,10 +553,13 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .pl-sum tbody tr { cursor: pointer; } .pl-sum tbody tr:hover { background: rgb(255 144 24 / .06); }
 .pl-sum tfoot td { font-weight: 700; background: color-mix(in srgb, var(--line) 35%, transparent); }
 .pl-grid { font-size: .72rem; }
-.pl-grid th, .pl-grid td { padding: 5px 3px; text-align: center; border-top: 1px solid var(--line); border-left: 1px solid color-mix(in srgb, var(--line) 50%, transparent); white-space: nowrap; min-width: 46px; }
+.pl-grid th, .pl-grid td { padding: 4px 2px; text-align: center; border-top: 1px solid var(--line); border-left: 1px solid color-mix(in srgb, var(--line) 50%, transparent); white-space: nowrap; min-width: 28px; }
+.pl-grid td > span { display: block; line-height: 1.15; }  /* giờ bắt đầu trên, giờ kết thúc dưới cho cột hẹp */
 .pl-grid th { font-weight: 600; color: var(--muted); border-top: 0; } .pl-grid th small { font-weight: 400; }
 .pl-grid th.so { color: var(--brand); } .pl-grid th.ft { color: #FFD666; }
-.pl-grid .sticky { position: sticky; left: 0; z-index: 1; background: var(--card); text-align: left; min-width: 190px; padding: 5px 10px; font-size: .8rem; }
+.pl-grid .sticky { position: sticky; left: 0; z-index: 1; background: var(--card); text-align: left; min-width: 150px; max-width: 190px; overflow: hidden; text-overflow: ellipsis; padding: 5px 8px; font-size: .8rem; }
+@media (max-width: 1240px) { .pl-grid { font-size: .62rem; } .pl-grid th, .pl-grid td { min-width: 21px; padding: 3px 1px; } .pl-grid .sticky { min-width: 110px; max-width: 120px; font-size: .7rem; padding: 4px 6px; } .pl-grid .sticky .m { display: none; } }
+@media (max-width: 900px) { .pl-grid { font-size: .54rem; } .pl-grid th, .pl-grid td { min-width: 18px; padding: 3px 0; } .pl-grid .sticky { min-width: 76px; max-width: 80px; font-size: .62rem; } .pl-grid td.b { padding: 3px 2px; } }
 .pl-grid td.sticky { cursor: pointer; } .pl-grid .m { color: var(--muted); margin-right: 4px; }
 .pl-grid td.frueh { background: rgb(255 144 24 / .16); } .pl-grid td.spaet { background: rgb(111 207 151 / .16); }
 .pl-grid td.so { background: rgb(255 120 150 / .2); } .pl-grid td.ft { background: rgb(255 214 102 / .25); }
