@@ -108,9 +108,16 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
       .sort((a, b) => (a.e.personnel_no || '').localeCompare(b.e.personnel_no || ''))
   }, [emps, shifts, abs, ym, yv])
 
-  const val = (e: Emp, st: St, c: Col) => {
+  // Giờ/tuần = giờ/ngày × ngày/tuần (theo số trong bảng, kể cả ô đã sửa)
+  const wocheOf = (e: Emp, st: St): string => {
+    const num = (k: string): number => Number(val(e, st, COLS.find((x) => x.k === k)!).v.replace(',', '.'))
+    const w = num('tag') * num('tage')
+    return Number.isFinite(w) && w > 0 ? n(Math.round(w * 100) / 100) : ''
+  }
+  const val = (e: Emp, st: St, c: Col): { v: string; own: boolean } => {
     const o = saved?.[e.id]?.[c.k]
     if (o != null) return { v: o, own: true }
+    if (c.k === 'woche') return { v: wocheOf(e, st), own: false }
     if (c.sticky) return { v: prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : ''), own: false }
     return { v: c.auto ? c.auto(e, st) : '', own: false }
   }
@@ -118,7 +125,13 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
   // So với tháng trước: ô khác giá trị tháng trước được tô nền; nhân viên vào làm trong tháng này tô cả dòng
   const changed = (e: Emp, st: St, c: Col, v: string) => {
     if (c.mon || c.check || c.noXlsx) return false
-    const was = c.sticky ? (prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : '')) : (last[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : ''))
+    const lastOf = (k: string) => { const cc = COLS.find((x) => x.k === k)!; return last[e.id]?.[k] ?? (cc.auto ? cc.auto(e, st) : '') }
+    let was: string
+    if (c.k === 'woche' && last[e.id]?.woche == null) {
+      // tháng trước cũng tính giờ/tuần = giờ/ngày × ngày/tuần
+      const w = Number(lastOf('tag').replace(',', '.')) * Number(lastOf('tage').replace(',', '.'))
+      was = Number.isFinite(w) && w > 0 ? n(Math.round(w * 100) / 100) : ''
+    } else was = c.sticky ? (prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : '')) : lastOf(c.k)
     return v.trim() !== was.trim()
   }
   const isNew = (e: Emp) => !!e.entry_date && e.entry_date >= `${ym}-01`
@@ -126,7 +139,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
   async function commit(e: Emp, st: St, c: Col, raw: string) {
     setEdit(null)
     const v = raw.trim()
-    const base = c.sticky ? (prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : '')) : c.auto ? c.auto(e, st) : ''
+    const base = c.k === 'woche' ? wocheOf(e, st) : c.sticky ? (prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : '')) : c.auto ? c.auto(e, st) : ''
     const cur = { ...(saved?.[e.id] || {}) }
     if (v === base && !(c.sticky && v)) delete cur[c.k]; else cur[c.k] = v
     if (JSON.stringify(cur) === JSON.stringify(saved?.[e.id] || {})) return
@@ -206,17 +219,37 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
   }
 
   async function exportXlsx() {
-    const XLSX = await import('xlsx')
+    // xlsx-js-style: bản SheetJS ghi được màu nền. Dòng có thay đổi so với tháng trước: nền cam (ô thay đổi đậm hơn);
+    // nhân viên mới: nền xanh cả dòng
+    const XLSX = (await import('xlsx-js-style')).default
     const title = `${company} ${ym.slice(5, 7)}/${ym.slice(2, 4)}`
     const aoa: (string | number)[][] = [[title], XCOLS.map((c) => c.de)]
-    for (const { e, st } of rows) aoa.push(XCOLS.map((c) => { const { v } = val(e, st, c); const x = c.num && v ? Number(v.replace(',', '.')) : NaN; return Number.isFinite(x) ? x : v }))
+    const marks: { row: 'new' | 'chg' | null; cells: boolean[] }[] = []
+    for (const { e, st } of rows) {
+      const cells = XCOLS.map((c) => !isNew(e) && changed(e, st, c, val(e, st, c).v))
+      marks.push({ row: isNew(e) ? 'new' : cells.some(Boolean) ? 'chg' : null, cells })
+      aoa.push(XCOLS.map((c) => { const { v } = val(e, st, c); const x = c.num && v ? Number(v.replace(',', '.')) : NaN; return Number.isFinite(x) ? x : v }))
+    }
+    if (marks.some((m) => m.row)) aoa.push([], ['Orange: Änderung gegenüber Vormonat · Grün: neuer Mitarbeiter'])
     const ws = XLSX.utils.aoa_to_sheet(aoa)
+    const fill = (rgb: string) => ({ patternType: 'solid', fgColor: { rgb } })
+    const thin = { style: 'thin', color: { rgb: 'BFBFBF' } }
+    const border = { top: thin, bottom: thin, left: thin, right: thin }
+    XCOLS.forEach((_c, ci) => { const h = ws[XLSX.utils.encode_cell({ r: 1, c: ci })]; if (h) h.s = { font: { bold: true }, alignment: { wrapText: true, vertical: 'center' }, border, fill: fill('EDEDED') } })
+    const t = ws[XLSX.utils.encode_cell({ r: 0, c: 0 })]; if (t) t.s = { font: { bold: true, sz: 13 } }
+    marks.forEach((m, ri) => XCOLS.forEach((_c, ci) => {
+      const ref = XLSX.utils.encode_cell({ r: ri + 2, c: ci })
+      const cell = ws[ref] || (ws[ref] = { t: 's', v: '' })
+      cell.s = { border, ...(m.row === 'new' ? { fill: fill('C6EFCE') } : m.row === 'chg' ? { fill: fill(m.cells[ci] ? 'FFC000' : 'FFE5B4'), font: { bold: m.cells[ci] } } : {}) }
+    }))
     ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: XCOLS.length - 1 } }]
     ws['!cols'] = XCOLS.map((c) => ({ wch: Math.max(8, Math.round((c.w || 70) / 7)) }))
+    ws['!rows'] = [{ hpt: 20 }, { hpt: 42 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, `${ym.slice(5, 7)}-${ym.slice(2, 4)}`)
     XLSX.writeFile(wb, `Mitarbeiterliste_${ym.slice(5, 7)}-${ym.slice(0, 4)}.xlsx`)
   }
+
 
   if (!saved) return <div className="card muted">…</div>
   return (
@@ -237,7 +270,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
             ) : <th key={c.k} lang="de" className={c.num ? '' : 'l'} style={{ minWidth: c.num ? undefined : Math.round((c.w || 70) * 0.8) }}>{c.de}{!de && <small>{c.vi}</small>}</th>)}</tr></thead>
             <tbody>
               {rows.map(({ e, st }) => (
-                <tr key={e.id} className={isNew(e) ? 'new' : ''}>
+                <tr key={e.id} className={isNew(e) ? 'new' : XCOLS.some((c) => changed(e, st, c, val(e, st, c).v)) ? 'chgrow' : ''}>
                   {XCOLS.map((c) => {
                     const { v, own } = val(e, st, c)
                     const editing = edit?.id === e.id && edit.k === c.k

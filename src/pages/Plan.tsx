@@ -86,6 +86,8 @@ export default function Plan() {
   const company = hs?.company_name || r.name
   const dates = ym ? monthDates(ym) : []
   const pnr = (e: Emp) => (e.personnel_no || '').replace(/^0+(?=\d{4})/, '')
+  // Nút PDF: phía trên, bên phải bảng
+  const pdfBtn = <button className="st-btn pl-pdf" disabled={!rows.length} onClick={() => setPdf(dienstplanPdf({ company, ym: ym!, rows: rows.map((x) => ({ name: `${x.e.last_name}, ${x.e.first_name}`, pnr: pnr(x.e), contract: x.contract, shifts: x.sh, vac: x.vac, noZ: noSurcharge(x.e) })) }))}>PDF</button>
   return (
     <>
       <Top title={T('Xếp lịch', 'Dienstplan')} sub={company} back={`/r/${rid}/hr`} right={<LangSwitch />} />
@@ -106,7 +108,6 @@ export default function Plan() {
             </label>
             <button aria-label={T('Tháng sau', 'Folgemonat')} disabled={!ym || months.indexOf(ym) <= 0} onClick={() => setYm(months[months.indexOf(ym!) - 1])}>›</button>
           </div>
-          {view !== 'list' && <button className="st-btn" disabled={!rows.length} onClick={() => setPdf(dienstplanPdf({ company, ym: ym!, rows: rows.map((x) => ({ name: `${x.e.last_name}, ${x.e.first_name}`, pnr: pnr(x.e), contract: x.contract, shifts: x.sh, vac: x.vac, noZ: noSurcharge(x.e) })) }))}>PDF</button>}
         </div>
 
         {!shifts ? <Spinner /> : view === 'list' ? <StaffMonth rid={rid!} ym={ym!} emps={emps} shifts={shifts} abs={abs} company={company} de={de} onSaved={() => setTick((x) => x + 1)} /> : !rows.length ? <div className="card muted">{T('Tháng này chưa có lịch làm việc', 'Für diesen Monat ist kein Dienstplan erfasst')}</div> : view === 'sum' ? (
@@ -115,6 +116,7 @@ export default function Plan() {
               <div className="st-stat"><span>{T('Nhân viên', 'Mitarbeiter')}</span><b>{rows.length}</b></div>
               <div className="st-stat"><span>{T('Tổng giờ', 'Ist gesamt')}</span><b>{hhmm(tot.ist)}</b></div>
               <div className="st-stat"><span>{T('Ngày phép', 'Urlaubstage')}</span><b>{tot.vac}</b></div>
+              {pdfBtn}
             </div>
             <div className="pl-scroll">
               <table className="pl-sum">
@@ -137,6 +139,7 @@ export default function Plan() {
             <div className="pl-legend">
               <span><i className="frueh" />{T('Ca sáng', 'Früh')}</span><span><i className="spaet" />{T('Ca chiều/tối', 'Spät')}</span>
               <span><i className="so" />{T('Chủ nhật', 'Sonntag')}</span><span><i className="ft" />{T('Ngày lễ', 'Feiertag')}</span><span><i className="u" />{T('Nghỉ phép', 'Urlaub')}</span>
+              {pdfBtn}
             </div>
             <div className="pl-scroll">
               <table className="pl-grid">

@@ -711,7 +711,7 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .sched-f { display: flex; gap: 8px; justify-content: flex-end; position: sticky; bottom: 0; background: var(--card); padding-top: 8px; }
 /* Lịch làm nhân viên: khác tháng trước / nhân viên mới */
 .sm-tab td.chg { background: color-mix(in srgb, var(--brand, #FF9018) 26%, var(--card)); }
-.sm-tab tr.new td { background: color-mix(in srgb, #2fa36b 24%, var(--card)); }
+.sm-tab tr.new td { background: color-mix(in srgb, #2fa36b 30%, var(--card)); }
 /* Ghi chú xếp lịch */
 .pn { margin-top: 14px; }
 .pn h3 { margin: 0 0 4px; }
@@ -730,3 +730,9 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .pn-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 10px; border-radius: 999px; background: color-mix(in srgb, #ff6b6b 18%, var(--card)); font-size: .85rem; }
 .sm-tab th.sm-pay { cursor: pointer; color: var(--brand, #FF9018); user-select: none; }
 .sm-tab th.sm-pay span { font-size: .8rem; }
+/* Nút PDF phía trên bên phải bảng (Tổng hợp / Lịch theo ngày) */
+.pl-legend { align-items: center; }
+.pl-legend .pl-pdf, .pl-kpi .pl-pdf { margin-left: auto; }
+.pl-kpi:has(.pl-pdf) { grid-template-columns: repeat(3, 1fr) auto; align-items: center; }
+.sm-tab tr.chgrow td { background: color-mix(in srgb, var(--brand, #FF9018) 22%, var(--card)); }
+.sm-tab tr.chgrow td.chg { background: color-mix(in srgb, var(--brand, #FF9018) 42%, var(--card)); font-weight: 700; }
