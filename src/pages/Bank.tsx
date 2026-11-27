@@ -12,7 +12,7 @@ import { MonthBar } from '../components/MonthBar'
 
 interface BankApp { app_id: string; has_key: boolean; updated_at: string }
 interface Link { id: string; restaurant_id: string; aspsp_name: string; status: 'pending' | 'active' | 'expired' | 'error'; valid_until: string | null; last_sync_at: string | null; last_error: string | null; last_error_at: string | null; created_at: string }
-interface Account { uid: string; link_id: string; iban: string | null; name: string | null; currency: string | null; balance: number | null; balance_type: string | null; balance_at: string | null }
+interface Account { uid: string; link_id: string; iban: string | null; name: string | null; currency: string | null; balance: number | null; balance_type: string | null; balance_at: string | null; enabled: boolean }
 interface Tx { id: string; iban: string | null; booking_date: string | null; value_date: string | null; amount: number; currency: string | null; counterparty: string | null; counterparty_iban: string | null; purpose: string | null; status: string | null }
 interface Aspsp { name: string; country: string; logo?: string; psu_types?: string[]; beta?: boolean; max_days?: number | null }
 
@@ -78,7 +78,9 @@ export default function Bank() {
   const [showBal, setShowBal] = useState(false)
   const [setup, setSetup] = useState<{ app_id: string; pem: string; file: string } | null>(null)
   const [pick, setPick] = useState<{ list: Aspsp[] | null; q: string; err: string } | null>(null)
+  const [choose, setChoose] = useState<{ link: Link; on: Set<string> } | null>(null)
   const autoSynced = useRef(false)
+  const autoChoose = useRef(false)
 
   const load = useCallback(async () => {
     const { from, to } = monthRange(period)
@@ -112,6 +114,13 @@ export default function Bank() {
     const act = links.filter((l) => l.status === 'active')
     if (act.length && act.some((l) => !l.last_sync_at || Date.now() - new Date(l.last_sync_at).getTime() > 3600000)) { autoSynced.current = true; sync(true) }
   }, [links, sync])
+
+  // Kết nối trả về nhiều tài khoản mà chưa chọn cái nào: mở luôn bảng chọn cho chủ
+  useEffect(() => {
+    if (!owner || !links || autoChoose.current) return
+    const l = links.find((x) => x.status === 'active' && accs.some((a) => a.link_id === x.id) && !accs.some((a) => a.link_id === x.id && a.enabled))
+    if (l) { autoChoose.current = true; setChoose({ link: l, on: new Set() }) }
+  }, [owner, links, accs])
 
   if (!r || !canManage(role)) return null
   const ready = !!app?.has_key
@@ -150,6 +159,16 @@ export default function Bank() {
       location.href = res.url
     } catch (e) { toast(errMsg(e)); setBusy('') }
   }
+  async function saveChoose() {
+    if (!choose) return
+    setBusy('choose')
+    try {
+      const res = await bankCall({ action: 'select_accounts', link_id: choose.link.id, uids: [...choose.on] }, de)
+      toast(res.sync_error || (de ? 'Gespeichert' : 'Đã lưu'))
+      setChoose(null)
+    } catch (e) { toast(errMsg(e)) }
+    setBusy(''); load()
+  }
   async function remove(l: Link) {
     if (!confirm(de ? `Verbindung zu ${l.aspsp_name} trennen? Bereits geladene Umsätze bleiben gespeichert.` : `Ngắt kết nối ${l.aspsp_name}? Giao dịch đã lấy về vẫn được giữ.`)) return
     setBusy('remove')
@@ -157,10 +176,11 @@ export default function Bank() {
     setBusy(''); load()
   }
 
-  const shown = txs.filter((t) => (!iban || t.iban === iban) && (!q || `${t.counterparty} ${t.purpose} ${t.counterparty_iban}`.toLowerCase().includes(q.toLowerCase())))
+  const off = new Set(accs.filter((a) => !a.enabled && !accs.some((b) => b.enabled && b.iban === a.iban)).map((a) => a.iban))
+  const shown = txs.filter((t) => !off.has(t.iban) && (!iban || t.iban === iban) && (!q || `${t.counterparty} ${t.purpose} ${t.counterparty_iban}`.toLowerCase().includes(q.toLowerCase())))
   const inSum = r2(shown.filter((t) => t.amount > 0).reduce((a, t) => a + Number(t.amount), 0))
   const outSum = r2(shown.filter((t) => t.amount < 0).reduce((a, t) => a + Number(t.amount), 0))
-  const ibans = [...new Set([...accs.map((a) => a.iban), ...txs.map((t) => t.iban)].filter(Boolean))] as string[]
+  const ibans = [...new Set([...accs.filter((a) => a.enabled).map((a) => a.iban), ...txs.map((t) => t.iban)].filter((x) => x && !off.has(x)))] as string[]
   const filteredBanks = (pick?.list || []).filter((a) => !pick?.q || a.name.toLowerCase().includes(pick.q.toLowerCase()))
 
   return (
@@ -189,7 +209,8 @@ export default function Bank() {
 
           {links.map((l) => {
             const left = daysLeft(l.valid_until)
-            const la = accs.filter((a) => a.link_id === l.id)
+            const all = accs.filter((a) => a.link_id === l.id)
+            const la = all.filter((a) => a.enabled)
             return (
               <div className="card" key={l.id}>
                 <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -222,8 +243,9 @@ export default function Bank() {
                     </div>
                   </div>
                 ))}
-                {l.status === 'active' && !la.length && <div className="small muted" style={{ marginTop: 8 }}>{de ? 'Keine Konten freigegeben. Bei Enable Banking müssen die Konten zuerst mit „Activate by linking accounts“ verknüpft sein.' : 'Ngân hàng không trả về tài khoản nào. Trên Enable Banking cần nối tài khoản trước bằng „Activate by linking accounts“.'}</div>}
-                {owner && <div className="row" style={{ marginTop: 10 }}><button className="ghost small" disabled={!!busy} onClick={() => remove(l)}>{de ? 'Verbindung trennen' : 'Ngắt kết nối'}</button></div>}
+                {l.status === 'active' && all.length > 0 && !la.length && <div className="small muted" style={{ marginTop: 8 }}>{de ? `${all.length} Konten gefunden – bitte wählen, welche zu diesem Restaurant gehören.` : `Tìm thấy ${all.length} tài khoản – hãy chọn tài khoản nào thuộc quán này.`}</div>}
+                {l.status === 'active' && !all.length && <div className="small muted" style={{ marginTop: 8 }}>{de ? 'Keine Konten freigegeben. Bei Enable Banking müssen die Konten zuerst mit „Activate by linking accounts“ verknüpft sein.' : 'Ngân hàng không trả về tài khoản nào. Trên Enable Banking cần nối tài khoản trước bằng „Activate by linking accounts“.'}</div>}
+                {owner && <div className="row" style={{ marginTop: 10, gap: 6, flexWrap: 'wrap' }}>{all.length > 1 && <button className="small" disabled={!!busy} onClick={() => setChoose({ link: l, on: new Set(la.map((a) => a.uid)) })}>{de ? `Konten wählen (${la.length}/${all.length})` : `Chọn tài khoản (${la.length}/${all.length})`}</button>}<button className="ghost small" disabled={!!busy} onClick={() => remove(l)}>{de ? 'Verbindung trennen' : 'Ngắt kết nối'}</button></div>}
               </div>
             )
           })}
@@ -233,7 +255,7 @@ export default function Bank() {
             <button className="ghost" onClick={() => setSetup({ app_id: app?.app_id || '', pem: '', file: '' })}>{de ? 'Enable Banking Einstellungen' : 'Cài đặt Enable Banking'}</button>
           </div>}
 
-          {(txs.length > 0 || accs.length > 0) && <>
+          {(txs.length > 0 || accs.some((a) => a.enabled)) && <>
             <MonthBar value={period} onChange={setPeriod} />
             <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
               {ibans.length > 1 && <select value={iban} onChange={(e) => setIban(e.target.value)} style={{ width: 'auto' }}>
@@ -289,6 +311,19 @@ export default function Bank() {
         </>}
       </Sheet>
 
+      <Sheet open={!!choose} onClose={() => setChoose(null)} title={de ? 'Konten für dieses Restaurant' : 'Tài khoản của quán này'}>
+        {choose && <>
+          <div className="small muted" style={{ marginBottom: 10 }}>{de ? `Nur die markierten Konten werden bei ${r.name} angezeigt und abgerufen.` : `Chỉ tài khoản được tích mới hiện và được lấy số ở ${r.name}.`}</div>
+          {accs.filter((a) => a.link_id === choose.link.id).map((a) => (
+            <label key={a.uid} className="row" style={{ gap: 10, marginBottom: 8, alignItems: 'center' }}>
+              <input type="checkbox" style={{ width: 'auto' }} checked={choose.on.has(a.uid)} onChange={(e) => { const on = new Set(choose.on); if (e.target.checked) on.add(a.uid); else on.delete(a.uid); setChoose({ ...choose, on }) }} />
+              <span><b>{fmtIban(a.iban) || a.uid}</b>{a.name ? <span className="small muted"> · {a.name}</span> : null}</span>
+            </label>
+          ))}
+          <button className="primary block" disabled={!!busy} onClick={saveChoose}>{busy === 'choose' ? '…' : (de ? 'Speichern' : 'Lưu')}</button>
+        </>}
+      </Sheet>
+
       <Sheet open={!!pick} onClose={() => setPick(null)} title={de ? 'Bank wählen' : 'Chọn ngân hàng'}>
         {pick && <>
           <input value={pick.q} onChange={(e) => setPick({ ...pick, q: e.target.value })} placeholder={de ? 'Bank suchen' : 'Tìm ngân hàng'} autoFocus style={{ marginBottom: 8 }} />
@@ -327,7 +362,7 @@ export function BankCallback() {
     ;(async () => {
       try {
         const res = await bankCall({ action: 'callback', code: p.get('code'), state: p.get('state'), error: p.get('error'), error_description: p.get('error_description') }, de)
-        toast(de ? `Verbunden · ${res.accounts} Konto/Konten` : `Đã kết nối · ${res.accounts} tài khoản`)
+        toast(res.accounts > 1 && !res.enabled ? (de ? `Verbunden · ${res.accounts} Konten gefunden – bitte wählen` : `Đã kết nối · tìm thấy ${res.accounts} tài khoản – hãy chọn tài khoản của quán`) : (de ? `Verbunden · ${res.enabled ?? res.accounts} Konto/Konten` : `Đã kết nối · ${res.enabled ?? res.accounts} tài khoản`))
         if (res.sync_error) toast(res.sync_error)
         nav(`/r/${res.restaurant_id}/bank`, { replace: true })
       } catch (e) {

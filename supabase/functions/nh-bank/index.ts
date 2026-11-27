@@ -69,7 +69,7 @@ async function syncLink(db: SupabaseClient, call: Call, link: Link, headers: Rec
     await db.from("nh_bank_links").update({ status: "expired" }).eq("id", link.id);
     throw new BankError("expired", "Zustimmung abgelaufen – bitte erneut verbinden");
   }
-  const { data: accs } = await db.from("nh_bank_accounts").select("*").eq("link_id", link.id);
+  const { data: accs } = await db.from("nh_bank_accounts").select("*").eq("link_id", link.id).eq("enabled", true);
   let nTx = 0;
   try {
     for (const a of accs || []) {
@@ -216,7 +216,11 @@ Deno.serve(async (req) => {
       await db.from("nh_bank_link_keys").update({ session_id: s.session_id, state: null, updated_at: new Date().toISOString() }).eq("link_id", link.id);
       const validUntil = ((s.access as O)?.valid_until as string) || link.valid_until;
       await db.from("nh_bank_links").update({ status: "active", valid_until: validUntil, last_error: null }).eq("id", link.id);
+      // tài khoản đã chọn cho quán này ở lần kết nối trước (khi xác nhận lại thì giữ nguyên lựa chọn)
+      const { data: prev } = await db.from("nh_bank_accounts").select("iban, enabled").eq("restaurant_id", link.restaurant_id).neq("link_id", link.id);
+      const prevOn = new Map((prev || []).map((p) => [p.iban, p.enabled]));
       const rows = accounts.map((a) => ({
+        enabled: prevOn.has(((a.account_id as O)?.iban as string) || null) ? !!prevOn.get(((a.account_id as O)?.iban as string) || null) : accounts.length === 1,
         uid: String(a.uid), link_id: link.id, restaurant_id: link.restaurant_id,
         iban: ((a.account_id as O)?.iban as string) || null, name: (a.name as string) || (a.product as string) || (a.details as string) || null, currency: (a.currency as string) || "EUR",
       }));
@@ -231,7 +235,7 @@ Deno.serve(async (req) => {
       let synced: O | null = null, syncError: string | null = null;
       try { synced = await syncLink(db, call, { ...link, status: "active", valid_until: validUntil } as Link, psuHeaders(link.psu_headers || [], reqInfo)); }
       catch (e) { syncError = String((e as Error).message || e); }
-      return json({ ok: true, restaurant_id: link.restaurant_id, accounts: rows.length, synced, sync_error: syncError });
+      return json({ ok: true, restaurant_id: link.restaurant_id, accounts: rows.length, enabled: rows.filter((r) => r.enabled).length, synced, sync_error: syncError });
     }
 
     if (body.action === "sync") {
@@ -245,6 +249,22 @@ Deno.serve(async (req) => {
         catch (e) { out.push({ bank: l.aspsp_name, error: e instanceof BankError ? e.code : "error", message: String((e as Error).message || e) }); }
       }
       return json({ results: out });
+    }
+
+    if (body.action === "select_accounts") {
+      // chủ chọn tài khoản nào thuộc quán này, rồi lấy số luôn
+      if (!isOwner) return json({ error: "forbidden" }, 403);
+      const { data: link } = await db.from("nh_bank_links").select("*").eq("id", String(body.link_id || "")).maybeSingle();
+      if (!link) return json({ error: "not_found" }, 404);
+      const on = new Set(((body.uids || []) as unknown[]).map(String));
+      const { data: accs } = await db.from("nh_bank_accounts").select("uid").eq("link_id", link.id);
+      for (const a of accs || []) await db.from("nh_bank_accounts").update({ enabled: on.has(a.uid) }).eq("uid", a.uid);
+      let synced: O | null = null, syncError: string | null = null;
+      if (on.size && link.status === "active") {
+        try { synced = await syncLink(db, await client(db), link as Link, psuHeaders(link.psu_headers || [], reqInfo)); }
+        catch (e) { syncError = String((e as Error).message || e); }
+      }
+      return json({ ok: true, synced, sync_error: syncError });
     }
 
     if (body.action === "remove") {
