@@ -48,6 +48,8 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de }: 
   const [showPay, setShowPay] = useState(false)
   const [edit, setEdit] = useState<{ id: string; k: string; v: string } | null>(null)
 
+  // Bảng rộng: dùng hết chiều rộng màn hình máy tính
+  useEffect(() => { const el = document.getElementById('root'); el?.classList.add('xfull'); return () => el?.classList.remove('xfull') }, [])
   useEffect(() => {
     setSaved(null)
     supabase.from('nh_staff_month').select('employee_id,ym,data').eq('restaurant_id', rid).lte('ym', ym).order('ym').limit(5000).then(({ data, error }) => {
@@ -116,7 +118,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de }: 
       {!rows.length ? <div className="card muted">{T('Tháng này chưa có nhân viên', 'Keine Mitarbeiter in diesem Monat')}</div> : (
         <div className="pl-scroll">
           <table className="pl-sum sm-tab">
-            <thead><tr>{COLS.map((c) => <th key={c.k} className={c.num ? '' : 'l'} style={{ minWidth: c.w }}>{c.de}{!de && <small>{c.vi}</small>}</th>)}</tr></thead>
+            <thead><tr>{COLS.map((c) => <th key={c.k} lang="de" className={c.num ? '' : 'l'} style={{ minWidth: c.num ? undefined : Math.round((c.w || 70) * 0.8) }}>{c.de}{!de && <small>{c.vi}</small>}</th>)}</tr></thead>
             <tbody>
               {rows.map(({ e, st }) => (
                 <tr key={e.id}>
@@ -137,7 +139,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de }: 
                       </td>)
                     return (
                       <td key={c.k} className={cls} onClick={() => setEdit({ id: e.id, k: c.k, v })}>
-                        <span className={c.k === 'entgelt' && v && !showPay ? 'masked' : ''}>{v}</span>
+                        <span className={c.k === 'entgelt' && v && !showPay ? 'masked' : ''}>{c.k === 'bank' && /^[A-Z]{2}\d/.test(v) ? v.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim() : v}</span>
                       </td>)
                   })}
                 </tr>
