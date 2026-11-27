@@ -4,6 +4,7 @@ import { toast } from './ui'
 import { dmy } from '../lib/format'
 import { isActive, type Employee } from '../lib/hr'
 import { monthDates, monthStat, noSurcharge, vacDays, type Shift, type Vacation } from '../lib/hrTime'
+import PlanNotes from './PlanNotes'
 import { buildSchedule, defaultSun, SUN_RULES, type SchedEmp, type SchedResult, type SunRule } from '../lib/scheduler'
 
 /**
@@ -128,7 +129,9 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
     setBusy(false)
     if (error) { toast(error.message); return }
     const vac: Record<string, Set<string>> = {}
-    for (const a of abs) for (const d of dates) if (d >= a.from_date && d <= a.to_date) (vac[a.employee_id] ||= new Set()).add(d)
+    // Urlaub / Krank / Unbezahlt: tính vào số ngày của tuần; Wunschfrei (other): chỉ không xếp ca
+    const off: Record<string, Set<string>> = {}
+    for (const a of abs) for (const d of dates) if (d >= a.from_date && d <= a.to_date) ((a.kind === 'other' ? off : vac)[a.employee_id] ||= new Set()).add(d)
     // Lấy đúng số trong bảng (giờ/ngày, ngày/tuần, ngày vào, ngày nghỉ); ô đã sửa trong tháng được ưu tiên hơn hồ sơ
     const col = (k: string) => COLS.find((c) => c.k === k)!
     const num = (x: string) => { const v = Number(x.replace(',', '.')); return Number.isFinite(v) && v > 0 ? v : 0 }
@@ -141,7 +144,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
       list.push({ id: e.id, name, hours, days, entry: isoOf(val(e, st, col('eintritt')).v), exit: isoOf(val(e, st, col('austritt')).v),
         sun: (val(e, st, col('sonntagsregel')).v || defaultSun(days)) as SunRule })
     }
-    const r = buildSchedule(ym, list, vac, (data || []) as never, from)
+    const r = buildSchedule(ym, list, vac, (data || []) as never, from, off)
     if (missing.length) r.warnings.unshift(T(`Chưa có giờ/ngày hoặc ngày/tuần, không xếp: ${missing.join(', ')}`, `Ohne Std./Tag oder Tage/Woche, nicht eingeplant: ${missing.join(', ')}`))
     setPlan({ ...r, from, replace: shifts.filter((s) => s.shift_date >= from).length })
   }
@@ -221,6 +224,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
           </table>
         </div>
       )}
+      <PlanNotes rid={rid} ym={ym} emps={rows.map((x) => x.e)} abs={abs} de={de} onChanged={onSaved} />
       {plan && (
         <div className="sheet-bg" onClick={(ev) => { if (ev.target === ev.currentTarget && !busy) setPlan(null) }}>
           <div className="sheet sched">

@@ -2,7 +2,7 @@
 // Nacht +25 % ab 20:00 (nicht an So/FT) · So/FT: ganze Schicht · Pause đã trừ trong Ist
 
 export type Shift = { id: string; employee_id: string; shift_date: string; start_time: string; end_time: string; break_min: number; note: string | null }
-export type Vacation = { employee_id: string; from_date: string; to_date: string; kind: string; note: string | null }
+export type Vacation = { id?: string; employee_id: string; from_date: string; to_date: string; kind: string; note: string | null }
 
 export const WD_DE = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 export const WD_VI = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']

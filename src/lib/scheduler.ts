@@ -61,9 +61,10 @@ export type SchedResult = { shifts: PlanShift[]; perEmp: Record<string, { days: 
 /**
  * Xếp lịch cho tháng ym. vac: ngày phép / nghỉ (không xếp ca, nhưng ngày phép tính vào số ngày của tuần).
  * prev: ca giữ nguyên trước ngày from (2 tuần trước tháng và đầu tháng đã qua) để tính tuần lẻ, nghỉ 11 h, ngày liên tiếp.
+ * off: ngày nhân viên xin nghỉ (Wunschfrei): không xếp ca nhưng không bớt số ngày của tuần.
  * from: ngày bắt đầu xếp (mặc định ngày 1; tháng đang chạy thì từ ngày mai).
  */
-export function buildSchedule(ym: string, emps: SchedEmp[], vac: Record<string, Set<string>>, prev: PrevShift[], from?: string): SchedResult {
+export function buildSchedule(ym: string, emps: SchedEmp[], vac: Record<string, Set<string>>, prev: PrevShift[], from?: string, off: Record<string, Set<string>> = {}): SchedResult {
   const first = `${ym}-01`
   const last = iso(new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0))
   const dates: string[] = []; for (let d = first; d <= last; d = addDays(d, 1)) dates.push(d)
@@ -113,7 +114,7 @@ export function buildSchedule(ym: string, emps: SchedEmp[], vac: Record<string, 
   for (const w of weeks) {
     const nextErsatz: Record<string, number> = {}
     for (const e of order) {
-      const W = work[e.id], V = vac[e.id] || new Set<string>()
+      const W = work[e.id], V = vac[e.id] || new Set<string>(), O = off[e.id] || new Set<string>()
       const inMonth = w.filter((d) => d >= start && d <= last)
       const before = w.filter((d) => d < start)
       const active = (d: string) => (!e.entry || d >= e.entry) && (!e.exit || d <= e.exit)
@@ -125,7 +126,7 @@ export function buildSchedule(ym: string, emps: SchedEmp[], vac: Record<string, 
       need -= before.filter((d) => W.has(d) || V.has(d)).length
       need -= inMonth.filter((d) => V.has(d) && active(d) && !isClosed(d)).length
       need -= ersatz[e.id] || 0
-      const pool = inMonth.filter((d) => active(d) && !V.has(d) && !isClosed(d))
+      const pool = inMonth.filter((d) => active(d) && !V.has(d) && !O.has(d) && !isClosed(d))
       need = Math.max(0, Math.min(need, pool.length))
       perEmp[e.id] ||= { days: 0, minutes: 0, need: 0 }
       perEmp[e.id].need += need
