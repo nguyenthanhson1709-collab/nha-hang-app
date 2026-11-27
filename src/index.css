@@ -701,3 +701,6 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .sheet.sched ul.warn { margin: 6px 0 10px; padding-left: 18px; }
 .sheet.sched .pl-sum { width: 100%; margin: 8px 0; }
 .sched-f { display: flex; gap: 8px; justify-content: flex-end; position: sticky; bottom: 0; background: var(--card); padding-top: 8px; }
+/* Lịch làm nhân viên: khác tháng trước / nhân viên mới */
+.sm-tab td.chg { background: color-mix(in srgb, var(--brand, #FF9018) 26%, var(--card)); }
+.sm-tab tr.new td { background: color-mix(in srgb, #2fa36b 24%, var(--card)); }
