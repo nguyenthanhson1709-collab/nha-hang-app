@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { EMP_TYPES, POSITIONS, type Employee } from '../lib/hr'
 import type { Shift } from '../lib/hrTime'
 import type { Company } from '../hoadon/types'
+import { ERR_VI } from './i18n'
 import { belegNo, distribute, ermittlung, lastDay, monthMinutes, toCents, type Absence, type FileKind, type Kind, type PayMethod, type Rounding, type Status } from './calc'
 
 export const TG_BUCKET = 'nh-trinkgeld'
@@ -41,7 +42,16 @@ const num = <T extends object>(o: T): T => {
 const check = <T,>(r: { data: T; error: { message: string } | null }): T => { if (r.error) throw new Error(r.error.message); return r.data }
 
 /** Fehlermeldungen der Datenbank (NH_TG_…) lesbar machen */
+let errVi = false
+/** Giao diện tiếng Việt: dịch lỗi cơ sở dữ liệu */
+export const setTgErrLang = (vi: boolean) => { errVi = vi }
 export function tgErr(e: unknown): string {
+  const msg = tgErrDe(e)
+  if (!errVi) return msg
+  for (const [re, vi] of ERR_VI) if (re.test(msg)) return msg.replace(new RegExp('^.*' + re.source + '.*$'), vi)
+  return msg
+}
+function tgErrDe(e: unknown): string {
   const m = e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? String((e as { message: unknown }).message) : String(e)
   const hit = m.match(/NH_TG_[A-Z]+:?\s*(.*)/)
   if (hit) return hit[1] || m
