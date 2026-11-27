@@ -29,7 +29,7 @@ export default function Plan() {
   const [ym, setYm] = useState<string | null>(null)
   const [shifts, setShifts] = useState<Shift[] | null>(null)
   const [abs, setAbs] = useState<Vacation[]>([])
-  const [view, setView] = useState<'sum' | 'grid' | 'list'>('sum')
+  const [view, setView] = useState<'sum' | 'grid' | 'list'>('list')
   const [pdf, setPdf] = useState<Blob | null>(null)
   const [tick, setTick] = useState(0)
   const pm = useFollowMonth(setYm)
@@ -61,8 +61,8 @@ export default function Plan() {
   const months = useMemo(() => {
     if (!range) return []
     const out: string[] = []
-    // Cho chọn trước 6 tháng tới để lên lịch, kể cả khi chưa có ca
-    const ahead = new Date(); ahead.setDate(1); ahead.setMonth(ahead.getMonth() + 6)
+    // Tháng sau chỉ hiện từ ngày 25 hàng tháng (để lên lịch); trước đó tối đa là tháng hiện tại hoặc tháng đã có ca
+    const now = new Date(), ahead = new Date(now.getFullYear(), now.getMonth() + (now.getDate() >= 25 ? 1 : 0), 1, 12)
     const end = range[1] > ymOf(ahead) ? range[1] : ymOf(ahead)
     for (let d = new Date(`${range[0]}-01T12:00:00`); ymOf(d) <= end; d.setMonth(d.getMonth() + 1)) out.push(ymOf(d))
     return out.reverse()
@@ -89,13 +89,20 @@ export default function Plan() {
       <Top title={T('Xếp lịch', 'Dienstplan')} sub={company} back={`/r/${rid}/hr`} right={<LangSwitch />} />
       <div className="st">
         <div className="pl-ctrl">
-          <select value={ym || ''} onChange={(ev) => setYm(ev.target.value)} aria-label={T('Tháng', 'Monat')}>
-            {months.map((m) => <option key={m} value={m}>{monthLabel(m, de)}</option>)}
-          </select>
           <div className="seg">
+            <button className={view === 'list' ? 'sel' : ''} onClick={() => setView('list')}>{T('Lịch làm nhân viên', 'Mitarbeiterliste')}</button>
             <button className={view === 'sum' ? 'sel' : ''} onClick={() => setView('sum')}>{T('Tổng hợp', 'Zusammenfassung')}</button>
             <button className={view === 'grid' ? 'sel' : ''} onClick={() => setView('grid')}>{T('Lịch theo ngày', 'Monatsübersicht')}</button>
-            <button className={view === 'list' ? 'sel' : ''} onClick={() => setView('list')}>{T('Lịch làm nhân viên', 'Mitarbeiterliste')}</button>
+          </div>
+          {/* Chọn tháng: mũi tên trước/sau, bấm vào tên tháng để mở danh sách */}
+          <div className="pl-month">
+            <button aria-label={T('Tháng trước', 'Vormonat')} disabled={!ym || months.indexOf(ym) >= months.length - 1} onClick={() => setYm(months[months.indexOf(ym!) + 1])}>‹</button>
+            <label><b>{ym ? monthLabel(ym, de) : ''}</b>
+              <select value={ym || ''} onChange={(ev) => setYm(ev.target.value)} aria-label={T('Tháng', 'Monat')}>
+                {months.map((m) => <option key={m} value={m}>{monthLabel(m, de)}</option>)}
+              </select>
+            </label>
+            <button aria-label={T('Tháng sau', 'Folgemonat')} disabled={!ym || months.indexOf(ym) <= 0} onClick={() => setYm(months[months.indexOf(ym!) - 1])}>›</button>
           </div>
           {view !== 'list' && <button className="st-btn" disabled={!rows.length} onClick={() => setPdf(dienstplanPdf({ company, ym: ym!, rows: rows.map((x) => ({ name: `${x.e.last_name}, ${x.e.first_name}`, pnr: pnr(x.e), contract: x.contract, shifts: x.sh, vac: x.vac, noZ: noSurcharge(x.e) })) }))}>PDF</button>}
         </div>

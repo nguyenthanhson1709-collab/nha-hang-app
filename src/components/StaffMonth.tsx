@@ -12,7 +12,7 @@ import { buildSchedule, defaultSun, SUN_RULES, type SchedEmp, type SchedResult, 
  * trong nh_staff_month.data (xoá trống = quay về giá trị tự tính). Anrede, Fahrgeld, Gutschein lấy lại từ tháng trước.
  */
 type Emp = Employee & { id: string }
-type Col = { k: string; de: string; vi: string; w?: number; num?: boolean; sticky?: boolean; check?: boolean; noXlsx?: boolean; opts?: string[]; auto?: (e: Emp, st: ReturnType<typeof monthStat>) => string }
+type Col = { k: string; de: string; vi: string; w?: number; num?: boolean; sticky?: boolean; check?: boolean; noXlsx?: boolean; mon?: boolean; opts?: string[]; auto?: (e: Emp, st: ReturnType<typeof monthStat>) => string }
 const n = (v: number | null | undefined) => (v == null ? '' : String(v).replace('.', ','))
 const h = (m: number) => (m ? n(Math.round((m / 60) * 100) / 100) : '')
 const COLS: Col[] = [
@@ -26,17 +26,17 @@ const COLS: Col[] = [
   { k: 'entgelt', de: 'Entgelt', vi: 'Lương', w: 80, num: true, auto: (e) => n(e.gross_monthly ?? e.hourly_wage) },
   { k: 'eintritt', de: 'Eintritt', vi: 'Ngày vào', w: 90, auto: (e) => (e.entry_date ? dmy(e.entry_date) : '') },
   { k: 'austritt', de: 'Austritt', vi: 'Ngày nghỉ', w: 90, auto: (e) => (e.exit_date ? dmy(e.exit_date) : '') },
-  { k: 'nacht', de: 'Nachtzuschlag (Std)', vi: 'Giờ đêm', w: 70, num: true, auto: (_e, s) => h(s.night) },
-  { k: 'sonntag', de: 'Sonntagszuschlag (Std)', vi: 'Giờ Chủ nhật', w: 70, num: true, auto: (_e, s) => h(s.sun) },
-  { k: 'feiertag', de: 'Feiertagszuschlag (Std)', vi: 'Giờ ngày lễ', w: 70, num: true, auto: (_e, s) => h(s.hol) },
+  { k: 'nacht', mon: true, de: 'Nachtzuschlag (Std)', vi: 'Giờ đêm', w: 70, num: true, auto: (_e, s) => h(s.night) },
+  { k: 'sonntag', mon: true, de: 'Sonntagszuschlag (Std)', vi: 'Giờ Chủ nhật', w: 70, num: true, auto: (_e, s) => h(s.sun) },
+  { k: 'feiertag', mon: true, de: 'Feiertagszuschlag (Std)', vi: 'Giờ ngày lễ', w: 70, num: true, auto: (_e, s) => h(s.hol) },
   { k: 'fahrgeld', de: 'Fahrgeld', vi: 'Tiền đi lại', w: 70, sticky: true, opts: ['ja', 'nein'] },
-  { k: 'urlaub', de: 'Urlaubstage', vi: 'Ngày phép tháng', w: 70, num: true, auto: (_e, s) => (s.vac ? String(s.vac) : '') },
-  { k: 'gutschein', de: 'Gutschein 50€', vi: 'Gutschein 50€', w: 70, check: true },
+  { k: 'urlaub', mon: true, de: 'Urlaubstage', vi: 'Ngày phép tháng', w: 70, num: true, auto: (_e, s) => (s.vac ? String(s.vac) : '') },
+  { k: 'gutschein', mon: true, de: 'Gutschein 50€', vi: 'Gutschein 50€', w: 70, check: true },
   { k: 'bank', de: 'Bank', vi: 'Ngân hàng / IBAN', w: 210, auto: (e) => e.iban || e.bank_name || '' },
   { k: 'jahresurlaub', de: 'Jahresurlaub', vi: 'Phép năm', w: 70, num: true, auto: (e) => n(e.vacation_year) },
-  { k: 'resturlaub', de: 'Resturlaub', vi: 'Phép còn lại', w: 70, num: true, auto: (e) => n(e.vacation_left) },
-  { k: 'anwesend', de: 'Anwesenheitstage', vi: 'Ngày đi làm', w: 70, num: true, auto: (_e, s) => (s.days ? String(s.days) : '') },
-  { k: 'ist', de: 'Ist-Std gesamt', vi: 'Tổng giờ', w: 70, num: true, auto: (_e, s) => h(s.ist) },
+  { k: 'resturlaub', mon: true, de: 'Resturlaub', vi: 'Phép còn lại', w: 70, num: true, auto: (e) => n(e.vacation_left) },
+  { k: 'anwesend', mon: true, de: 'Anwesenheitstage', vi: 'Ngày đi làm', w: 70, num: true, auto: (_e, s) => (s.days ? String(s.days) : '') },
+  { k: 'ist', mon: true, de: 'Ist-Std gesamt', vi: 'Tổng giờ', w: 70, num: true, auto: (_e, s) => h(s.ist) },
   // Quy tắc Chủ nhật cho bộ xếp lịch: không hiện trong bảng, không xuất Excel (vẫn lưu theo tháng)
   { k: 'sonntagsregel', de: 'Sonntage', vi: 'Quy tắc Chủ nhật', w: 80, sticky: true, noXlsx: true, opts: SUN_RULES, auto: (e) => defaultSun(e.work_days) },
 ]
@@ -51,6 +51,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
   const T = (vi: string, g: string) => (de ? g : vi)
   const [saved, setSaved] = useState<Record<string, Data> | null>(null)
   const [prev, setPrev] = useState<Record<string, Data>>({})
+  const [last, setLast] = useState<Record<string, Data>>({})   // dữ liệu tháng trước, để đánh dấu ô thay đổi
   const [showPay, setShowPay] = useState(false)
   const [edit, setEdit] = useState<{ id: string; k: string; v: string } | null>(null)
   const [plan, setPlan] = useState<(SchedResult & { from: string; replace: number }) | null>(null)
@@ -62,13 +63,16 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
     setSaved(null)
     supabase.from('nh_staff_month').select('employee_id,ym,data').eq('restaurant_id', rid).lte('ym', ym).order('ym').limit(5000).then(({ data, error }) => {
       if (error) { toast(error.message); setSaved({}); return }
-      const cur: Record<string, Data> = {}, before: Record<string, Data> = {}
+      const cur: Record<string, Data> = {}, before: Record<string, Data> = {}, lm: Record<string, Data> = {}
+      const pd = new Date(`${ym}-01T12:00:00`); pd.setMonth(pd.getMonth() - 1)
+      const pym = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, '0')}`
       for (const r of (data || []) as { employee_id: string; ym: string; data: Data }[]) {
+        if (r.ym === pym) lm[r.employee_id] = r.data || {}
         if (r.ym === ym) cur[r.employee_id] = r.data || {}
         // Anrede / Fahrgeld / Gutschein: giá trị gần nhất của các tháng trước
         else for (const c of COLS) if (c.sticky && r.data?.[c.k] != null) (before[r.employee_id] ||= {})[c.k] = r.data[c.k]
       }
-      setSaved(cur); setPrev(before)
+      setSaved(cur); setPrev(before); setLast(lm)
     })
   }, [rid, ym])
 
@@ -89,6 +93,14 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
     if (c.sticky) return { v: prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : ''), own: false }
     return { v: c.auto ? c.auto(e, st) : '', own: false }
   }
+
+  // So với tháng trước: ô khác giá trị tháng trước được tô nền; nhân viên vào làm trong tháng này tô cả dòng
+  const changed = (e: Emp, st: ReturnType<typeof monthStat>, c: Col, v: string) => {
+    if (c.mon || c.check || c.noXlsx) return false
+    const was = c.sticky ? (prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : '')) : (last[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : ''))
+    return v.trim() !== was.trim()
+  }
+  const isNew = (e: Emp) => !!e.entry_date && e.entry_date >= `${ym}-01`
 
   async function commit(e: Emp, st: ReturnType<typeof monthStat>, c: Col, raw: string) {
     setEdit(null)
@@ -167,7 +179,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
     <>
       <div className="sm-bar">
         {canPlan && <button className="st-btn primary" disabled={busy || !rows.length} onClick={makePlan}>{busy && !plan ? '…' : T('Xếp lịch', 'Dienstplan erstellen')}</button>}
-        <span className="small muted">{T('Ô tự điền từ hồ sơ và lịch làm. Bấm vào ô để sửa; ô đã sửa có vạch cam bên trái, xoá trống để quay về giá trị tự tính.', 'Felder werden aus Personalakte und Dienstplan übernommen. Zum Ändern anklicken; geänderte Felder sind orange markiert, leeren = automatischer Wert.')}</span>
+        <span className="small muted">{T('Ô tự điền từ hồ sơ và lịch làm. Bấm vào ô để sửa; ô đã sửa có vạch cam bên trái, xoá trống để quay về giá trị tự tính. Nền cam: khác tháng trước; dòng nền xanh: nhân viên mới.', 'Felder werden aus Personalakte und Dienstplan übernommen. Zum Ändern anklicken; geänderte Felder sind orange markiert, leeren = automatischer Wert. Orange hinterlegt: anders als Vormonat; grüne Zeile: neuer Mitarbeiter.')}</span>
         <button className="st-btn" onClick={() => setShowPay(!showPay)}>{showPay ? T('Ẩn lương', 'Entgelt ausblenden') : T('Xem lương', 'Entgelt anzeigen')}</button>
         <button className="st-btn" disabled={!rows.length} onClick={exportXlsx}>Excel</button>
       </div>
@@ -177,11 +189,11 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
             <thead><tr>{XCOLS.map((c) => <th key={c.k} lang="de" className={c.num ? '' : 'l'} style={{ minWidth: c.num ? undefined : Math.round((c.w || 70) * 0.8) }}>{c.de}{!de && <small>{c.vi}</small>}</th>)}</tr></thead>
             <tbody>
               {rows.map(({ e, st }) => (
-                <tr key={e.id}>
+                <tr key={e.id} className={isNew(e) ? 'new' : ''}>
                   {XCOLS.map((c) => {
                     const { v, own } = val(e, st, c)
                     const editing = edit?.id === e.id && edit.k === c.k
-                    const cls = `${c.num ? '' : 'l'}${own ? ' own' : ''}`
+                    const cls = `${c.num ? '' : 'l'}${own ? ' own' : ''}${!isNew(e) && changed(e, st, c, v) ? ' chg' : ''}`
                     if (editing) return (
                       <td key={c.k} className={`${cls} ed`}>
                         {c.opts ? (
