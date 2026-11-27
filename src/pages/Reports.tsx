@@ -6,6 +6,7 @@ import { remember } from '../lib/categorize'
 import { canManage, catName, useApp, useRole } from '../lib/app'
 import { DayBar, QuarterBar, YearBar } from '../components/PeriodBar'
 import { MonthBar } from '../components/MonthBar'
+import { useFollowMonth } from '../lib/useMonthParam'
 import { useLang, useT } from '../lib/i18n'
 import { addMonths, daysOfMonth, dmy, eur, monthLabel, monthRange, r2, thisMonth } from '../lib/format'
 import { grossDoc, signCredit } from '../lib/lines'
@@ -110,6 +111,7 @@ export default function Reports() {
   const [tab, setTab] = useState<Tab | null>(null)
   const [mode, setMode] = useState<Mode>('month')
   const [anchor, setAnchor] = useState(thisMonth())
+  useFollowMonth((m) => { setMode('month'); setAnchor(m) })
   const [day, setDay] = useState(() => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }))
   const [custom, setCustom] = useState(monthRange(thisMonth()))
   const [docs, setDocs] = useState<Doc[] | null>(null)

@@ -637,3 +637,27 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .pick-box { width: 24px; height: 24px; flex: none; border-radius: 6px; border: 2px solid var(--muted, #888); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; color: #15120F; margin-right: 10px; }
 .pick-box.on { background: var(--brand, #FF9018); border-color: var(--brand, #FF9018); }
 .it.picked { background: rgb(255 144 24 / .08); }
+
+/* Trợ lý giọng nói: nút micro nổi góc phải dưới, cạnh logo trang chủ */
+.as-fab { position: fixed; right: 16px; bottom: calc(22px + env(safe-area-inset-bottom)); z-index: 21; width: 56px; height: 56px; min-height: 0; padding: 0; border-radius: 50%;
+  background: var(--brand); color: var(--on-brand); border: 0; box-shadow: 0 6px 18px rgb(0 0 0 / .5); }
+.as-fab:active { transform: scale(.94); }
+@media (max-width: 640px) { .as-fab.hide-m { display: none; } }
+@media print { .as-fab { display: none; } }
+.as-sheet { max-width: 520px; }
+.as-lang { flex-wrap: nowrap; }
+.as-lang button { min-width: 0; min-height: 34px; padding: 4px 10px; font-size: .8rem; }
+.as-stage { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 0 16px; }
+.as-mic { width: 84px; height: 84px; border-radius: 50%; padding: 0; background: var(--brand-2); color: var(--brand); border: 2px solid var(--brand); }
+.as-mic svg { width: 36px; height: 36px; }
+.as-mic.on { background: var(--brand); color: var(--on-brand); animation: as-pulse 1.3s ease-out infinite; }
+.as-mic.think { opacity: .8; }
+@keyframes as-pulse { 0% { box-shadow: 0 0 0 0 rgb(255 144 24 / .55); } 100% { box-shadow: 0 0 0 22px rgb(255 144 24 / 0); } }
+.as-said { min-height: 1.5em; text-align: center; font-size: 1.1rem; font-weight: 600; max-width: 100%; overflow-wrap: anywhere; }
+.spinner.sm { width: 26px; height: 26px; }
+.as-form { gap: 8px; margin: 4px 0 10px; flex-wrap: nowrap; }
+.as-form input { flex: 1; min-width: 0; }
+.as-ex { display: flex; flex-wrap: wrap; gap: 6px; }
+.as-ex .chip { min-height: 34px; padding: 6px 12px; border-radius: 999px; font-size: .85rem; color: var(--muted); }
+.as-opt { width: 100%; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; justify-content: space-between; text-align: left; }
+@media (prefers-reduced-motion: reduce) { .as-mic.on { animation: none; } }

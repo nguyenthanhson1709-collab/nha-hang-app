@@ -35,6 +35,7 @@ import RcRecipeView from './congthuc/pages/RecipeView'
 import RcRecipeEditor from './congthuc/pages/RecipeEditor'
 import RcIngredients from './congthuc/pages/Ingredients'
 import RcConcepts from './congthuc/pages/Concepts'
+import Assistant from './components/Assistant'
 
 // Mở app mới (tab mới / mở lại từ màn hình chính) -> luôn về trang đầu, không quay lại trang cũ (vd. trang scan).
 // Tải lại trang trong cùng một tab thì vẫn giữ trang đang xem.
@@ -134,6 +135,7 @@ function Shell({ session }: { session: Session }) {
           <Route path="*" element={<Navigate to={start} replace />} />
         </Routes>
         <HomeNav start={start} />
+        <Assistant />
       </HashRouter>
     </AppCtx.Provider>
   )

@@ -10,6 +10,7 @@ import { dienstplanPdf } from '../lib/hrTimePdf'
 import { Spinner, Top, useRestaurant } from '../components/ui'
 import { LangSwitch } from '../components/LangSwitch'
 import PdfSheet from '../components/PdfSheet'
+import { useFollowMonth } from '../lib/useMonthParam'
 
 type Emp = Employee & { id: string }
 const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -29,6 +30,7 @@ export default function Plan() {
   const [abs, setAbs] = useState<Vacation[]>([])
   const [view, setView] = useState<'sum' | 'grid'>('sum')
   const [pdf, setPdf] = useState<Blob | null>(null)
+  const pm = useFollowMonth(setYm)
 
   useEffect(() => { const el = document.getElementById('root'); el?.classList.add('xwide'); return () => el?.classList.remove('xwide') }, [])
   useEffect(() => {
@@ -41,7 +43,7 @@ export default function Plan() {
     ]).then(([a, b]) => {
       const lo = a.data?.[0]?.shift_date?.slice(0, 7), hi = b.data?.[0]?.shift_date?.slice(0, 7)
       const now = ymOf(new Date())
-      setRange([lo || now, hi || now]); setYm(hi || now)
+      setRange([lo || now, hi || now]); setYm(pm || hi || now)
     })
   }, [rid])
   useEffect(() => {
