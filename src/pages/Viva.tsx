@@ -12,7 +12,9 @@ import { MonthBar } from '../components/MonthBar'
 export interface VivaAccount {
   restaurant_id: string; merchant_id: string; has_key: boolean; source_codes: string | null; terminal_ids: string | null
   cutoff_hour: number; auto_sync: boolean; demo: boolean; last_sync_at: string | null; last_error: string | null; last_error_at: string | null
+  webhook_token?: string; wallets?: Wallet[] | null; wallets_at?: string | null; last_hook_at?: string | null
 }
+interface Wallet { id: string; name: string; iban: string; primary: boolean; amount: number; available: number; overdraft: number; currency: string }
 interface VivaDay { day: string; amount: number; tip: number; refunds: number; n_tx: number }
 
 const ERR: Record<string, [string, string]> = {
@@ -50,6 +52,10 @@ export default function Viva() {
   const [zcard, setZcard] = useState<Record<string, number>>({})
   const [kb, setKb] = useState<Record<string, number>>({})
   const [busy, setBusy] = useState('')
+  const [wallets, setWallets] = useState<Wallet[] | null>(null)
+  const [walletErr, setWalletErr] = useState('')
+  // Số dư mặc định che mờ, bấm con mắt để xem (không nhớ lại, mở trang lần sau lại mờ)
+  const [showBal, setShowBal] = useState(false)
   const [edit, setEdit] = useState<{ merchant_id: string; api_key: string; source_codes: string; terminal_ids: string; cutoff_hour: number; auto_sync: boolean } | null>(null)
 
   const load = useCallback(async () => {
@@ -70,6 +76,14 @@ export default function Viva() {
     setDays(dd); setZcard(zz); setKb(kk)
   }, [rid, period])
   useEffect(() => { if (r) load() }, [r, load])
+  // Guthaben: hỏi Viva mỗi lần mở trang (khi đã có khoá)
+  const loadWallets = useCallback(async () => {
+    setWalletErr('')
+    try { const res = await vivaCall({ action: 'wallets', restaurant_id: rid }, lang === 'de'); setWallets(res.wallets || []) }
+    catch (e) { setWalletErr(errMsg(e)) }
+  }, [rid, lang])
+  const hasKey = !!acc?.has_key
+  useEffect(() => { if (hasKey) loadWallets() }, [hasKey, loadWallets])
 
   if (!r || !canManage(role)) return null
   const connected = !!acc?.has_key
@@ -152,6 +166,37 @@ export default function Viva() {
           {connected && r.card_source !== 'viva' && <div className="alert warn small">
             {de ? 'Das Kassenbuch rechnet die Kartenzahlung gerade lt. Z-Bon: Viva-Beträge werden gespeichert, aber nicht verwendet.' : 'Kassenbuch đang tính Kartenzahlung theo Z-Bon: số Viva vẫn được lưu nhưng chưa dùng.'}
             {owner && <> <button className="small" style={{ marginLeft: 6 }} onClick={useViva}>{de ? 'lt. Viva Wallet rechnen' : 'Chuyển sang theo Viva Wallet'}</button></>}
+          </div>}
+
+          {connected && <div className="card">
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <h3 style={{ margin: 0 }}>{de ? 'Verfügbares Guthaben' : 'Số dư khả dụng'}</h3>
+              <div className="row" style={{ gap: 4 }}>
+                <button className="ghost small" onClick={() => setShowBal(!showBal)} aria-label={showBal ? (de ? 'Ausblenden' : 'Ẩn') : (de ? 'Anzeigen' : 'Hiện')} title={showBal ? (de ? 'Ausblenden' : 'Ẩn') : (de ? 'Anzeigen' : 'Hiện')}>
+                  <svg className="lu" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    {showBal
+                      ? <><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" /><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" /><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" /><path d="m2 2 20 20" /></>
+                      : <><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /><circle cx="12" cy="12" r="3" /></>}
+                  </svg>
+                </button>
+                <button className="ghost small" onClick={loadWallets} title={de ? 'Aktualisieren' : 'Tải lại'}>↻</button>
+              </div>
+            </div>
+            {walletErr ? <div className="alert err small">{walletErr}</div>
+              : !wallets ? <div className="small muted">…</div>
+              : !wallets.length ? <div className="small muted">{de ? 'Kein Wallet gefunden' : 'Không thấy ví nào'}</div>
+              : wallets.map((w) => (
+                <div key={w.id} className="row" style={{ justifyContent: 'space-between', marginTop: 8, gap: 8 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div><b>{w.name || 'Wallet'}</b>{w.primary ? <span className="tag" style={{ marginLeft: 6 }}>{de ? 'Haupt' : 'Chính'}</span> : null}</div>
+                    {w.iban && <div className="small muted">{w.iban}</div>}
+                  </div>
+                  <div className="right">
+                    <div className="num" style={{ fontSize: '1.25rem', filter: showBal ? undefined : 'blur(8px)', userSelect: showBal ? undefined : 'none', transition: 'filter .2s', cursor: 'pointer' }}
+                      onClick={() => setShowBal(!showBal)} aria-hidden={!showBal}><b>{eur(w.available)}</b></div>
+                  </div>
+                </div>
+              ))}
           </div>}
 
           <MonthBar value={period} onChange={setPeriod} />

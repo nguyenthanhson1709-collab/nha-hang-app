@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { getCounter, insertMany, listArticles, listCustomers, loadCompany, saveCompany, setCounter } from '../api'
+import { getCounter, insertMany, listArticles, listCustomers, loadCompany, saveCompany, saveLogo, setCounter } from '../api'
 import type { Company } from '../types'
 import { todayIso } from '../money'
 import { InvShell, useL } from '../ui'
@@ -11,14 +11,37 @@ interface LexwareExport {
   contacts: { nr: string; typ: string; name: string; strasse: string; plz: string; ort: string; email?: string }[]
 }
 
-async function resizeImage(file: File, maxW = 600, maxH = 240): Promise<string> {
-  const img = new Image()
-  img.src = URL.createObjectURL(file)
-  await img.decode()
-  const scale = Math.min(1, maxW / img.width, maxH / img.height)
+/** Logo: nhận PNG/JPG/WebP/HEIC (nếu trình duyệt đọc được) hoặc PDF (lấy trang 1), cắt bớt viền trắng, thu nhỏ, trả về PNG data URL */
+async function logoFromFile(file: File, maxW = 600, maxH = 240): Promise<string> {
+  let src: HTMLCanvasElement | HTMLImageElement
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+    const { pdfToCanvases } = await import('../../lib/ocr')
+    const pages = await pdfToCanvases(file, 1200)
+    if (!pages.length) throw new Error('PDF trống')
+    src = pages[0]
+  } else {
+    const img = new Image()
+    img.src = URL.createObjectURL(file)
+    await img.decode()
+    src = img
+  }
+  const w0 = src.width, h0 = src.height
+  const full = document.createElement('canvas'); full.width = w0; full.height = h0
+  const fx = full.getContext('2d')!
+  fx.drawImage(src, 0, 0)
+  // Cắt viền trắng / trong suốt
+  const d = fx.getImageData(0, 0, w0, h0).data
+  let x0 = w0, y0 = h0, x1 = -1, y1 = -1
+  for (let y = 0; y < h0; y++) for (let x = 0; x < w0; x++) {
+    const i = (y * w0 + x) * 4
+    if (d[i + 3] > 16 && (d[i] < 245 || d[i + 1] < 245 || d[i + 2] < 245)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }
+  }
+  if (x1 < x0) { x0 = 0; y0 = 0; x1 = w0 - 1; y1 = h0 - 1 }
+  const cw = x1 - x0 + 1, ch = y1 - y0 + 1
+  const scale = Math.min(1, maxW / cw, maxH / ch)
   const canvas = document.createElement('canvas')
-  canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale)
-  canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+  canvas.width = Math.max(1, Math.round(cw * scale)); canvas.height = Math.max(1, Math.round(ch * scale))
+  canvas.getContext('2d')!.drawImage(full, x0, y0, cw, ch, 0, 0, canvas.width, canvas.height)
   return canvas.toDataURL('image/png')
 }
 
@@ -28,6 +51,7 @@ export default function InvSettings() {
   const [c, setC] = useState<Company | null>(null)
   const [err, setErr] = useState('')
   const [ok, setOk] = useState('')
+  const [logoMsg, setLogoMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const period = todayIso().slice(0, 7).replace('-', '')
   const [counter, setCounterVal] = useState('')
   const [counter0, setCounter0] = useState('')
@@ -54,6 +78,21 @@ export default function InvSettings() {
       if (counter !== counter0 && Number.isFinite(n) && n >= 0) { await setCounter(rid!, period, n); setCounter0(String(n)) }
       setOk(L('Đã lưu cài đặt.', 'Einstellungen gespeichert.'))
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  // Logo lưu ngay khi chọn (không cần bấm Lưu cài đặt)
+  async function setLogo(url: string | null) {
+    setLogoMsg(null)
+    try {
+      await saveLogo(rid!, url)
+      setC((x) => (x ? { ...x, logo_url: url } : x))
+      setLogoMsg({ ok: true, text: url ? L('Đã lưu logo. Hoá đơn sẽ in logo này.', 'Logo gespeichert.') : L('Đã bỏ logo.', 'Logo entfernt.') })
+    } catch (e) { setLogoMsg({ ok: false, text: (e as Error).message }) }
+  }
+  async function uploadLogo(file: File) {
+    try { await setLogo(await logoFromFile(file)) } catch {
+      setLogoMsg({ ok: false, text: L(`Không đọc được file "${file.name}". Hãy dùng ảnh PNG/JPG hoặc PDF.`, `Datei „${file.name}" konnte nicht gelesen werden. Bitte PNG/JPG oder PDF verwenden.`) })
+    }
   }
 
   async function importLexware(file: File) {
@@ -118,16 +157,15 @@ export default function InvSettings() {
           <span className="lbl">Logo (PNG/JPG)</span>
           <div className="toolbar">
             {c.logo_url && <img src={c.logo_url} alt="Logo" style={{ maxHeight: 60, maxWidth: 200, background: '#fff', borderRadius: 8, padding: 4 }} />}
-            <label className="btn drop" {...dropProps(async (fl) => {
-              const file = Array.from(fl).find((x) => /^image\/(png|jpeg)$/.test(x.type)); if (file) setC({ ...c, logo_url: await resizeImage(file) })
-            })}>
-              🖼️ {L('Chọn logo', 'Logo wählen')}<span className="drop-hint">{L('hoặc kéo thả ảnh vào đây', 'oder Bild hierher ziehen')}</span>
-              <input type="file" accept="image/png,image/jpeg" hidden onChange={async (e) => {
-                const file = e.target.files?.[0]; e.target.value = ''; if (file) setC({ ...c, logo_url: await resizeImage(file) })
+            <label className="btn drop" {...dropProps((fl) => { const file = Array.from(fl)[0]; if (file) uploadLogo(file) })}>
+              🖼️ {L('Chọn logo', 'Logo wählen')}<span className="drop-hint">{L('ảnh hoặc PDF, hoặc kéo thả vào đây', 'Bild oder PDF, oder hierher ziehen')}</span>
+              <input type="file" accept="image/*,application/pdf" hidden onChange={(e) => {
+                const file = e.target.files?.[0]; e.target.value = ''; if (file) uploadLogo(file)
               }} />
             </label>
-            {c.logo_url && <button className="sm" onClick={() => setC({ ...c, logo_url: null })}>{L('Bỏ logo', 'Logo entfernen')}</button>}
+            {c.logo_url && <button className="sm" onClick={() => setLogo(null)}>{L('Bỏ logo', 'Logo entfernen')}</button>}
           </div>
+          {logoMsg && <div className={logoMsg.ok ? 'okmsg' : 'err'}>{logoMsg.text}</div>}
         </div>
       </div>
 

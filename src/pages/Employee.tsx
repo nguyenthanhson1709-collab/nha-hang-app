@@ -39,6 +39,8 @@ const GI = {
   note: <><path d="M5 4h14v16H5z" /><path d="M9 9h6M9 13h6M9 17h3" /></>,
   file: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /></>,
   folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
+  eye: <><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /><circle cx="12" cy="12" r="3" /></>,
+  eyeOff: <><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" /><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" /><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" /><path d="m2 2 20 20" /></>,
   pen: <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />,
   lock: <><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>,
   camera: <><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></>,
@@ -117,6 +119,8 @@ export default function EmployeePage() {
   // Bản xem trước: chưa lưu gì cho tới khi bấm Lưu
   const [pv, setPv] = useState<{ title: string; pdf: Blob; docx?: Blob; base: string; kind: 'contract' | 'certificate'; miss?: string; saved?: boolean } | null>(null)
   /** Chọn nhiều bảng lương để gửi WhatsApp: path → File (tải sẵn khi chọn để bấm Gửi mở bảng chia sẻ ngay) */
+  /** Tiền lương mặc định làm mờ, bấm con mắt (hoặc bấm vào số) để xem */
+  const [showPay, setShowPay] = useState(false)
   const [pick, setPick] = useState<Record<string, File | null> | null>(null)
   const [fv, setFv] = useState<{ title: string; blob: Blob; name: string; slip?: boolean } | null>(null)
   const [exitF, setExitF] = useState<{ date: string | null; reason: string } | null>(null)
@@ -377,6 +381,7 @@ export default function EmployeePage() {
   }
   // Người dùng yêu cầu (26/11): bấm Sửa thì sửa được toàn bộ thông tin, không còn mục khoá
   const editable = (_f: FD) => true
+  const PAY_K: K[] = ['gross_monthly', 'hourly_wage']
   const sub = (k: K) => (!de && k === 'residence_permit' && permitInfo(e.residence_permit) ? permitInfo(e.residence_permit)![1] : null)
   const group = (id: GroupId, o: { flat?: boolean; acc?: boolean; extra?: ReactNode } = {}) => {
     const G = GROUPS[id]
@@ -399,9 +404,10 @@ export default function EmployeePage() {
             const v = show(f.k)
             return (
               <div key={f.k} className={`kv-i${f.full || (mobile && f.mfull) ? ' full' : ''}`}>
-                <div className="kv-l">{lab(labelOf[f.k] || String(f.k))}{editing && !editable(f) && <span className="kv-lock" title={T('Cố định', 'Fest')}><GIcon k="lock" /></span>}</div>
+                <div className="kv-l">{lab(labelOf[f.k] || String(f.k))}{!editing && v && PAY_K.includes(f.k) && eyeBtn}{editing && !editable(f) && <span className="kv-lock" title={T('Cố định', 'Fest')}><GIcon k="lock" /></span>}</div>
                 {editing && editable(f) ? edInput(f.k) : <>
-                  <div className={`kv-v${v ? '' : ' empty'}`}>{v || (mobile ? '—' : T('Chưa cập nhật', 'Nicht erfasst'))}</div>
+                  {v && PAY_K.includes(f.k) ? <div className={`kv-v${showPay ? '' : ' masked'}`} onClick={() => setShowPay(!showPay)}>{v}</div>
+                    : <div className={`kv-v${v ? '' : ' empty'}`}>{v || (mobile ? '—' : T('Chưa cập nhật', 'Nicht erfasst'))}</div>}
                   {v && sub(f.k) && <div className="kv-sub">{sub(f.k)}</div>}
                 </>}
               </div>
@@ -740,6 +746,10 @@ export default function EmployeePage() {
     setBusy(false)
   }
   const initials = [e.first_name, e.last_name].map((x) => (x || '').trim()[0] || '').join('').toUpperCase()
+  const eyeBtn = (
+    <button type="button" className="eye-btn" onClick={() => setShowPay(!showPay)} aria-label={showPay ? T('Ẩn lương', 'Lohn ausblenden') : T('Xem lương', 'Lohn anzeigen')} title={showPay ? T('Ẩn', 'Ausblenden') : T('Xem', 'Anzeigen')}>
+      <GIcon k={showPay ? 'eyeOff' : 'eye'} />
+    </button>)
   const pay = e.gross_monthly != null ? eur(Number(e.gross_monthly)) : e.hourly_wage != null ? `${eur(Number(e.hourly_wage))} / ${T('giờ', 'Std.')}` : ''
   const ABS: Record<string, [string, string]> = { vacation: ['Nghỉ phép', 'Urlaub'], sick: ['Nghỉ ốm', 'Krank'], unpaid: ['Nghỉ không lương', 'Unbezahlt'], other: ['Khác', 'Sonstiges'] }
   const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5) + 1
@@ -883,7 +893,7 @@ export default function EmployeePage() {
               </div>
             </div>
             <div className="ph-stats">
-              <div><span>{L('Lương tháng', 'Monatslohn')}</span><b className={pay ? 'accent' : 'empty'}>{pay || T('Chưa cập nhật', 'Nicht erfasst')}</b></div>
+              <div><span>{L('Lương tháng', 'Monatslohn')}{pay && eyeBtn}</span><b className={pay ? `accent${showPay ? '' : ' masked'}` : 'empty'} onClick={pay ? () => setShowPay(!showPay) : undefined}>{pay || T('Chưa cập nhật', 'Nicht erfasst')}</b></div>
               <div><span>{L('Ngày vào làm', 'Eintritt')}</span><b className={e.entry_date ? '' : 'empty'}>{e.entry_date ? dmy(e.entry_date) : T('Chưa cập nhật', 'Nicht erfasst')}</b></div>
               <div><span>{L('Hợp đồng', 'Beschäftigung')}</span><b className={e.employment_type ? '' : 'empty'}>{e.employment_type ? EMP_TYPES[e.employment_type][li] : T('Chưa cập nhật', 'Nicht erfasst')}</b></div>
             </div>

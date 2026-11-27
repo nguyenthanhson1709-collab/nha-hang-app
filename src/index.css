@@ -661,3 +661,8 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .as-ex .chip { min-height: 34px; padding: 6px 12px; border-radius: 999px; font-size: .85rem; color: var(--muted); }
 .as-opt { width: 100%; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; justify-content: space-between; text-align: left; }
 @media (prefers-reduced-motion: reduce) { .as-mic.on { animation: none; } }
+/* Tiền lương làm mờ, bấm con mắt để xem */
+.masked { filter: blur(8px); user-select: none; cursor: pointer; transition: filter .2s; }
+.eye-btn { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; width: 28px; height: 28px; min-height: 0; padding: 0; margin: -6px 0 -6px 4px; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.eye-btn:hover { color: var(--brand); }
+.eye-btn svg { width: 18px; height: 18px; }

@@ -10,6 +10,12 @@ watchUpdates()
 swipeBack()
 blockStrayDrops()
 
+// Ngân hàng (Enable Banking) trả về https://app.../?code=...&state=... -> chuyển sang trang #/bank-callback
+{
+  const q = new URLSearchParams(location.search)
+  if (q.get('state') && (q.get('code') || q.get('error'))) history.replaceState(null, '', `${location.pathname}#/bank-callback?${q}`)
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
