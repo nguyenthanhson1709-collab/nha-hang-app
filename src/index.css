@@ -637,3 +637,8 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .pick-box { width: 24px; height: 24px; flex: none; border-radius: 6px; border: 2px solid var(--muted, #888); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; color: #15120F; margin-right: 10px; }
 .pick-box.on { background: var(--brand, #FF9018); border-color: var(--brand, #FF9018); }
 .it.picked { background: rgb(255 144 24 / .08); }
+/* Tiền lương làm mờ, bấm con mắt để xem */
+.masked { filter: blur(8px); user-select: none; cursor: pointer; transition: filter .2s; }
+.eye-btn { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; width: 28px; height: 28px; min-height: 0; padding: 0; margin: -6px 0 -6px 4px; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.eye-btn:hover { color: var(--brand); }
+.eye-btn svg { width: 18px; height: 18px; }
