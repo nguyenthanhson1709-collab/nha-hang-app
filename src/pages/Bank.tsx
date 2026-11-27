@@ -13,8 +13,34 @@ import { MonthBar } from '../components/MonthBar'
 interface BankApp { app_id: string; has_key: boolean; updated_at: string }
 interface Link { id: string; restaurant_id: string; aspsp_name: string; status: 'pending' | 'active' | 'expired' | 'error'; valid_until: string | null; last_sync_at: string | null; last_error: string | null; last_error_at: string | null; created_at: string }
 interface Account { uid: string; link_id: string; iban: string | null; name: string | null; currency: string | null; balance: number | null; balance_type: string | null; balance_at: string | null; enabled: boolean }
-interface Tx { id: string; iban: string | null; booking_date: string | null; value_date: string | null; amount: number; currency: string | null; counterparty: string | null; counterparty_iban: string | null; purpose: string | null; status: string | null }
+interface Tx { id: string; iban: string | null; booking_date: string | null; value_date: string | null; amount: number; currency: string | null; counterparty: string | null; counterparty_iban: string | null; purpose: string | null; status: string | null; btc?: { code?: string; sub_code?: string; description?: string } | null }
 interface Aspsp { name: string; country: string; logo?: string; psu_types?: string[]; beta?: boolean; max_days?: number | null }
+
+// Loại thanh toán theo mã giao dịch ngân hàng (ISO 20022 Bank Transaction Code: domain / family / sub-family)
+const PAY: Record<string, [string, string]> = {
+  in: ['Tiền chuyển đến', 'Überweisungseingang'],
+  out: ['Chuyển khoản đi', 'Überweisung'],
+  instant: ['Chuyển khoản tức thì', 'Echtzeitüberweisung'],
+  standing: ['Lệnh chuyển định kỳ', 'Dauerauftrag'],
+  debit: ['Ghi nợ tự động (Lastschrift)', 'Lastschrift'],
+  b2b: ['Ghi nợ doanh nghiệp (Firmenlastschrift)', 'Firmenlastschrift'],
+  card: ['Thanh toán thẻ', 'Kartenzahlung'],
+  fee: ['Phí tài khoản', 'Kontoführung / Entgelte'],
+  returned: ['Bị trả lại', 'Rückbuchung'],
+  other: ['Khác', 'Sonstiges'],
+}
+function payType(t: Pick<Tx, 'btc' | 'amount'>): string {
+  const d = t.btc?.description || '', c = t.btc?.code || '', sc = t.btc?.sub_code || ''
+  if (d === 'ACMT') return 'fee'
+  if (sc === 'RRTN' || c === 'RRTN') return 'returned'
+  if (c === 'RCDT' || c === 'RRCT') return 'in'
+  if (c === 'RDDT' || c === 'IDDT') return sc === 'BBDD' ? 'b2b' : 'debit'
+  if (c === 'CCRD' || c === 'DCRD' || sc === 'POSD') return 'card'
+  if (sc === 'STDO') return 'standing'
+  if (c === 'IRCT') return 'instant'
+  if (c === 'ICDT') return 'out'
+  return t.amount > 0 && d === 'PMNT' ? 'in' : 'other'
+}
 
 const REDIRECT = location.hostname === 'localhost' ? 'http://localhost:5173/' : 'https://app.vietbowlmitte.de/'
 
@@ -74,6 +100,7 @@ export default function Bank() {
   const [period, setPeriod] = useState(thisMonth())
   const [iban, setIban] = useState('')
   const [q, setQ] = useState('')
+  const [ptype, setPtype] = useState('')
   const [busy, setBusy] = useState('')
   const [showBal, setShowBal] = useState(false)
   const [setup, setSetup] = useState<{ app_id: string; pem: string; file: string } | null>(null)
@@ -88,7 +115,7 @@ export default function Bank() {
       owner ? supabase.from('nh_bank_app').select('*').eq('id', 1).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from('nh_bank_links').select('*').eq('restaurant_id', rid!).order('created_at'),
       supabase.from('nh_bank_accounts').select('*').eq('restaurant_id', rid!).order('iban'),
-      supabase.from('nh_bank_tx').select('id, iban, booking_date, value_date, amount, currency, counterparty, counterparty_iban, purpose, status').eq('restaurant_id', rid!).gte('booking_date', from).lte('booking_date', to).order('booking_date', { ascending: false }).limit(2000),
+      supabase.from('nh_bank_tx').select('id, iban, booking_date, value_date, amount, currency, counterparty, counterparty_iban, purpose, status, btc:raw->bank_transaction_code').eq('restaurant_id', rid!).gte('booking_date', from).lte('booking_date', to).order('booking_date', { ascending: false }).limit(2000),
     ])
     setApp((a.data as BankApp) || null)
     setLinks(((l.data || []) as Link[]).filter((x) => x.status !== 'pending' || Date.now() - new Date(x.created_at).getTime() < 3600000))
@@ -177,7 +204,10 @@ export default function Bank() {
   }
 
   const off = new Set(accs.filter((a) => !a.enabled && !accs.some((b) => b.enabled && b.iban === a.iban)).map((a) => a.iban))
-  const shown = txs.filter((t) => !off.has(t.iban) && (!iban || t.iban === iban) && (!q || `${t.counterparty} ${t.purpose} ${t.counterparty_iban}`.toLowerCase().includes(q.toLowerCase())))
+  const base = txs.filter((t) => !off.has(t.iban) && (!iban || t.iban === iban))
+  const byType = new Map<string, { n: number; sum: number }>()
+  for (const t of base) { const k = payType(t), v = byType.get(k) || { n: 0, sum: 0 }; v.n++; v.sum = r2(v.sum + Number(t.amount)); byType.set(k, v) }
+  const shown = base.filter((t) => (!ptype || payType(t) === ptype) && (!q || `${t.counterparty} ${t.purpose} ${t.counterparty_iban}`.toLowerCase().includes(q.toLowerCase())))
   const inSum = r2(shown.filter((t) => t.amount > 0).reduce((a, t) => a + Number(t.amount), 0))
   const outSum = r2(shown.filter((t) => t.amount < 0).reduce((a, t) => a + Number(t.amount), 0))
   const ibans = [...new Set([...accs.filter((a) => a.enabled).map((a) => a.iban), ...txs.map((t) => t.iban)].filter((x) => x && !off.has(x)))] as string[]
@@ -264,6 +294,20 @@ export default function Bank() {
               </select>}
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={de ? 'Suchen (Name, Verwendungszweck)' : 'Tìm (tên, nội dung)'} style={{ flex: 1, minWidth: 160 }} />
             </div>
+            {byType.size > 0 && <div className="card" style={{ padding: '10px 12px' }}>
+              <div className="small muted" style={{ marginBottom: 6 }}>{de ? 'Nach Zahlungsart (antippen zum Filtern)' : 'Theo loại thanh toán (bấm để lọc)'}</div>
+              {Object.keys(PAY).filter((k) => byType.has(k)).map((k) => {
+                const v = byType.get(k)!
+                return (
+                  <button key={k} className={`ghost block${ptype === k ? ' active' : ''}`} onClick={() => setPtype(ptype === k ? '' : k)}
+                    style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 8px', textAlign: 'left', fontWeight: ptype === k ? 700 : undefined, background: ptype === k ? 'var(--hover, rgba(127,127,127,.15))' : undefined }}>
+                    <span>{PAY[k][de ? 1 : 0]} <span className="small muted">· {v.n}</span></span>
+                    <span className="num" style={{ color: v.sum < 0 ? 'var(--err, #dc2626)' : 'var(--ok, #16a34a)' }}>{v.sum > 0 ? '+' : ''}{eur(v.sum)}</span>
+                  </button>
+                )
+              })}
+              {ptype && <button className="small" style={{ marginTop: 6 }} onClick={() => setPtype('')}>{de ? 'Alle anzeigen' : 'Hiện tất cả'}</button>}
+            </div>}
             <div className="row small" style={{ gap: 16, marginBottom: 8 }}>
               <span>{de ? 'Eingänge' : 'Tiền vào'}: <b className="num" style={{ color: 'var(--ok, #16a34a)' }}>{eur(inSum)}</b></span>
               <span>{de ? 'Ausgänge' : 'Tiền ra'}: <b className="num" style={{ color: 'var(--err, #dc2626)' }}>{eur(outSum)}</b></span>
@@ -278,7 +322,7 @@ export default function Bank() {
                 <tbody>
                   {shown.map((t) => (
                     <tr key={t.id}>
-                      <td style={{ whiteSpace: 'nowrap' }}>{t.booking_date ? dmy(t.booking_date) : '—'}{t.status === 'PDNG' ? <div className="small muted">{de ? 'vorgemerkt' : 'đang chờ'}</div> : null}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{t.booking_date ? dmy(t.booking_date) : '—'}{t.status === 'PDNG' ? <div className="small muted">{de ? 'vorgemerkt' : 'đang chờ'}</div> : null}<div><span className="tag" style={{ fontSize: '.72rem' }}>{PAY[payType(t)][de ? 1 : 0]}</span></div></td>
                       <td style={{ minWidth: 200 }}>
                         <div><b>{t.counterparty || '—'}</b></div>
                         {t.purpose && <div className="small muted" style={{ wordBreak: 'break-word' }}>{t.purpose}</div>}
