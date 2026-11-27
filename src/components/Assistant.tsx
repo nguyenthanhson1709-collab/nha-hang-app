@@ -31,7 +31,8 @@ export default function Assistant() {
   const [text, setText] = useState('')
   const [msg, setMsg] = useState('')
   const [pick, setPick] = useState<Plan | null>(null)
-  const [recLang, setRecLang] = useState<'vi' | 'de'>(() => { try { return (localStorage.getItem('nh-as-lang') as 'vi' | 'de') || 'vi' } catch { return 'vi' } })
+  // Trợ lý nghe, hiểu và đọc lại theo ngôn ngữ chọn ở nút VI/DE góc trên app
+  const recLang = lang
   const rec = useRef<Rec | null>(null)
   const emps = useRef<AsEmp[] | null>(null)
   const viaVoice = useRef(false)
@@ -42,7 +43,6 @@ export default function Assistant() {
 
   useEffect(() => () => rec.current?.abort(), [])
   useEffect(() => { try { speechSynthesis.getVoices() } catch { /* */ } }, [open])
-  useEffect(() => { try { localStorage.setItem('nh-as-lang', recLang) } catch { /* */ } }, [recLang])
   // Tải sẵn danh sách nhân viên khi mở trợ lý (chỉ chủ / người phụ trách)
   useEffect(() => { if (open && !emps.current && isManagerSomewhere) loadEmployees().then((l) => { emps.current = l }) }, [open]) // eslint-disable-line
 
@@ -155,9 +155,7 @@ export default function Assistant() {
           <div className="row between" style={{ marginBottom: 4 }}>
             <h2 style={{ margin: 0 }}>{T('Trợ lý', 'Assistent')}</h2>
             <div className="row" style={{ gap: 6 }}>
-              {RecCtor && <div className="seg as-lang" title={T('Ngôn ngữ nói', 'Sprache')}>
-                {(['vi', 'de'] as const).map((l) => <button key={l} className={recLang === l ? 'sel' : ''} onClick={() => { setRecLang(l); if (phase === 'listen') setTimeout(listen, 0) }}>{l.toUpperCase()}</button>)}
-              </div>}
+              <span className="tag" title={T('Đổi ngôn ngữ ở nút VI/DE góc trên', 'Sprache oben über VI/DE ändern')}>{recLang === 'de' ? 'Deutsch' : 'Tiếng Việt'}</span>
               <button className="ghost" onClick={close} aria-label="close">✕</button>
             </div>
           </div>

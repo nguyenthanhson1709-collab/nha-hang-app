@@ -47,6 +47,11 @@ check('so sánh nhà hàng tháng 10', { to: '/reports?m=2026-10' })
 check('Kassenbuch', { kind: 'pickRest' }, { ...ctx, currentRid: null })
 check('Kassenbuch', { kind: 'deny' }, { ...ctx, isOwner: false, canManage: () => false })
 check('nhân viên số 12', { to: '/r/r1/hr/e1' })
+// Tiếng Anh
+check('show me the payslip of Nam for October', { to: '/r/r1/hr/e2?slip=2026-10' })
+check('cash book last month', { to: '/r/r1/kb?m=2026-10' })
+check('Lina Schmidt employment contract', { to: '/r/r2/hr/e3?tab=work' })
+check('cash receipts for september', { to: '/r/r1/archive?f=Bargeld&m=2026-09' })
 
 if (fail) { console.log(`${fail} lỗi`); process.exit(1) }
 console.log('Tất cả đúng')
