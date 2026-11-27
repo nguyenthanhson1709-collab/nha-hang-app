@@ -62,6 +62,8 @@ export default function Viva() {
   const [wallets, setWallets] = useState<Wallet[] | null>(null)
   const [walletErr, setWalletErr] = useState('')
   const [atx, setAtx] = useState<AccTx[]>([])
+  // Số dư mặc định che mờ, bấm con mắt để xem (không nhớ lại, mở trang lần sau lại mờ)
+  const [showBal, setShowBal] = useState(false)
   const [edit, setEdit] = useState<{ merchant_id: string; api_key: string; source_codes: string; terminal_ids: string; cutoff_hour: number; auto_sync: boolean } | null>(null)
 
   const load = useCallback(async () => {
@@ -179,8 +181,17 @@ export default function Viva() {
 
           {connected && <div className="card">
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h3 style={{ margin: 0 }}>{de ? 'Guthaben' : 'Số dư (Guthaben)'}</h3>
-              <button className="ghost small" onClick={loadWallets} title={de ? 'Aktualisieren' : 'Tải lại'}>↻</button>
+              <h3 style={{ margin: 0 }}>{de ? 'Verfügbares Guthaben' : 'Số dư khả dụng'}</h3>
+              <div className="row" style={{ gap: 4 }}>
+                <button className="ghost small" onClick={() => setShowBal(!showBal)} aria-label={showBal ? (de ? 'Ausblenden' : 'Ẩn') : (de ? 'Anzeigen' : 'Hiện')} title={showBal ? (de ? 'Ausblenden' : 'Ẩn') : (de ? 'Anzeigen' : 'Hiện')}>
+                  <svg className="lu" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    {showBal
+                      ? <><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" /><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" /><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" /><path d="m2 2 20 20" /></>
+                      : <><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /><circle cx="12" cy="12" r="3" /></>}
+                  </svg>
+                </button>
+                <button className="ghost small" onClick={loadWallets} title={de ? 'Aktualisieren' : 'Tải lại'}>↻</button>
+              </div>
             </div>
             {walletErr ? <div className="alert err small">{walletErr}</div>
               : !wallets ? <div className="small muted">…</div>
@@ -192,8 +203,8 @@ export default function Viva() {
                     {w.iban && <div className="small muted">{w.iban}</div>}
                   </div>
                   <div className="right">
-                    <div className="num" style={{ fontSize: '1.25rem' }}><b>{eur(w.amount)}</b></div>
-                    {w.available !== w.amount && <div className="small muted num">{de ? 'verfügbar' : 'khả dụng'} {eur(w.available)}</div>}
+                    <div className="num" style={{ fontSize: '1.25rem', filter: showBal ? undefined : 'blur(8px)', userSelect: showBal ? undefined : 'none', transition: 'filter .2s', cursor: 'pointer' }}
+                      onClick={() => setShowBal(!showBal)} aria-hidden={!showBal}><b>{eur(w.available)}</b></div>
                   </div>
                 </div>
               ))}
