@@ -35,6 +35,8 @@ export default function Plan() {
   const pm = useFollowMonth(setYm)
 
   useEffect(() => { const el = document.getElementById('root'); el?.classList.add('xwide'); return () => el?.classList.remove('xwide') }, [])
+  // Lịch theo ngày: dùng hết chiều rộng để thấy đủ cả tháng trên máy tính / iPad
+  useEffect(() => { if (view !== 'grid') return; const el = document.getElementById('root'); el?.classList.add('xfull'); return () => el?.classList.remove('xfull') }, [view])
   useEffect(() => {
     if (!rid) return
     supabase.from('nh_employees').select('*').eq('restaurant_id', rid).then(({ data }) => setEmps((data || []) as Emp[]))
@@ -147,7 +149,7 @@ export default function Plan() {
                     return (
                       <tr key={x.e.id}>
                         <td className="l sticky" onClick={() => nav(`/r/${rid}/hr/${x.e.id}`)}><span className="m">{pnr(x.e)}</span> {fullName(x.e)}</td>
-                        {dates.map((d) => { const s = by.get(d); return s ? <td key={d} className={shiftClass(s)}>{tShort(s.start_time.slice(0, 5))}–{tShort(s.end_time.slice(0, 5))}</td> : x.vac.includes(d) ? <td key={d} className="u">U</td> : <td key={d} className="off" /> })}
+                        {dates.map((d) => { const s = by.get(d); return s ? <td key={d} className={shiftClass(s)} title={`${tShort(s.start_time.slice(0, 5))}–${tShort(s.end_time.slice(0, 5))}`}><span>{tShort(s.start_time.slice(0, 5))}</span><span>{tShort(s.end_time.slice(0, 5))}</span></td> : x.vac.includes(d) ? <td key={d} className="u">U</td> : <td key={d} className="off" /> })}
                         <td className="b">{hhmm(x.st.ist)}</td>
                       </tr>
                     )

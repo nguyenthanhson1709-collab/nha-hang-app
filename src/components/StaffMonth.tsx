@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from './ui'
 import { dmy } from '../lib/format'
 import { isActive, type Employee } from '../lib/hr'
-import { holidayOf, monthDates, monthStat, noSurcharge, vacDays, type Shift, type Vacation } from '../lib/hrTime'
+import { monthDates, monthStat, noSurcharge, vacDays, type Shift, type Vacation } from '../lib/hrTime'
 import PlanNotes from './PlanNotes'
 import { buildSchedule, defaultSun, SUN_RULES, type SchedEmp, type SchedResult, type SunRule } from '../lib/scheduler'
 
@@ -13,7 +13,9 @@ import { buildSchedule, defaultSun, SUN_RULES, type SchedEmp, type SchedResult, 
  * trong nh_staff_month.data (xoá trống = quay về giá trị tự tính). Anrede, Fahrgeld, Gutschein lấy lại từ tháng trước.
  */
 type Emp = Employee & { id: string }
-type Col = { k: string; de: string; vi: string; w?: number; num?: boolean; sticky?: boolean; check?: boolean; noXlsx?: boolean; mon?: boolean; opts?: string[]; auto?: (e: Emp, st: ReturnType<typeof monthStat>) => string }
+type St = ReturnType<typeof monthStat> & { rest: number | null }
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+type Col = { k: string; de: string; vi: string; w?: number; num?: boolean; sticky?: boolean; check?: boolean; noXlsx?: boolean; mon?: boolean; opts?: string[]; auto?: (e: Emp, st: St) => string }
 const n = (v: number | null | undefined) => (v == null ? '' : String(v).replace('.', ','))
 const h = (m: number) => (m ? n(Math.round((m / 60) * 100) / 100) : '')
 const COLS: Col[] = [
@@ -35,7 +37,7 @@ const COLS: Col[] = [
   { k: 'gutschein', mon: true, de: 'Gutschein 50€', vi: 'Gutschein 50€', w: 70, check: true },
   { k: 'bank', de: 'Bank', vi: 'Ngân hàng / IBAN', w: 210, auto: (e) => e.iban || e.bank_name || '' },
   { k: 'jahresurlaub', de: 'Jahresurlaub', vi: 'Phép năm', w: 70, num: true, auto: (e) => n(e.vacation_year) },
-  { k: 'resturlaub', mon: true, de: 'Resturlaub', vi: 'Phép còn lại', w: 70, num: true, auto: (e) => n(e.vacation_left) },
+  { k: 'resturlaub', mon: true, de: 'Resturlaub', vi: 'Phép còn lại', w: 70, num: true, auto: (_e, s) => n(s.rest) },
   { k: 'anwesend', mon: true, de: 'Anwesenheitstage', vi: 'Ngày đi làm', w: 70, num: true, auto: (_e, s) => (s.days ? String(s.days) : '') },
   { k: 'ist', mon: true, de: 'Ist-Std gesamt', vi: 'Tổng giờ', w: 70, num: true, auto: (_e, s) => h(s.ist) },
   // Quy tắc Chủ nhật cho bộ xếp lịch: không hiện trong bảng, không xuất Excel (vẫn lưu theo tháng)
@@ -57,6 +59,14 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
   const [edit, setEdit] = useState<{ id: string; k: string; v: string } | null>(null)
   const [plan, setPlan] = useState<(SchedResult & { from: string; replace: number }) | null>(null)
   const [busy, setBusy] = useState(false)
+  // Ngày phép đã ghi (cả năm) để tính Phép còn lại đến hết tháng đang xem
+  const [yv, setYv] = useState<{ employee_id: string; from_date: string; to_date: string }[]>([])
+  useEffect(() => {
+    const y = ym.slice(0, 4)
+    supabase.from('nh_absences').select('employee_id,from_date,to_date').eq('restaurant_id', rid).eq('kind', 'vacation')
+      .gte('to_date', `${Number(y) - 1}-12-01`).lte('from_date', `${Number(y) + 1}-01-31`).limit(5000)
+      .then(({ data }) => setYv((data || []) as { employee_id: string; from_date: string; to_date: string }[]))
+  }, [rid, ym, abs])
 
   // Bảng rộng: dùng hết chiều rộng màn hình máy tính
   useEffect(() => { const el = document.getElementById('root'); el?.classList.add('xfull'); return () => el?.classList.remove('xfull') }, [])
@@ -83,12 +93,22 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
       .filter((e) => shifts.some((s) => s.employee_id === e.id) || ((!e.entry_date || e.entry_date <= last) && isActive(e, first)))
       .map((e) => {
         const sh = shifts.filter((s) => s.employee_id === e.id)
-        return { e, st: monthStat(sh, vacDays(abs.filter((a) => a.employee_id === e.id), ym), noSurcharge(e)) }
+        // Resturlaub = Resturlaub trong hồ sơ (tính đến hết tháng vacation_as_of) − ngày phép sau đó đến hết tháng này
+        // (tháng trước tháng hồ sơ: cộng lại ngày phép từ sau tháng này đến tháng hồ sơ)
+        let rest: number | null = e.vacation_left == null ? null : Number(e.vacation_left)
+        if (rest != null) {
+          const a0 = e.vacation_as_of ? monthDates(e.vacation_as_of).at(-1)! : last
+          const lo = a0 < last ? a0 : last, hi = a0 < last ? last : a0, sign = a0 < last ? -1 : 1
+          const ds = new Set<string>()
+          for (const v of yv) if (v.employee_id === e.id) for (let d = new Date(`${v.from_date}T12:00:00`); iso(d) <= v.to_date; d.setDate(d.getDate() + 1)) { const k = iso(d); if (k > lo && k <= hi) ds.add(k) }
+          rest += sign * ds.size
+        }
+        return { e, st: { ...monthStat(sh, vacDays(abs.filter((a) => a.employee_id === e.id), ym), noSurcharge(e)), rest } }
       })
       .sort((a, b) => (a.e.personnel_no || '').localeCompare(b.e.personnel_no || ''))
-  }, [emps, shifts, abs, ym])
+  }, [emps, shifts, abs, ym, yv])
 
-  const val = (e: Emp, st: ReturnType<typeof monthStat>, c: Col) => {
+  const val = (e: Emp, st: St, c: Col) => {
     const o = saved?.[e.id]?.[c.k]
     if (o != null) return { v: o, own: true }
     if (c.sticky) return { v: prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : ''), own: false }
@@ -96,14 +116,14 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
   }
 
   // So với tháng trước: ô khác giá trị tháng trước được tô nền; nhân viên vào làm trong tháng này tô cả dòng
-  const changed = (e: Emp, st: ReturnType<typeof monthStat>, c: Col, v: string) => {
+  const changed = (e: Emp, st: St, c: Col, v: string) => {
     if (c.mon || c.check || c.noXlsx) return false
     const was = c.sticky ? (prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : '')) : (last[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : ''))
     return v.trim() !== was.trim()
   }
   const isNew = (e: Emp) => !!e.entry_date && e.entry_date >= `${ym}-01`
 
-  async function commit(e: Emp, st: ReturnType<typeof monthStat>, c: Col, raw: string) {
+  async function commit(e: Emp, st: St, c: Col, raw: string) {
     setEdit(null)
     const v = raw.trim()
     const base = c.sticky ? (prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : '')) : c.auto ? c.auto(e, st) : ''
@@ -124,14 +144,12 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
     const from = isoDay(tm) > first ? isoDay(tm) : first
     if (from > last) { setBusy(false); return }
     const back = new Date(`${first}T12:00:00`); back.setDate(back.getDate() - 14)
-    const asOfMin = rows.reduce((m, { e }) => (e.vacation_as_of && e.vacation_as_of < m ? e.vacation_as_of : m), ym)
-    const [{ data, error }, cl, va] = await Promise.all([
+    const [{ data, error }, cl] = await Promise.all([
       supabase.from('nh_shifts').select('employee_id,shift_date,start_time,end_time').eq('restaurant_id', rid).gte('shift_date', isoDay(back)).lt('shift_date', from).limit(5000),
       supabase.from('nh_closed_days').select('day').eq('restaurant_id', rid).gte('day', first).lte('day', last),
-      supabase.from('nh_absences').select('employee_id,from_date,to_date').eq('restaurant_id', rid).eq('kind', 'vacation').gte('to_date', `${asOfMin}-01`).lte('from_date', last).limit(5000),
     ])
     setBusy(false)
-    if (error || cl.error || va.error) { toast((error || cl.error || va.error)!.message); return }
+    if (error || cl.error) { toast((error || cl.error)!.message); return }
     const closed = (cl.data || []).map((x: { day: string }) => x.day)
     const vac: Record<string, Set<string>> = {}
     // Urlaub / Krank / Unbezahlt: tính vào số ngày của tuần; Wunschfrei (other): chỉ không xếp ca
@@ -149,24 +167,13 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
       list.push({ id: e.id, name, hours, days, entry: isoOf(val(e, st, col('eintritt')).v), exit: isoOf(val(e, st, col('austritt')).v),
         sun: (val(e, st, col('sonntagsregel')).v || defaultSun(days)) as SunRule })
     }
-    // Phép còn lại chưa ghi chú: Resturlaub (tính đến tháng vacation_as_of) trừ ngày phép đã ghi sau đó đến hết tháng này.
+    // Phép còn lại chưa ghi chú = cột Resturlaub (đã trừ phép ghi đến hết tháng này).
     // Tháng 12 hoặc tháng nghỉ việc: xếp hết; tháng khác: chia đều cho các tháng còn lại trong năm.
     const autoVac: Record<string, number> = {}
-    const monthEnd = (m: string) => monthDates(m).at(-1)!
     for (const se of list) {
       const x = rows.find((r0) => r0.e.id === se.id)!
-      const left = Number(val(x.e, x.st, col('resturlaub')).v.replace(',', '.'))
-      if (!Number.isFinite(left) || left <= 0) continue
-      const after = x.e.vacation_as_of ? monthEnd(x.e.vacation_as_of) : isoDay(new Date(new Date(`${first}T12:00:00`).getTime() - 864e5))
-      const used = new Set<string>()
-      for (const a of (va.data || []) as { employee_id: string; from_date: string; to_date: string }[]) {
-        if (a.employee_id !== se.id) continue
-        for (let d = new Date(`${a.from_date}T12:00:00`); isoDay(d) <= a.to_date; d.setDate(d.getDate() + 1)) {
-          const k = isoDay(d); if (k > after && k <= last && !closed.includes(k) && !holidayOf(k)) used.add(k)
-        }
-      }
-      const rest = left - used.size
-      if (rest <= 0) continue
+      const rest = Math.floor(Number(val(x.e, x.st, col('resturlaub')).v.replace(',', '.')))
+      if (!Number.isFinite(rest) || rest <= 0) continue
       const mo = Number(ym.slice(5, 7)), exitHere = !!se.exit && se.exit <= last
       autoVac[se.id] = mo === 12 || exitHere ? rest : Math.round(rest / (13 - mo))
     }
@@ -217,13 +224,17 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
       <div className="sm-bar">
         {canPlan && <button className="st-btn primary" disabled={busy || !rows.length} onClick={makePlan}>{busy && !plan ? '…' : T('Xếp lịch', 'Dienstplan erstellen')}</button>}
         <span className="small muted">{T('Ô tự điền từ hồ sơ và lịch làm. Bấm vào ô để sửa; ô đã sửa có vạch cam bên trái, xoá trống để quay về giá trị tự tính. Nền cam: khác tháng trước; dòng nền xanh: nhân viên mới.', 'Felder werden aus Personalakte und Dienstplan übernommen. Zum Ändern anklicken; geänderte Felder sind orange markiert, leeren = automatischer Wert. Orange hinterlegt: anders als Vormonat; grüne Zeile: neuer Mitarbeiter.')}</span>
-        <button className="st-btn" onClick={() => setShowPay(!showPay)}>{showPay ? T('Ẩn lương', 'Entgelt ausblenden') : T('Xem lương', 'Entgelt anzeigen')}</button>
         <button className="st-btn" disabled={!rows.length} onClick={exportXlsx}>Excel</button>
       </div>
       {!rows.length ? <div className="card muted">{T('Tháng này chưa có nhân viên', 'Keine Mitarbeiter in diesem Monat')}</div> : (
         <div className="pl-scroll">
           <table className="pl-sum sm-tab">
-            <thead><tr>{XCOLS.map((c) => <th key={c.k} lang="de" className={c.num ? '' : 'l'} style={{ minWidth: c.num ? undefined : Math.round((c.w || 70) * 0.8) }}>{c.de}{!de && <small>{c.vi}</small>}</th>)}</tr></thead>
+            <thead><tr>{XCOLS.map((c) => c.k === 'entgelt' ? (
+              // Bấm tiêu đề Entgelt để hiện / làm mờ lương
+              <th key={c.k} lang="de" className="sm-pay" role="button" tabIndex={0} title={showPay ? T('Làm mờ lương', 'Entgelt ausblenden') : T('Hiện lương', 'Entgelt anzeigen')}
+                onClick={() => setShowPay(!showPay)} onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setShowPay(!showPay) } }}>
+                {c.de} <span aria-hidden>{showPay ? '🙈' : '👁'}</span>{!de && <small>{c.vi}</small>}</th>
+            ) : <th key={c.k} lang="de" className={c.num ? '' : 'l'} style={{ minWidth: c.num ? undefined : Math.round((c.w || 70) * 0.8) }}>{c.de}{!de && <small>{c.vi}</small>}</th>)}</tr></thead>
             <tbody>
               {rows.map(({ e, st }) => (
                 <tr key={e.id} className={isNew(e) ? 'new' : ''}>
