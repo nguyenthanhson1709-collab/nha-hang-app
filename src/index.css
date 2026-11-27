@@ -537,7 +537,7 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 
 /* Xếp lịch */
 .pl-ctrl { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.pl-ctrl select { min-width: 180px; }
+.pl-ctrl select { width: auto; min-width: 0; flex: 0 0 auto; padding-top: 6px; padding-bottom: 6px; min-height: 40px; font-size: .9rem; }
 .pl-ctrl .seg { flex: 0 1 auto; }
 .pl-kpi { grid-template-columns: repeat(3, 1fr); }
 .pl-scroll { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
