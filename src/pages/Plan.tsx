@@ -60,7 +60,10 @@ export default function Plan() {
   const months = useMemo(() => {
     if (!range) return []
     const out: string[] = []
-    for (let d = new Date(`${range[0]}-01T12:00:00`); ymOf(d) <= range[1]; d.setMonth(d.getMonth() + 1)) out.push(ymOf(d))
+    // Cho chọn trước 6 tháng tới để lên lịch, kể cả khi chưa có ca
+    const ahead = new Date(); ahead.setDate(1); ahead.setMonth(ahead.getMonth() + 6)
+    const end = range[1] > ymOf(ahead) ? range[1] : ymOf(ahead)
+    for (let d = new Date(`${range[0]}-01T12:00:00`); ymOf(d) <= end; d.setMonth(d.getMonth() + 1)) out.push(ymOf(d))
     return out.reverse()
   }, [range])
 
