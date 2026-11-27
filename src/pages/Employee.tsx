@@ -19,6 +19,7 @@ import { baseSalary, empTypeOf, hourlyOf, splitName } from '../lib/payslip'
 import { DateField } from '../components/PeriodBar'
 import { ComboInput, Money, Sheet, Spinner, Top, toast, useRestaurant } from '../components/ui'
 import PdfSheet from '../components/PdfSheet'
+import { noSurcharge } from '../lib/hrTime'
 import WorkTime from '../components/WorkTime'
 import { MOBILE_Q, useMedia } from '../lib/useMedia'
 
@@ -805,7 +806,7 @@ export default function EmployeePage() {
   )
   const workTimeCard = (o: { flat?: boolean } = {}) => (
     <Group icon={<GIcon k="calendar" />} title={T('Giờ làm theo tháng', 'Arbeitszeiten je Monat')} flat={o.flat}>
-            <WorkTime eid={eid!} name={`${e.first_name} ${e.last_name}`.trim()} pnr={e.personnel_no || null} company={hs?.company_name || e.company || r.name} de={de} download={download}
+            <WorkTime eid={eid!} name={`${e.first_name} ${e.last_name}`.trim()} pnr={e.personnel_no || null} company={hs?.company_name || e.company || r.name} de={de} download={download} noZ={noSurcharge(e)}
               contract={e.work_days != null && e.daily_hours != null ? `${String(e.work_days).replace('.', ',')} Tage/Woche × ${String(e.daily_hours).replace('.', ',')} Std.` : null} />
     </Group>
   )

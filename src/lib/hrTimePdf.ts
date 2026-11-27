@@ -14,11 +14,11 @@ function head(pdf: jsPDF, title: string, sub: string, w: number) {
 }
 
 /** Stundenzettel một tháng của một nhân viên */
-export function stundenzettelPdf(o: { name: string; pnr: string | null; company: string; ym: string; contract: string | null; shifts: Shift[]; vac: string[] }): Blob {
+export function stundenzettelPdf(o: { name: string; pnr: string | null; company: string; ym: string; contract: string | null; shifts: Shift[]; vac: string[]; noZ?: boolean }): Blob {
   const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
   const W = 210
   head(pdf, `Stundenzettel ${monthLabel(o.ym, true)}`, [o.company, `${o.name}${o.pnr ? ` (Pers.-Nr. ${o.pnr})` : ''}`, o.contract ? `Vertrag: ${o.contract}` : ''].filter(Boolean).join(' · '), W)
-  const st = monthStat(o.shifts, o.vac)
+  const st = monthStat(o.shifts, o.vac, o.noZ)
   pdf.setFontSize(9)
   const chips = [`Anwesenheitstage: ${st.days}`, `Ist: ${hhmm(st.ist)}`, `Nacht: ${hhmm(st.night)}`, `Sonntag: ${hhmm(st.sun)}`, `Feiertag: ${hhmm(st.hol)}`, `Urlaub: ${st.vac} Tage`]
   pdf.text(chips.join('   |   '), 14, 31)
@@ -56,7 +56,7 @@ export function stundenzettelPdf(o: { name: string; pnr: string | null; company:
   return pdf.output('blob')
 }
 
-export type PlanRow = { name: string; pnr: string | null; contract: string; shifts: Shift[]; vac: string[] }
+export type PlanRow = { name: string; pnr: string | null; contract: string; shifts: Shift[]; vac: string[]; noZ?: boolean }
 /** Dienstplan một tháng: trang 1 bảng tổng hợp, sau đó bảng theo ngày (khổ ngang) */
 export function dienstplanPdf(o: { company: string; ym: string; rows: PlanRow[] }): Blob {
   const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true })
@@ -69,7 +69,7 @@ export function dienstplanPdf(o: { company: string; ym: string; rows: PlanRow[] 
   const tot = { days: 0, ist: 0, night: 0, sun: 0, hol: 0, vac: 0 }
   for (const r of o.rows) {
     if (y > 195) { pdf.addPage(); y = 20; th() }
-    const st = monthStat(r.shifts, r.vac); (Object.keys(tot) as (keyof typeof tot)[]).forEach((k) => (tot[k] += st[k]))
+    const st = monthStat(r.shifts, r.vac, r.noZ); (Object.keys(tot) as (keyof typeof tot)[]).forEach((k) => (tot[k] += st[k]))
     const v = [r.pnr || '', r.name, r.contract, String(st.days), hhmm(st.ist), hhmm(st.night), hhmm(st.sun), hhmm(st.hol), String(st.vac)]
     v.forEach((x, i) => pdf.text(pdfText(x), cols[i] + 1, y))
     pdf.setDrawColor(230); pdf.line(14, y + 1.6, W - 14, y + 1.6); y += 5.8
