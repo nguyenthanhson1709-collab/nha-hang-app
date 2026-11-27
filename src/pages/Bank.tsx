@@ -85,6 +85,16 @@ function Eye({ open }: { open: boolean }) {
   )
 }
 
+/** Số tiền mặc định làm mờ; bấm vào số (hoặc nút con mắt) để hiện tất cả */
+function Money({ v, show, onToggle, sign = false, color = true }: { v: number; show: boolean; onToggle: () => void; sign?: boolean; color?: boolean }) {
+  return (
+    <span className="num" onClick={(e) => { e.stopPropagation(); onToggle() }} aria-hidden={!show}
+      style={{ filter: show ? undefined : 'blur(7px)', userSelect: show ? undefined : 'none', transition: 'filter .2s', cursor: 'pointer', whiteSpace: 'nowrap', color: color ? (v < 0 ? 'var(--err, #dc2626)' : 'var(--ok, #16a34a)') : undefined }}>
+      {sign && v > 0 ? '+' : ''}{eur(v)}
+    </span>
+  )
+}
+
 export default function Bank() {
   const { rid } = useParams()
   const r = useRestaurant(rid)
@@ -295,22 +305,25 @@ export default function Bank() {
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={de ? 'Suchen (Name, Verwendungszweck)' : 'Tìm (tên, nội dung)'} style={{ flex: 1, minWidth: 160 }} />
             </div>
             {byType.size > 0 && <div className="card" style={{ padding: '10px 12px' }}>
-              <div className="small muted" style={{ marginBottom: 6 }}>{de ? 'Nach Zahlungsart (antippen zum Filtern)' : 'Theo loại thanh toán (bấm để lọc)'}</div>
+              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
+                <span className="small muted">{de ? 'Nach Zahlungsart (antippen zum Filtern)' : 'Theo loại thanh toán (bấm để lọc)'}</span>
+                <button className="ghost small" onClick={() => setShowBal(!showBal)} aria-label={showBal ? (de ? 'Beträge ausblenden' : 'Ẩn số tiền') : (de ? 'Beträge anzeigen' : 'Hiện số tiền')} title={showBal ? (de ? 'Beträge ausblenden' : 'Ẩn số tiền') : (de ? 'Beträge anzeigen' : 'Hiện số tiền')}><Eye open={showBal} /></button>
+              </div>
               {Object.keys(PAY).filter((k) => byType.has(k)).map((k) => {
                 const v = byType.get(k)!
                 return (
                   <button key={k} className={`ghost block${ptype === k ? ' active' : ''}`} onClick={() => setPtype(ptype === k ? '' : k)}
                     style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 8px', textAlign: 'left', fontWeight: ptype === k ? 700 : undefined, background: ptype === k ? 'var(--hover, rgba(127,127,127,.15))' : undefined }}>
                     <span>{PAY[k][de ? 1 : 0]} <span className="small muted">· {v.n}</span></span>
-                    <span className="num" style={{ color: v.sum < 0 ? 'var(--err, #dc2626)' : 'var(--ok, #16a34a)' }}>{v.sum > 0 ? '+' : ''}{eur(v.sum)}</span>
+                    <Money v={v.sum} sign show={showBal} onToggle={() => setShowBal(!showBal)} />
                   </button>
                 )
               })}
               {ptype && <button className="small" style={{ marginTop: 6 }} onClick={() => setPtype('')}>{de ? 'Alle anzeigen' : 'Hiện tất cả'}</button>}
             </div>}
             <div className="row small" style={{ gap: 16, marginBottom: 8 }}>
-              <span>{de ? 'Eingänge' : 'Tiền vào'}: <b className="num" style={{ color: 'var(--ok, #16a34a)' }}>{eur(inSum)}</b></span>
-              <span>{de ? 'Ausgänge' : 'Tiền ra'}: <b className="num" style={{ color: 'var(--err, #dc2626)' }}>{eur(outSum)}</b></span>
+              <span>{de ? 'Eingänge' : 'Tiền vào'}: <b><Money v={inSum} show={showBal} onToggle={() => setShowBal(!showBal)} /></b></span>
+              <span>{de ? 'Ausgänge' : 'Tiền ra'}: <b><Money v={outSum} show={showBal} onToggle={() => setShowBal(!showBal)} /></b></span>
             </div>
             <div className="tbl-wrap">
               <table className="kb">
@@ -327,7 +340,7 @@ export default function Bank() {
                         <div><b>{t.counterparty || '—'}</b></div>
                         {t.purpose && <div className="small muted" style={{ wordBreak: 'break-word' }}>{t.purpose}</div>}
                       </td>
-                      <td className="num" style={{ whiteSpace: 'nowrap', color: t.amount < 0 ? 'var(--err, #dc2626)' : 'var(--ok, #16a34a)' }}>{t.amount > 0 ? '+' : ''}{eur(Number(t.amount))}</td>
+                      <td className="num"><Money v={Number(t.amount)} sign show={showBal} onToggle={() => setShowBal(!showBal)} /></td>
                     </tr>
                   ))}
                   {!shown.length && <tr><td colSpan={3} className="muted">{de ? 'Keine Umsätze in diesem Monat' : 'Tháng này chưa có giao dịch'}</td></tr>}
