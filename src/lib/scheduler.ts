@@ -37,8 +37,6 @@ export function shiftOptions(hours: number): Tpl[] {
   return [11, 12, 14].map((h, i) => ({ code: `X${i + 1}`, a: h * 60, b: Math.min(1440, h * 60 + len), ...(p ? { pa: h * 60 + Math.floor(len / 2) - p / 2, pb: h * 60 + Math.floor(len / 2) + p / 2 } : {}) }))
     .filter((x) => x.b - x.a === len)
 }
-export const CLOSED_MD = ['12-24', '12-25']
-const isClosed = (d: string) => CLOSED_MD.includes(d.slice(5))
 const isHoliday = (d: string) => !!holidayOf(d) && d.slice(5) !== '12-31'
 
 /** Mục tiêu nhân sự theo khung 30 phút từ 11:00 đến 24:00 (26 ô) */
@@ -56,15 +54,20 @@ const covers = (s: Tpl, slot: number) => { const m = SLOT0 + slot * 30; return m
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const addDays = (d: string, n: number) => { const x = new Date(`${d}T12:00:00`); x.setDate(x.getDate() + n); return iso(x) }
 
-export type SchedResult = { shifts: PlanShift[]; perEmp: Record<string, { days: number; minutes: number; need: number }>; gapHours: number; warnings: string[] }
+export type SchedResult = { shifts: PlanShift[]; perEmp: Record<string, { days: number; minutes: number; need: number }>; gapHours: number; warnings: string[]; autoVac: Record<string, string[]> }
 
 /**
  * Xếp lịch cho tháng ym. vac: ngày phép / nghỉ (không xếp ca, nhưng ngày phép tính vào số ngày của tuần).
  * prev: ca giữ nguyên trước ngày from (2 tuần trước tháng và đầu tháng đã qua) để tính tuần lẻ, nghỉ 11 h, ngày liên tiếp.
- * off: ngày nhân viên xin nghỉ (Wunschfrei): không xếp ca nhưng không bớt số ngày của tuần.
- * from: ngày bắt đầu xếp (mặc định ngày 1; tháng đang chạy thì từ ngày mai).
+ * o.from: ngày bắt đầu xếp (mặc định ngày 1; tháng đang chạy thì từ ngày mai).
+ * o.off: ngày nhân viên xin nghỉ (Wunschfrei): không xếp ca nhưng không bớt số ngày của tuần.
+ * o.closed: ngày quán đóng cửa (YYYY-MM-DD).
+ * o.autoVac: số ngày phép còn lại cần xếp trong tháng cho từng người (chưa có ghi chú phép).
  */
-export function buildSchedule(ym: string, emps: SchedEmp[], vac: Record<string, Set<string>>, prev: PrevShift[], from?: string, off: Record<string, Set<string>> = {}): SchedResult {
+export function buildSchedule(ym: string, emps: SchedEmp[], vac: Record<string, Set<string>>, prev: PrevShift[],
+  o: { from?: string; off?: Record<string, Set<string>>; closed?: string[]; autoVac?: Record<string, number> } = {}): SchedResult {
+  const from = o.from, off = o.off || {}, closedSet = new Set(o.closed || [])
+  const isClosed = (d: string) => closedSet.has(d)
   const first = `${ym}-01`
   const last = iso(new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0))
   const dates: string[] = []; for (let d = first; d <= last; d = addDays(d, 1)) dates.push(d)
@@ -85,6 +88,55 @@ export function buildSchedule(ym: string, emps: SchedEmp[], vac: Record<string, 
     if (cov[s.shift_date]) for (let i = 0; i < SLOTS; i++) if (covers(p, i)) cov[s.shift_date][i]++
   }
   const out: PlanShift[] = [], warnings: string[] = []
+
+  // Tự xếp phép (regeln.json urlaub): khối trọn tuần Mo–So (tối đa 3), ngày lẻ liền kề; không tuần có ngày đóng cửa / lễ.
+  // Mỗi tuần phép = số ngày/tuần (người làm mọi Chủ nhật: bớt 1, Chủ nhật vẫn làm). Rải tuần để ít người nghỉ cùng lúc.
+  const autoVac: Record<string, string[]> = {}
+  const freeWeek = (w: string[]) => w.every((d) => d >= start && d <= last && !isClosed(d) && !isHoliday(d))
+  const load = new Map<string, number>()
+  for (const e of [...emps].sort((a, b) => (o.autoVac?.[b.id] || 0) - (o.autoVac?.[a.id] || 0))) {
+    let n = Math.floor(o.autoVac?.[e.id] || 0)
+    if (n <= 0) continue
+    const V = (vac[e.id] ||= new Set()), O = off[e.id] || new Set<string>()
+    const active = (d: string) => (!e.entry || d >= e.entry) && (!e.exit || d <= e.exit)
+    const okDay = (d: string) => d >= start && d <= last && active(d) && !isClosed(d) && !isHoliday(d) && weekday(d) !== 0 && !V.has(d) && !O.has(d)
+    const k = Math.max(1, Math.min(6, e.sun === 'jeden' ? e.days - 1 : e.days))
+    const elig = weeks.map((w, i) => ({ w, i })).filter(({ w }) => freeWeek(w) && w.every(active) && !w.some((d) => V.has(d) || O.has(d)))
+    const take: string[] = []
+    const mark = (ds: string[]) => { for (const d of ds) { V.add(d); take.push(d) } }
+    const wk = (w: string[]) => w.filter(okDay)
+    let blocks = Math.min(3, Math.floor(n / k), elig.length), lo = -1, hi = -1
+    // dãy tuần liên tiếp ít người nghỉ nhất
+    while (blocks > 0 && lo < 0) {
+      let best = Infinity
+      for (let s0 = 0; s0 + blocks <= elig.length; s0++) {
+        const run = elig.slice(s0, s0 + blocks)
+        if (run.some((x, j) => j && x.i !== run[j - 1].i + 1)) continue
+        const l = run.reduce((t, x) => t + (load.get(x.w[0]) || 0), 0)
+        if (l < best) { best = l; lo = run[0].i; hi = run[blocks - 1].i }
+      }
+      if (lo < 0) blocks--
+    }
+    if (lo >= 0) for (let i = lo; i <= hi; i++) { mark(wk(weeks[i]).slice(0, k)); load.set(weeks[i][0], (load.get(weeks[i][0]) || 0) + 1) }
+    n -= take.length
+    const r = Math.min(n, k - 1 > 0 ? k - 1 : 1)
+    if (r > 0) {
+      if (lo >= 0) {
+        // ngày lẻ liền kề: đầu tuần sau khối, nếu không được thì cuối tuần trước khối
+        const after = hi + 1 < weeks.length ? wk(weeks[hi + 1]).slice(0, r) : []
+        const before = lo > 0 ? wk(weeks[lo - 1]).slice(-r) : []
+        mark(after.length >= before.length ? after : before)
+      } else {
+        // ít hơn một tuần: tuần ít người nghỉ nhất còn đủ ngày
+        const cand = weeks.map((w) => ({ w, ds: wk(w) })).filter((x) => x.ds.length >= r)
+          .sort((a, b) => (load.get(a.w[0]) || 0) - (load.get(b.w[0]) || 0))[0]
+        if (cand) { mark(cand.ds.slice(0, r)); load.set(cand.w[0], (load.get(cand.w[0]) || 0) + 1) }
+      }
+    }
+    if (take.length) autoVac[e.id] = take.sort()
+    const miss = Math.floor(o.autoVac?.[e.id] || 0) - take.length
+    if (miss > 0) warnings.push(`${e.name}: còn ${miss} ngày phép chưa xếp được trong tháng`)
+  }
   const perEmp: SchedResult['perEmp'] = {}
   const sunCount: Record<string, number> = {}
   for (const s of prev) if (s.shift_date >= first && s.shift_date <= last && weekday(s.shift_date) === 0) sunCount[s.employee_id] = (sunCount[s.employee_id] || 0) + 1
@@ -171,5 +223,5 @@ export function buildSchedule(ym: string, emps: SchedEmp[], vac: Record<string, 
   let gap = 0
   for (const d of dates) { if (isClosed(d) || d < start) continue; const wd = weekday(d); for (let i = 0; i < SLOTS; i++) gap += Math.max(0, target(i, wd) - cov[d][i]) * 0.5 }
   out.sort((a, b) => a.shift_date.localeCompare(b.shift_date) || a.start_time.localeCompare(b.start_time))
-  return { shifts: out, perEmp, gapHours: gap, warnings }
+  return { shifts: out, perEmp, gapHours: gap, warnings, autoVac }
 }
