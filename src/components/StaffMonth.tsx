@@ -217,13 +217,17 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
       <div className="sm-bar">
         {canPlan && <button className="st-btn primary" disabled={busy || !rows.length} onClick={makePlan}>{busy && !plan ? '…' : T('Xếp lịch', 'Dienstplan erstellen')}</button>}
         <span className="small muted">{T('Ô tự điền từ hồ sơ và lịch làm. Bấm vào ô để sửa; ô đã sửa có vạch cam bên trái, xoá trống để quay về giá trị tự tính. Nền cam: khác tháng trước; dòng nền xanh: nhân viên mới.', 'Felder werden aus Personalakte und Dienstplan übernommen. Zum Ändern anklicken; geänderte Felder sind orange markiert, leeren = automatischer Wert. Orange hinterlegt: anders als Vormonat; grüne Zeile: neuer Mitarbeiter.')}</span>
-        <button className="st-btn" onClick={() => setShowPay(!showPay)}>{showPay ? T('Ẩn lương', 'Entgelt ausblenden') : T('Xem lương', 'Entgelt anzeigen')}</button>
         <button className="st-btn" disabled={!rows.length} onClick={exportXlsx}>Excel</button>
       </div>
       {!rows.length ? <div className="card muted">{T('Tháng này chưa có nhân viên', 'Keine Mitarbeiter in diesem Monat')}</div> : (
         <div className="pl-scroll">
           <table className="pl-sum sm-tab">
-            <thead><tr>{XCOLS.map((c) => <th key={c.k} lang="de" className={c.num ? '' : 'l'} style={{ minWidth: c.num ? undefined : Math.round((c.w || 70) * 0.8) }}>{c.de}{!de && <small>{c.vi}</small>}</th>)}</tr></thead>
+            <thead><tr>{XCOLS.map((c) => c.k === 'entgelt' ? (
+              // Bấm tiêu đề Entgelt để hiện / làm mờ lương
+              <th key={c.k} lang="de" className="sm-pay" role="button" tabIndex={0} title={showPay ? T('Làm mờ lương', 'Entgelt ausblenden') : T('Hiện lương', 'Entgelt anzeigen')}
+                onClick={() => setShowPay(!showPay)} onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setShowPay(!showPay) } }}>
+                {c.de} <span aria-hidden>{showPay ? '🙈' : '👁'}</span>{!de && <small>{c.vi}</small>}</th>
+            ) : <th key={c.k} lang="de" className={c.num ? '' : 'l'} style={{ minWidth: c.num ? undefined : Math.round((c.w || 70) * 0.8) }}>{c.de}{!de && <small>{c.vi}</small>}</th>)}</tr></thead>
             <tbody>
               {rows.map(({ e, st }) => (
                 <tr key={e.id} className={isNew(e) ? 'new' : ''}>
