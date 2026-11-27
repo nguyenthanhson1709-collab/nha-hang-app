@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx'
 import { Spinner, toast } from '../components/ui'
 import PdfSheet from '../components/PdfSheet'
 import { supabase } from '../lib/supabase'
+import { useTT, useVD, useLabels, FILE_VI } from './i18n'
 import { useTg, StatusTag } from './TgApp'
 import { chainPayments, loadDetail, tgErr, tgFileBlob, tgFileUrl, type Line, type Payment, type Settlement, type TgFile, downloadBlob } from './api'
 import { ARCHIVE_DIR, ARCHIVE_DIRS, archiveDir, deMonth, dmy, FILE_KINDS, fileSafe, fmtH, pdfName, PAY_STATE, payState, STATUS } from './calc'
@@ -14,6 +15,9 @@ import { renderTgPdf } from './TgPdf'
 interface LineHit { settlement_id: string; first_name: string; last_name: string; personnel_no: string | null }
 
 export default function Archiv() {
+  const vd = useVD()
+  const { pick } = useLabels()
+  const tr = useTT()
   const { rid, list, company, r } = useTg()
   const years = useMemo(() => [...new Set(list.map((s) => s.period.slice(0, 4)))].sort().reverse(), [list])
   const [year, setYear] = useState(years[0] || String(new Date().getFullYear()))
@@ -44,7 +48,7 @@ export default function Archiv() {
     return renderTgPdf({ company: company!, s: d.s, lines: d.lines, payments: pays, restaurantName: r.name })
   }
   async function preview(s: Settlement) {
-    if (!company) { toast('Firmendaten fehlen'); return }
+    if (!company) { toast(tr('Firmendaten fehlen')); return }
     setBusy(s.id)
     try { setPdf({ blob: await genPdf(s), name: pdfName(s.beleg_no, co) }) } catch (e) { toast(tgErr(e)) }
     setBusy('')
@@ -60,7 +64,7 @@ export default function Archiv() {
     setBusy('')
   }
   async function zipMonth(period: string) {
-    if (!company) { toast('Firmendaten fehlen'); return }
+    if (!company) { toast(tr('Firmendaten fehlen')); return }
     setBusy(period)
     try {
       const zip = new JSZip()
@@ -87,10 +91,10 @@ export default function Archiv() {
         <select style={{ flex: '0 0 120px' }} value={year} onChange={(e) => setYear(e.target.value)} disabled={!!ql}>
           {(years.length ? years : [year]).map((y) => <option key={y}>{y}</option>)}
         </select>
-        <input className="grow" style={{ minWidth: 180 }} placeholder="Suche: Monat, Jahr, Mitarbeiter, Beleg-Nr." value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="grow" style={{ minWidth: 180 }} placeholder={tr('Suche: Monat, Jahr, Mitarbeiter, Beleg-Nr.')} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
-      <p className="small muted">📁 Trinkgeld / {ql ? 'Suchergebnis' : year}</p>
-      {months.length === 0 && <p className="muted">Keine Belege.</p>}
+      <p className="small muted">📁 Trinkgeld / {ql ? vd('Kết quả tìm', 'Suchergebnis') : year}</p>
+      {months.length === 0 && <p className="muted">{tr('Keine Belege.')}</p>}
       {months.map((m) => {
         const ss = shown.filter((s) => s.period === m)
         const fs = files.filter((f) => ss.some((s) => s.id === f.settlement_id))
@@ -101,7 +105,7 @@ export default function Archiv() {
               <span className="small muted">{ss.length} Abrechnung(en) · {fs.length} Datei(en)</span>
             </summary>
             <div className="row wrap" style={{ margin: '8px 0' }}>
-              <button disabled={!!busy} onClick={() => zipMonth(m)}>{busy === m ? 'ZIP wird erstellt…' : '⬇ Monat als ZIP'}</button>
+              <button disabled={!!busy} onClick={() => zipMonth(m)}>{busy === m ? vd('Đang tạo ZIP…', 'ZIP wird erstellt…') : `⬇ ${tr('Monat als ZIP')}`}</button>
             </div>
             {ss.map((s) => (
               <div key={s.id} className="tg-arch">
@@ -109,9 +113,9 @@ export default function Archiv() {
                   <Link to={`/r/${rid}/tg/abrechnung/${s.id}?m=${s.period}`}><b>{s.beleg_no}</b></Link><StatusTag s={s} />
                 </div>
                 <div className="row wrap" style={{ margin: '6px 0' }}>
-                  <button className="tg-mini" disabled={!!busy} onClick={() => preview(s)}>{busy === s.id ? '…' : 'PDF-Vorschau / Drucken'}</button>
-                  <button className="tg-mini" disabled={!!busy} onClick={() => exportTable(s, 'xlsx')}>Excel</button>
-                  <button className="tg-mini" disabled={!!busy} onClick={() => exportTable(s, 'csv')}>CSV</button>
+                  <button className="tg-mini" disabled={!!busy} onClick={() => preview(s)}>{busy === s.id ? '…' : tr('PDF-Vorschau / Drucken')}</button>
+                  <button className="tg-mini" disabled={!!busy} onClick={() => exportTable(s, 'xlsx')}>{tr('Excel')}</button>
+                  <button className="tg-mini" disabled={!!busy} onClick={() => exportTable(s, 'csv')}>{tr('CSV')}</button>
                 </div>
                 {ARCHIVE_DIRS.map((dir) => {
                   const inDir = files.filter((f) => f.settlement_id === s.id && ARCHIVE_DIR[f.kind] === dir)
@@ -121,7 +125,7 @@ export default function Archiv() {
                       <div className="small muted">📂 {dir}</div>
                       {inDir.map((f) => (
                         <a key={f.id} href="#" className="tg-file" onClick={async (e) => { e.preventDefault(); const u = await tgFileUrl(f.path); if (u) window.open(u, '_blank') }}>
-                          📄 {f.name} <span className="small muted">· {FILE_KINDS[f.kind]} · {dmy(f.created_at.slice(0, 10))}</span>
+                          📄 {f.name} <span className="small muted">· {pick(FILE_KINDS, FILE_VI, f.kind)} · {dmy(f.created_at.slice(0, 10))}</span>
                         </a>
                       ))}
                     </div>
@@ -132,8 +136,8 @@ export default function Archiv() {
           </details>
         )
       })}
-      <p className="small muted">Unterschriebene PDFs bitte in der Monatsabrechnung unter „Belege & Anhänge“ als „Trinkgeldabrechnung (unterschrieben)“ hochladen. Sie werden nie überschrieben oder gelöscht; neu erzeugte PDFs werden als weitere Version abgelegt.</p>
-      {pdf && <PdfSheet pdf={pdf.blob} title={pdf.name} onClose={() => setPdf(null)} actions={[{ label: 'PDF herunterladen', onClick: () => downloadBlob(pdf.blob, pdf.name), primary: true }]} />}
+      <p className="small muted">{tr('Unterschriebene PDFs bitte in der Monatsabrechnung unter „Belege & Anhänge“ als „Trinkgeldabrechnung (unterschrieben)“ hochladen. Sie werden nie überschrieben oder gelöscht; neu erzeugte PDFs werden als weitere Version abgelegt.')}</p>
+      {pdf && <PdfSheet pdf={pdf.blob} title={pdf.name} onClose={() => setPdf(null)} actions={[{ label: tr('PDF herunterladen'), onClick: () => downloadBlob(pdf.blob, pdf.name), primary: true }]} />}
     </>
   )
 }
