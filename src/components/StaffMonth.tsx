@@ -4,7 +4,7 @@ import { toast } from './ui'
 import { dmy } from '../lib/format'
 import { isActive, type Employee } from '../lib/hr'
 import { monthDates, monthStat, noSurcharge, vacDays, type Shift, type Vacation } from '../lib/hrTime'
-import { buildSchedule, defaultSun, SUN_RULES, type SchedResult, type SunRule } from '../lib/scheduler'
+import { buildSchedule, defaultSun, SUN_RULES, type SchedEmp, type SchedResult, type SunRule } from '../lib/scheduler'
 
 /**
  * Lịch làm nhân viên (Mitarbeiterliste je Monat): bảng theo tháng giống file Excel gửi văn phòng lương.
@@ -37,7 +37,7 @@ const COLS: Col[] = [
   { k: 'resturlaub', de: 'Resturlaub', vi: 'Phép còn lại', w: 70, num: true, auto: (e) => n(e.vacation_left) },
   { k: 'anwesend', de: 'Anwesenheitstage', vi: 'Ngày đi làm', w: 70, num: true, auto: (_e, s) => (s.days ? String(s.days) : '') },
   { k: 'ist', de: 'Ist-Std gesamt', vi: 'Tổng giờ', w: 70, num: true, auto: (_e, s) => h(s.ist) },
-  // Quy tắc Chủ nhật cho bộ xếp lịch (không xuất Excel)
+  // Quy tắc Chủ nhật cho bộ xếp lịch: không hiện trong bảng, không xuất Excel (vẫn lưu theo tháng)
   { k: 'sonntagsregel', de: 'Sonntage', vi: 'Quy tắc Chủ nhật', w: 80, sticky: true, noXlsx: true, opts: SUN_RULES, auto: (e) => defaultSun(e.work_days) },
 ]
 const XCOLS = COLS.filter((c) => !c.noXlsx)
@@ -117,14 +117,20 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
     if (error) { toast(error.message); return }
     const vac: Record<string, Set<string>> = {}
     for (const a of abs) for (const d of dates) if (d >= a.from_date && d <= a.to_date) (vac[a.employee_id] ||= new Set()).add(d)
-    const list = rows.map(({ e, st }) => e.work_days && e.daily_hours ? {
-      id: e.id, name: `${(e.personnel_no || '').replace(/^0+(?=\d)/, '')} ${e.first_name || ''} ${e.last_name || ''}`.trim(),
-      hours: Number(e.daily_hours), days: Number(e.work_days), entry: e.entry_date || null, exit: e.exit_date || null,
-      sun: (val(e, st, COLS.find((c) => c.k === 'sonntagsregel')!).v || defaultSun(e.work_days)) as SunRule,
-    } : null).filter((x) => !!x)
+    // Lấy đúng số trong bảng (giờ/ngày, ngày/tuần, ngày vào, ngày nghỉ); ô đã sửa trong tháng được ưu tiên hơn hồ sơ
+    const col = (k: string) => COLS.find((c) => c.k === k)!
+    const num = (x: string) => { const v = Number(x.replace(',', '.')); return Number.isFinite(v) && v > 0 ? v : 0 }
+    const isoOf = (x: string) => { const m = x.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : /^\d{4}-\d{2}-\d{2}$/.test(x.trim()) ? x.trim() : null }
+    const list: SchedEmp[] = [], missing: string[] = []
+    for (const { e, st } of rows) {
+      const hours = num(val(e, st, col('tag')).v), days = num(val(e, st, col('tage')).v)
+      const name = `${(e.personnel_no || '').replace(/^0+(?=\d)/, '')} ${e.first_name || ''} ${e.last_name || ''}`.trim()
+      if (!hours || !days) { missing.push(name); continue }
+      list.push({ id: e.id, name, hours, days, entry: isoOf(val(e, st, col('eintritt')).v), exit: isoOf(val(e, st, col('austritt')).v),
+        sun: (val(e, st, col('sonntagsregel')).v || defaultSun(days)) as SunRule })
+    }
     const r = buildSchedule(ym, list, vac, (data || []) as never, from)
-    const missing = rows.filter(({ e }) => !e.work_days || !e.daily_hours).map(({ e }) => `${e.first_name || ''} ${e.last_name || ''}`.trim())
-    if (missing.length) r.warnings.unshift(T(`Chưa có số ngày/giờ hợp đồng, không xếp: ${missing.join(', ')}`, `Ohne Vertragstage/-stunden, nicht eingeplant: ${missing.join(', ')}`))
+    if (missing.length) r.warnings.unshift(T(`Chưa có giờ/ngày hoặc ngày/tuần, không xếp: ${missing.join(', ')}`, `Ohne Std./Tag oder Tage/Woche, nicht eingeplant: ${missing.join(', ')}`))
     setPlan({ ...r, from, replace: shifts.filter((s) => s.shift_date >= from).length })
   }
   async function savePlan() {
@@ -168,11 +174,11 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
       {!rows.length ? <div className="card muted">{T('Tháng này chưa có nhân viên', 'Keine Mitarbeiter in diesem Monat')}</div> : (
         <div className="pl-scroll">
           <table className="pl-sum sm-tab">
-            <thead><tr>{COLS.map((c) => <th key={c.k} lang="de" className={c.num ? '' : 'l'} style={{ minWidth: c.num ? undefined : Math.round((c.w || 70) * 0.8) }}>{c.de}{!de && <small>{c.vi}</small>}</th>)}</tr></thead>
+            <thead><tr>{XCOLS.map((c) => <th key={c.k} lang="de" className={c.num ? '' : 'l'} style={{ minWidth: c.num ? undefined : Math.round((c.w || 70) * 0.8) }}>{c.de}{!de && <small>{c.vi}</small>}</th>)}</tr></thead>
             <tbody>
               {rows.map(({ e, st }) => (
                 <tr key={e.id}>
-                  {COLS.map((c) => {
+                  {XCOLS.map((c) => {
                     const { v, own } = val(e, st, c)
                     const editing = edit?.id === e.id && edit.k === c.k
                     const cls = `${c.num ? '' : 'l'}${own ? ' own' : ''}`
