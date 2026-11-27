@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import { fromRecoveryLink, supabase, type Category, type Profile, type Restaurant, type Role } from './lib/supabase'
@@ -37,6 +37,8 @@ import RcRecipeEditor from './congthuc/pages/RecipeEditor'
 import RcIngredients from './congthuc/pages/Ingredients'
 import RcConcepts from './congthuc/pages/Concepts'
 import Assistant from './components/Assistant'
+// Trinkgeld nur bei Bedarf laden (PDF-Bibliothek nicht im Startpaket)
+const TgApp = lazy(() => import('./trinkgeld/TgApp'))
 
 // Mở app mới (tab mới / mở lại từ màn hình chính) -> luôn về trang đầu, không quay lại trang cũ (vd. trang scan).
 // Tải lại trang trong cùng một tab thì vẫn giữ trang đang xem.
@@ -133,6 +135,7 @@ function Shell({ session }: { session: Session }) {
           <Route path="/r/:rid/rc/:id" element={<RestLayout><RcRecipeView /></RestLayout>} />
           <Route path="/r/:rid/rc/:id/edit" element={<RestLayout><RcRecipeEditor /></RestLayout>} />
           <Route path="/r/:rid/viva" element={<RestLayout><Viva /></RestLayout>} />
+          <Route path="/r/:rid/tg/*" element={<RestLayout><Suspense fallback={<Spinner />}><TgApp /></Suspense></RestLayout>} />
           <Route path="/r/:rid/bank" element={<RestLayout><Bank /></RestLayout>} />
           <Route path="/bank-callback" element={<BankCallback />} />
           <Route path="/r/:rid/settings" element={<RestLayout><RestaurantSettings /></RestLayout>} />

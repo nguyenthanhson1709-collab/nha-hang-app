@@ -147,7 +147,9 @@ export default function Kassenbuch() {
   async function delMove(id: string) {
     if (!confirm(t('confirmDelete'))) return
     const { error } = await supabase.from('nh_cash_moves').delete().eq('id', id)
-    if (error) toast(errMsg(error)); else load()
+    // Trinkgeld-Auszahlung ist mit dem Beleg im Modul Trinkgeld verknüpft: dort stornieren
+    if (error && /nh_tg_payments/.test(error.message)) toast('Trinkgeld-Auszahlung: bitte im Modul Trinkgeld → Auszahlungen stornieren')
+    else if (error) toast(errMsg(error)); else load()
   }
 
   const cmap = new Map(counts.map((c) => [c.count_date, c]))

@@ -93,6 +93,11 @@ export function buildBookings(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: 
     const [s0, h, txt0] = MV[m.type]
     const viva = m.channel === 'viva'
     const s = viva ? '1210' : s0, txt = viva ? 'Kartenzahlung Viva Wallet' : txt0
+    if (m.channel === 'trinkgeld') {
+      // Trinkgeld-Auszahlung: Konto lt. Einstellungen des Moduls Trinkgeld, nicht als Betriebsausgabe (4900)
+      out.push({ date: m.move_date, amount: Number(m.amount), soll: m.konto || '', haben: '1000', bu: '', text: m.description || 'Trinkgeld-Auszahlung', beleg: '', source: m.id })
+      continue
+    }
     out.push({ date: m.move_date, amount: Number(m.amount), soll: s, haben: h, bu: '', text: m.description ? `${txt}: ${m.description}` : txt, beleg: '', source: m.id })
   }
   return out.sort((a, b) => a.date.localeCompare(b.date))
