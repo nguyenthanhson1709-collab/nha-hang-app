@@ -58,7 +58,7 @@ export interface KbRow {
   restaurant_id: string; entry_date: string; period: string; source: string; source_id: string
   text: string; einnahme: number; ausgabe: number; mwst: string | null; nr: number; saldo: number
 }
-export interface CashMove { id: string; restaurant_id: string; move_date: string; period: string; type: string; amount: number; description: string | null; files?: string[]; created_at: string; channel?: string | null }
+export interface CashMove { id: string; restaurant_id: string; move_date: string; period: string; type: string; amount: number; description: string | null; files?: string[]; created_at: string; channel?: string | null; konto?: string | null }
 export interface CashCount { restaurant_id: string; count_date: string; period: string; counted: number; book_balance: number; difference: number; reason: string | null }
 
 export async function signedUrl(path: string) {

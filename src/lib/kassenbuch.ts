@@ -93,8 +93,10 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
     if (m.channel === 'viva') vivaTip = r2(vivaTip + Number(m.amount)) // ngày chưa có Z-Bon
     const [konto0, txt0, isIn] = MV[m.type]
     // Viva Wallet có tài khoản riêng 1210 trong DATEV của Steuerberater (SKR03)
-    const konto = m.channel === 'viva' ? '1210' : konto0
-    const txt = m.channel === 'viva' ? 'Kartenzahlung' : txt0
+    // Trinkgeld-Auszahlung (Module Trinkgeld): Text wie erfasst, Konto lt. Einstellungen (durchlaufender Posten, keine Betriebsausgabe)
+    const tg = m.channel === 'trinkgeld'
+    const konto = m.channel === 'viva' ? '1210' : tg ? m.konto || '' : konto0
+    const txt = m.channel === 'viva' ? 'Kartenzahlung' : tg ? m.description || 'Trinkgeld-Auszahlung' : txt0
     const a = Number(m.amount)
     out.push({
       ...base, date: m.move_date, konto, text: m.type === 'geldtransit' && m.description?.trim() ? m.description.trim() : m.description && m.description.trim() !== txt ? `${txt}: ${m.description}` : txt, moveId: m.id, prio: isIn ? 1 : 4, ts: m.created_at,

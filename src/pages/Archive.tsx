@@ -190,6 +190,9 @@ export default function Archive() {
                 <Link className="tile" to={`/r/${rid}/contracts`}>
                   <TileIcon name="contract" /><span>{t('contracts')}</span><span className="small muted">Lastschrift</span>
                 </Link>
+                {m && <Link className="tile" to={`/r/${rid}/tg?m=${period}`}>
+                  <TileIcon name="people" /><span>Trinkgeld</span><span className="small muted">Abrechnung & Auszahlung</span>
+                </Link>}
               </div>
             )}
           </>

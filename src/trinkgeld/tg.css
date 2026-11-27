@@ -1,0 +1,36 @@
+/* Module Trinkgeld */
+.tg-tabs { margin-bottom: 10px; }
+.tg-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.tg-kpi .v { font-size: 1.1rem; }
+.tg-kpi.strong { border-color: var(--brand); }
+.tg-kpi.strong .v { color: var(--brand); }
+.tg-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; background: var(--brand-2); border-radius: 12px; padding: 10px 12px; margin: 8px 0; }
+.tg-sum > div { display: flex; flex-direction: column; min-width: 0; }
+.tg-sum span { font-size: .75rem; color: var(--muted); }
+.tg-sum b { font-variant-numeric: tabular-nums; font-size: 1.02rem; }
+.tg-sum.sticky { position: sticky; top: 64px; z-index: 5; }
+.tg-actions { margin: 4px 0 12px; }
+.tg-chart { display: flex; align-items: flex-end; gap: 4px; height: 170px; margin-top: 10px; }
+.tg-col { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; }
+.tg-col > span { font-size: .62rem; color: var(--muted); margin-top: 4px; white-space: nowrap; }
+.tg-col > span.on { color: var(--brand); font-weight: 700; }
+.tg-bars { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
+.tg-bar { width: 42%; max-width: 16px; border-radius: 3px 3px 0 0; min-height: 1px; }
+.tg-bar.a, .tg-dot.a { background: var(--brand); }
+.tg-bar.b, .tg-dot.b { background: var(--cardc); }
+.tg-dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin: 0 3px 0 8px; }
+.tg-click { cursor: pointer; }
+.tg-click:hover td { background: color-mix(in srgb, var(--brand) 6%, transparent); }
+.tg-tbl td { vertical-align: middle; }
+.tg-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.tg-h { width: 90px; min-height: 36px; padding: 6px 8px; text-align: right; }
+.tg-reason { margin-top: 4px; min-height: 34px; padding: 6px 8px; font-size: .8rem; min-width: 150px; }
+.tg-off td, .tg-off .t { opacity: .5; }
+.tg-mini { min-height: 34px; padding: 6px 10px; font-size: .8rem; }
+.tg-pay { flex-wrap: wrap; }
+.tg-folder > summary { cursor: pointer; list-style: none; }
+.tg-folder > summary::-webkit-details-marker { display: none; }
+.tg-arch { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+.tg-sub { margin: 6px 0 0 8px; }
+.tg-file { display: block; padding: 4px 0 4px 14px; overflow-wrap: anywhere; }
+.tg-audit td { font-size: .75rem; max-width: 280px; overflow-wrap: anywhere; }
