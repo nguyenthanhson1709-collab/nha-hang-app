@@ -4,8 +4,9 @@
 //
 // Gọi từ app (đăng nhập):  { action: 'save' | 'remove' | 'test' | 'sync', restaurant_id, ... }
 // Gọi từ pg_cron (header x-sync-secret): {} -> mọi quán bật tự động, 3 ngày kinh doanh gần nhất.
+// Webhook Viva "Account Transaction Created" (?hook=<webhook_token> của quán): GET = mã xác minh, POST = lưu biến động tài khoản.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { aggregate, daysBetween, fetchDates, txList, type VivaDay } from "./viva.ts";
+import { aggregate, daysBetween, fetchDates, parseInsDate, txList, type VivaDay } from "./viva.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -40,6 +41,52 @@ async function fetchDay(acc: Account, key: string, date: string) {
   const b = body as Record<string, unknown>;
   if (b && b.Success === false && b.ErrorCode) throw new VivaError("viva_error", `Viva ErrorCode ${b.ErrorCode}: ${b.ErrorText || ""}`);
   return txList(body);
+}
+
+/** Gọi API cũ của Viva (Basic auth) và trả JSON */
+async function vivaGet(acc: Account, key: string, path: string) {
+  const host = acc.demo ? "https://demo.vivapayments.com" : "https://www.vivapayments.com";
+  const res = await fetch(host + path, { headers: { Authorization: "Basic " + btoa(`${acc.merchant_id.trim()}:${key.trim()}`), Accept: "application/json" } });
+  const text = await res.text();
+  if (res.status === 401 || res.status === 403) throw new VivaError("viva_auth", `Viva ${res.status}: Merchant ID oder API-Schlüssel falsch`);
+  if (!res.ok) throw new VivaError("viva_http", `Viva ${res.status}: ${text.slice(0, 200)}`);
+  try { return JSON.parse(text); } catch { throw new VivaError("viva_format", `Viva: unerwartete Antwort ${text.slice(0, 120)}`); }
+}
+
+const pick = (o: Record<string, unknown>, k: string) => o?.[k] ?? o?.[k[0].toLowerCase() + k.slice(1)];
+
+/** Webhook của Viva cho một quán (nhận diện bằng webhook_token bí mật trong URL) */
+async function hook(db: SupabaseClient, req: Request, token: string) {
+  const { data: acc } = await db.from("nh_viva_accounts").select("*").eq("webhook_token", token).maybeSingle();
+  if (!acc) return json({ error: "forbidden" }, 403);
+  const { data: k } = await db.from("nh_viva_keys").select("api_key").eq("restaurant_id", acc.restaurant_id).maybeSingle();
+  if (req.method === "GET") {
+    // Viva kiểm tra URL: trả lại mã xác minh lấy từ /api/messages/config/token
+    if (!k?.api_key) return json({ error: "no_key" }, 400);
+    const v = await vivaGet(acc as Account, k.api_key, "/api/messages/config/token");
+    return json({ Key: pick(v, "Key") });
+  }
+  const body = await req.json().catch(() => ({}));
+  const ev = Number(pick(body, "EventTypeId"));
+  const d = (pick(body, "EventData") || {}) as Record<string, unknown>;
+  if (ev !== 2054 || !d) return json({ ok: true, ignored: ev });
+  const id = String(pick(d, "WalletTransactionId") || pick(body, "CorrelationId") || pick(body, "MessageId") || crypto.randomUUID());
+  const created = String(pick(d, "Created") || pick(body, "Created") || new Date().toISOString());
+  const n = (v: unknown) => (v == null || v === "" ? null : Number(v));
+  const vd = pick(d, "ValueDate");
+  const row = {
+    id, restaurant_id: acc.restaurant_id, created: new Date(parseInsDate(created) ?? Date.now()).toISOString(),
+    value_date: vd ? String(vd).slice(0, 10) : null, amount: n(pick(d, "Amount")) ?? 0,
+    type_id: n(pick(d, "TypeId")), subtype_id: n(pick(d, "SubTypeId")), status_id: (pick(d, "StatusId") as string) ?? null,
+    description: (pick(d, "Description") as string) || (pick(d, "InternalDescription") as string) || null,
+    iban: (pick(d, "Iban") as string) ?? null, wallet_id: pick(d, "WalletId") != null ? String(pick(d, "WalletId")) : null,
+    available_after: n(pick(d, "targetAvailable") ?? pick(d, "TargetAvailable")), balance_after: n(pick(d, "targetAmount") ?? pick(d, "TargetAmount")),
+    raw: body,
+  };
+  const { error } = await db.from("nh_viva_account_tx").upsert(row);
+  if (error) return json({ error: error.message }, 500);
+  await db.from("nh_viva_accounts").update({ last_hook_at: new Date().toISOString() }).eq("restaurant_id", acc.restaurant_id);
+  return json({ ok: true });
 }
 
 async function pull(acc: Account, key: string, from: string, to: string) {
@@ -92,6 +139,10 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
   try {
+    // ---- Webhook Viva ----
+    const hk = new URL(req.url).searchParams.get("hook");
+    if (hk) return await hook(db, req, hk);
+
     // ---- Lịch chạy hằng ngày ----
     const cronSecret = req.headers.get("x-sync-secret");
     if (cronSecret) {
@@ -155,6 +206,20 @@ Deno.serve(async (req) => {
       const day = berlinDay(-1);
       const { days, raw } = await pull(acc as Account, k.api_key, day, day);
       return json({ ok: true, day, raw, ...days[0] });
+    }
+    if (body.action === "wallets") {
+      // số dư từng ví (Guthaben) - đọc trực tiếp từ Viva
+      const { data: k } = await db.from("nh_viva_keys").select("api_key").eq("restaurant_id", rid).maybeSingle();
+      if (!k?.api_key) return json({ error: "no_key" }, 400);
+      const raw = await vivaGet(acc as Account, k.api_key, "/api/wallets");
+      const arr = (Array.isArray(raw) ? raw : (pick(raw, "Wallets") || [])) as Record<string, unknown>[];
+      const wallets = arr.map((w) => ({
+        id: String(pick(w, "WalletId") ?? ""), name: (pick(w, "FriendlyName") as string) || "", iban: (pick(w, "Iban") as string) || "",
+        primary: !!pick(w, "IsPrimary"), amount: Number(pick(w, "Amount") ?? 0), available: Number(pick(w, "Available") ?? pick(w, "Amount") ?? 0),
+        overdraft: Number(pick(w, "Overdraft") ?? 0), currency: (pick(w, "CurrencyCode") as string) || "",
+      }));
+      await db.from("nh_viva_accounts").update({ wallets, wallets_at: new Date().toISOString() }).eq("restaurant_id", rid);
+      return json({ wallets });
     }
     if (body.action === "sync") {
       const re = /^\d{4}-\d{2}-\d{2}$/;
