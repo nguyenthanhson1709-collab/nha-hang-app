@@ -692,3 +692,5 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .sm-tab th:nth-child(3), .sm-tab td:nth-child(3) { left: 96px; min-width: 80px; width: 80px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
 .sm-tab th:nth-child(4), .sm-tab td:nth-child(4) { left: 176px; min-width: 110px; box-shadow: 1px 0 0 var(--line); }
 .sm-tab td:nth-child(17) { font-variant-numeric: tabular-nums; font-size: .74rem; letter-spacing: -.01em; }
+.sm-tab td.sm-chk { cursor: pointer; text-align: center; }
+.sm-tab td.sm-chk .pick-box { margin: 0; width: 22px; height: 22px; }
