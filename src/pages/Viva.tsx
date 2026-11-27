@@ -103,8 +103,10 @@ export default function Viva() {
     try {
       await vivaCall({ action: 'save', restaurant_id: rid, ...edit }, de)
       toast(de ? 'Gespeichert' : 'Đã lưu'); setEdit(null)
-    } catch (e) { toast(errMsg(e)) }
-    setBusy(''); load()
+    } catch (e) { toast(errMsg(e)); setBusy(''); load(); return }
+    setBusy('')
+    // Lưu khoá mới xong: lấy luôn số từng ngày của tháng đang xem
+    if (edit.api_key.trim()) await sync(); else load()
   }
   async function remove() {
     if (!confirm(de ? 'Verbindung zu Viva Wallet trennen? Der API-Schlüssel wird gelöscht. Bereits übernommene Beträge bleiben im Kassenbuch.' : 'Ngắt kết nối Viva Wallet? API Key sẽ bị xoá. Số đã ghi vào Kassenbuch vẫn giữ.')) return
