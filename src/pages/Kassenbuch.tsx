@@ -9,6 +9,7 @@ import { balanceBefore, currentBalance, kassenbuch, lockedPeriods, uploadFiles }
 import Scanner, { type ScannedPage } from '../components/Scanner'
 import { autoScanImage } from '../lib/scanner'
 import { compressImage } from '../lib/ocr'
+import { dropProps } from '../lib/drop'
 import { download } from '../lib/pdf'
 import { kbLines, kbPdf, kbTotals, kbXlsx, type KbLine } from '../lib/kassenbuch'
 import { docsInRange } from '../lib/data'
@@ -85,7 +86,7 @@ export default function Kassenbuch() {
     setSaving(false)
   }
   function closeMove() { mvPages.forEach((p) => URL.revokeObjectURL(p.preview)); setMvPages([]); setMove(null) }
-  async function addPhotos(fl: FileList | null) {
+  async function addPhotos(fl: FileList | File[] | null) {
     for (const f of Array.from(fl || [])) {
       let blob: Blob
       try { blob = await autoScanImage(f) } catch { blob = await compressImage(f) }
@@ -203,7 +204,10 @@ export default function Kassenbuch() {
           <label className="f"><span>{t('amount')}</span><Money autoFocus value={move.amount} onChange={(v) => setMove({ ...move, amount: v })} /></label>
           <label className="f"><span>{t('description')}</span><input value={move.description} onChange={(e) => setMove({ ...move, description: e.target.value })} /></label>
           {(move.type !== 'geldtransit' || move.channel === 'viva') && <>
-            <div className="grid2" style={{ marginBottom: 8 }}>
+            <div className="grid2" style={{ marginBottom: 8 }} {...dropProps((fl) => {
+              const imgs = Array.from(fl).filter((f) => f.type.startsWith('image/'))
+              if (imgs.length) addPhotos(imgs); else toast(t('onlyImages'))
+            })}>
               <button onClick={() => setScanner(true)}>📄 {t('scan')}</button>
               <button onClick={() => cam.current?.click()}>📷 {t('takePhoto')}</button>
             </div>

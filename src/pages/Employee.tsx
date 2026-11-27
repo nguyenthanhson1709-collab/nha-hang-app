@@ -241,6 +241,10 @@ export default function EmployeePage() {
     const { error } = await supabase.from('nh_employee_docs').update({ valid_until: v }).eq('id', d.id)
     if (error) toast(errMsg(error)); else loadChildren()
   }
+  const dropPhoto = dropProps((fl) => {
+    const f = Array.from(fl).find((x) => x.type.startsWith('image/'))
+    if (f) uploadPhoto(f); else toast(T('Chỉ nhận file ảnh', 'Nur Bilddateien'))
+  })
   async function uploadPhoto(f: File | undefined) {
     if (!f || isNew) return
     try {
@@ -575,7 +579,7 @@ export default function EmployeePage() {
           {!isNew && (
             <div className="row" style={{ marginBottom: 10 }}>
               {photoUrl ? <img src={photoUrl} alt="" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover' }} /> : <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--brand-2)' }} />}
-              <label className="btn">{T('Ảnh chân dung', 'Foto')}<input type="file" accept="image/*" hidden onChange={(ev) => { uploadPhoto(ev.target.files?.[0]); ev.target.value = '' }} /></label>
+              <label className="btn" {...dropPhoto}>{T('Ảnh chân dung', 'Foto')}<input type="file" accept="image/*" hidden onChange={(ev) => { uploadPhoto(ev.target.files?.[0]); ev.target.value = '' }} /></label>
             </div>
           )}
           <div className="grid2">
@@ -824,7 +828,7 @@ export default function EmployeePage() {
       <div className="page pf">
         {mobile ? (
           <section className="phead ph-m">
-            <label className="ph-av" title={T('Đổi ảnh chân dung', 'Foto ändern')}>
+            <label className="ph-av" title={T('Đổi ảnh chân dung', 'Foto ändern')} {...dropPhoto}>
               {photoUrl ? <img src={photoUrl} alt="" /> : <span>{initials || '?'}</span>}
               <span className="ph-cam"><GIcon k="camera" /></span>
               <input type="file" accept="image/*" hidden onChange={(ev) => { uploadPhoto(ev.target.files?.[0]); ev.target.value = '' }} />
@@ -843,7 +847,7 @@ export default function EmployeePage() {
         ) : (
         <section className="phead">
             <div className="ph-top">
-              <label className="ph-av" title={T('Đổi ảnh chân dung', 'Foto ändern')}>
+              <label className="ph-av" title={T('Đổi ảnh chân dung', 'Foto ändern')} {...dropPhoto}>
                 {photoUrl ? <img src={photoUrl} alt="" /> : <span>{initials || '?'}</span>}
                 <span className="ph-cam"><GIcon k="camera" /></span>
                 <input type="file" accept="image/*" hidden onChange={(ev) => { uploadPhoto(ev.target.files?.[0]); ev.target.value = '' }} />
