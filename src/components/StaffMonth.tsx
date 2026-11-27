@@ -108,9 +108,16 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
       .sort((a, b) => (a.e.personnel_no || '').localeCompare(b.e.personnel_no || ''))
   }, [emps, shifts, abs, ym, yv])
 
-  const val = (e: Emp, st: St, c: Col) => {
+  // Giờ/tuần = giờ/ngày × ngày/tuần (theo số trong bảng, kể cả ô đã sửa)
+  const wocheOf = (e: Emp, st: St): string => {
+    const num = (k: string): number => Number(val(e, st, COLS.find((x) => x.k === k)!).v.replace(',', '.'))
+    const w = num('tag') * num('tage')
+    return Number.isFinite(w) && w > 0 ? n(Math.round(w * 100) / 100) : ''
+  }
+  const val = (e: Emp, st: St, c: Col): { v: string; own: boolean } => {
     const o = saved?.[e.id]?.[c.k]
     if (o != null) return { v: o, own: true }
+    if (c.k === 'woche') return { v: wocheOf(e, st), own: false }
     if (c.sticky) return { v: prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : ''), own: false }
     return { v: c.auto ? c.auto(e, st) : '', own: false }
   }
@@ -118,7 +125,13 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
   // So với tháng trước: ô khác giá trị tháng trước được tô nền; nhân viên vào làm trong tháng này tô cả dòng
   const changed = (e: Emp, st: St, c: Col, v: string) => {
     if (c.mon || c.check || c.noXlsx) return false
-    const was = c.sticky ? (prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : '')) : (last[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : ''))
+    const lastOf = (k: string) => { const cc = COLS.find((x) => x.k === k)!; return last[e.id]?.[k] ?? (cc.auto ? cc.auto(e, st) : '') }
+    let was: string
+    if (c.k === 'woche' && last[e.id]?.woche == null) {
+      // tháng trước cũng tính giờ/tuần = giờ/ngày × ngày/tuần
+      const w = Number(lastOf('tag').replace(',', '.')) * Number(lastOf('tage').replace(',', '.'))
+      was = Number.isFinite(w) && w > 0 ? n(Math.round(w * 100) / 100) : ''
+    } else was = c.sticky ? (prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : '')) : lastOf(c.k)
     return v.trim() !== was.trim()
   }
   const isNew = (e: Emp) => !!e.entry_date && e.entry_date >= `${ym}-01`
@@ -126,7 +139,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
   async function commit(e: Emp, st: St, c: Col, raw: string) {
     setEdit(null)
     const v = raw.trim()
-    const base = c.sticky ? (prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : '')) : c.auto ? c.auto(e, st) : ''
+    const base = c.k === 'woche' ? wocheOf(e, st) : c.sticky ? (prev[e.id]?.[c.k] ?? (c.auto ? c.auto(e, st) : '')) : c.auto ? c.auto(e, st) : ''
     const cur = { ...(saved?.[e.id] || {}) }
     if (v === base && !(c.sticky && v)) delete cur[c.k]; else cur[c.k] = v
     if (JSON.stringify(cur) === JSON.stringify(saved?.[e.id] || {})) return
