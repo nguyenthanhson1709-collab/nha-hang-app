@@ -29,7 +29,7 @@ export default function Plan() {
   const [ym, setYm] = useState<string | null>(null)
   const [shifts, setShifts] = useState<Shift[] | null>(null)
   const [abs, setAbs] = useState<Vacation[]>([])
-  const [view, setView] = useState<'sum' | 'grid' | 'list'>('sum')
+  const [view, setView] = useState<'sum' | 'grid' | 'list'>('list')
   const [pdf, setPdf] = useState<Blob | null>(null)
   const [tick, setTick] = useState(0)
   const pm = useFollowMonth(setYm)
@@ -89,6 +89,11 @@ export default function Plan() {
       <Top title={T('Xếp lịch', 'Dienstplan')} sub={company} back={`/r/${rid}/hr`} right={<LangSwitch />} />
       <div className="st">
         <div className="pl-ctrl">
+          <div className="seg">
+            <button className={view === 'list' ? 'sel' : ''} onClick={() => setView('list')}>{T('Lịch làm nhân viên', 'Mitarbeiterliste')}</button>
+            <button className={view === 'sum' ? 'sel' : ''} onClick={() => setView('sum')}>{T('Tổng hợp', 'Zusammenfassung')}</button>
+            <button className={view === 'grid' ? 'sel' : ''} onClick={() => setView('grid')}>{T('Lịch theo ngày', 'Monatsübersicht')}</button>
+          </div>
           {/* Chọn tháng: mũi tên trước/sau, bấm vào tên tháng để mở danh sách */}
           <div className="pl-month">
             <button aria-label={T('Tháng trước', 'Vormonat')} disabled={!ym || months.indexOf(ym) >= months.length - 1} onClick={() => setYm(months[months.indexOf(ym!) + 1])}>‹</button>
@@ -98,11 +103,6 @@ export default function Plan() {
               </select>
             </label>
             <button aria-label={T('Tháng sau', 'Folgemonat')} disabled={!ym || months.indexOf(ym) <= 0} onClick={() => setYm(months[months.indexOf(ym!) - 1])}>›</button>
-          </div>
-          <div className="seg">
-            <button className={view === 'sum' ? 'sel' : ''} onClick={() => setView('sum')}>{T('Tổng hợp', 'Zusammenfassung')}</button>
-            <button className={view === 'grid' ? 'sel' : ''} onClick={() => setView('grid')}>{T('Lịch theo ngày', 'Monatsübersicht')}</button>
-            <button className={view === 'list' ? 'sel' : ''} onClick={() => setView('list')}>{T('Lịch làm nhân viên', 'Mitarbeiterliste')}</button>
           </div>
           {view !== 'list' && <button className="st-btn" disabled={!rows.length} onClick={() => setPdf(dienstplanPdf({ company, ym: ym!, rows: rows.map((x) => ({ name: `${x.e.last_name}, ${x.e.first_name}`, pnr: pnr(x.e), contract: x.contract, shifts: x.sh, vac: x.vac, noZ: noSurcharge(x.e) })) }))}>PDF</button>}
         </div>
