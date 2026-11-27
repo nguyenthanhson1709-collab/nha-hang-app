@@ -31,7 +31,7 @@ export default function Assistant() {
   const [text, setText] = useState('')
   const [msg, setMsg] = useState('')
   const [pick, setPick] = useState<Plan | null>(null)
-  const [recLang, setRecLang] = useState<'vi' | 'de'>(() => { try { return (localStorage.getItem('nh-as-lang') as 'vi' | 'de') || lang } catch { return lang } })
+  const [recLang, setRecLang] = useState<'vi' | 'de'>(() => { try { return (localStorage.getItem('nh-as-lang') as 'vi' | 'de') || 'vi' } catch { return 'vi' } })
   const rec = useRef<Rec | null>(null)
   const emps = useRef<AsEmp[] | null>(null)
   const viaVoice = useRef(false)
@@ -41,6 +41,7 @@ export default function Assistant() {
   const isManagerSomewhere = app.profile.is_owner || Object.values(app.roles).some((r) => canManageRole(r))
 
   useEffect(() => () => rec.current?.abort(), [])
+  useEffect(() => { try { speechSynthesis.getVoices() } catch { /* */ } }, [open])
   useEffect(() => { try { localStorage.setItem('nh-as-lang', recLang) } catch { /* */ } }, [recLang])
   // Tải sẵn danh sách nhân viên khi mở trợ lý (chỉ chủ / người phụ trách)
   useEffect(() => { if (open && !emps.current && isManagerSomewhere) loadEmployees().then((l) => { emps.current = l }) }, [open]) // eslint-disable-line
@@ -48,7 +49,7 @@ export default function Assistant() {
   function ctx(): AsCtx {
     const visible = app.restaurants.filter((r) => r.active || app.profile.is_owner)
     return {
-      lang, today: todayIso(), currentRid,
+      lang: recLang, today: todayIso(), currentRid,
       restaurants: visible.map((r) => ({ id: r.id, name: r.name })),
       employees: emps.current || [],
       isOwner: app.profile.is_owner,
@@ -60,19 +61,25 @@ export default function Assistant() {
     if (!viaVoice.current || !('speechSynthesis' in window)) return
     try {
       const u = new SpeechSynthesisUtterance(s.split(' · ')[0])
-      u.lang = de ? 'de-DE' : 'vi-VN'
+      const vl = recLang === 'de' ? 'de' : 'vi'
+      u.lang = vl === 'de' ? 'de-DE' : 'vi-VN'
+      // Chọn đúng giọng Việt / Đức có trên máy (không thì trình duyệt đọc bằng giọng mặc định, sai âm)
+      const v = speechSynthesis.getVoices().find((x) => x.lang.toLowerCase().replace('_', '-').startsWith(vl))
+      if (v) u.voice = v
+      u.rate = 1
       speechSynthesis.cancel(); speechSynthesis.speak(u)
     } catch { /* không đọc được thì thôi */ }
   }
 
   function close() { rec.current?.abort(); setOpen(false); setPhase('idle'); setText(''); setMsg(''); setPick(null) }
 
+  const S = (vi: string, g: string) => (recLang === 'de' ? g : vi)
   function run(p: Plan) {
     if (p.kind === 'go') { close(); nav(p.to); toast(p.label); speak(p.label); return }
-    if (p.kind === 'pickEmp' || p.kind === 'pickRest') { setPick(p); setPhase('pick'); speak(p.kind === 'pickEmp' ? T('Nhân viên nào?', 'Welcher Mitarbeiter?') : T('Nhà hàng nào?', 'Welches Restaurant?')); return }
+    if (p.kind === 'pickEmp' || p.kind === 'pickRest') { setPick(p); setPhase('pick'); speak(p.kind === 'pickEmp' ? S('Nhân viên nào?', 'Welcher Mitarbeiter?') : S('Nhà hàng nào?', 'Welches Restaurant?')); return }
     if (p.kind === 'deny') { setMsg(p.msg); setPhase('msg'); speak(p.msg); return }
     const m = T('Chưa hiểu câu lệnh. Thử nói tên trang và tên người, ví dụ "Bảng lương tháng 10 của Lina".', 'Befehl nicht verstanden. Z.B. „Lohnabrechnung Oktober von Lina“.')
-    setMsg(m); setPhase('msg'); speak(T('Chưa hiểu, nói lại giúp nhé', 'Nicht verstanden, bitte noch einmal'))
+    setMsg(m); setPhase('msg'); speak(S('Chưa hiểu, nói lại giúp nhé', 'Nicht verstanden, bitte noch einmal'))
   }
 
   async function handle(raw: string) {
