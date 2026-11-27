@@ -131,8 +131,8 @@ export default function Bank() {
     if (f.size > 20000) { toast(de ? 'Datei zu groß – bitte die .pem-Datei wählen' : 'File quá lớn – hãy chọn file .pem'); return }
     const text = await f.text()
     if (!/-----BEGIN (RSA )?PRIVATE KEY-----/.test(text)) { toast(ERR.invalid_key[de ? 1 : 0]); return }
-    const id = f.name.replace(/\.pem$/i, '')
-    setSetup({ ...setup, pem: text, file: f.name, app_id: setup.app_id || (/^[0-9a-f-]{36}$/i.test(id) ? id : '') })
+    const id = f.name.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] || ''
+    setSetup((s) => s && { ...s, pem: text, file: f.name, app_id: s.app_id.trim() || id })
   }
   async function saveSetup() {
     if (!setup) return
