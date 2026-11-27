@@ -54,7 +54,7 @@ export default function Plan() {
     const to = monthDates(ym).at(-1)!
     Promise.all([
       supabase.from('nh_shifts').select('id,employee_id,shift_date,start_time,end_time,break_min,note').eq('restaurant_id', rid).gte('shift_date', `${ym}-01`).lte('shift_date', to).limit(5000),
-      supabase.from('nh_absences').select('employee_id,from_date,to_date,kind,note').eq('restaurant_id', rid).lte('from_date', to).gte('to_date', `${ym}-01`).limit(5000),
+      supabase.from('nh_absences').select('id,employee_id,from_date,to_date,kind,note').eq('restaurant_id', rid).lte('from_date', to).gte('to_date', `${ym}-01`).limit(5000),
     ]).then(([s, a]) => { setShifts((s.data || []) as Shift[]); setAbs((a.data || []) as Vacation[]) })
   }, [rid, ym, tick])
 

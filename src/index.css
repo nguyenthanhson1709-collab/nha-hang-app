@@ -709,3 +709,16 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 /* Lịch làm nhân viên: khác tháng trước / nhân viên mới */
 .sm-tab td.chg { background: color-mix(in srgb, var(--brand, #FF9018) 26%, var(--card)); }
 .sm-tab tr.new td { background: color-mix(in srgb, #2fa36b 24%, var(--card)); }
+/* Ghi chú xếp lịch */
+.pn { margin-top: 14px; }
+.pn h3 { margin: 0 0 4px; }
+.pn-tab { width: 100%; margin: 10px 0; }
+.pn-tab tr { cursor: pointer; }
+.pn-tab tr.sel td { background: color-mix(in srgb, var(--brand, #FF9018) 18%, var(--card)); }
+.pn-k.vacation { color: #4aa3ff; } .pn-k.sick { color: #ff6b6b; } .pn-k.other { color: var(--brand, #FF9018); } .pn-k.unpaid { color: var(--muted); }
+.pn-del { min-height: 32px; min-width: 32px; padding: 0; border: 0; background: none; color: var(--muted); font-size: 1rem; }
+.pn-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 8px; }
+.pn-form select, .pn-form input { width: auto; min-height: 40px; font-size: .9rem; }
+.pn-form label { display: flex; flex-direction: column; gap: 2px; font-size: .75rem; color: var(--muted); }
+.pn-form .pn-note { flex: 1 1 200px; }
+@media (max-width: 640px) { .pn-form > select, .pn-form .pn-note { flex: 1 1 100%; } .pn-form label { flex: 1 1 40%; } .pn-form label input { width: 100%; } }
