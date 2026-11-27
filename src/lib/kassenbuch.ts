@@ -82,14 +82,6 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
     if (transfer > 0) out.push({ ...base, date: z.z_date, aus: transfer, ausNetto: transfer, konto: '1360', text: 'Überweisung', link, prio: 2.7, ts: z.created_at })
   }
 
-  // Quán theo Viva Wallet: một dòng cả tháng, ngày cuối tháng. Einnahmen = Σ Viva − Σ Kreditzahlung (các ngày có cả hai)
-  if (vivaMode && vivaTip) {
-    const last = new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate()
-    const d = `${period}-${String(last).padStart(2, '0')}`
-    out.push({ ...base, date: d, konto: '1590', text: 'Trinkgeld von Viva Wallet', prio: 5, ts: '9999',
-      ...(vivaTip > 0 ? { ein: vivaTip, einNetto: vivaTip } : { aus: -vivaTip, ausNetto: -vivaTip }) })
-  }
-
   // Thu/chi khác, nộp tiền vào ngân hàng
   const MV: Record<string, [string, string, boolean]> = {
     geldtransit: ['1360', 'Geldtransit an Bank', false], sonstige_einnahme: ['2700', 'Sonstige Einnahme', true],
@@ -98,6 +90,7 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
   for (const m of moves) {
     // Viva Wallet: quán theo Z-Bon thì bỏ qua; quán theo Viva thì ngày có Z-Bon đã gộp vào dòng Kartenzahlung ở trên
     if (m.channel === 'viva' && (!vivaMode || zDays.has(m.move_date))) continue
+    if (m.channel === 'viva') vivaTip = r2(vivaTip + Number(m.amount)) // ngày chưa có Z-Bon
     const [konto0, txt0, isIn] = MV[m.type]
     // Viva Wallet có tài khoản riêng 1210 trong DATEV của Steuerberater (SKR03)
     const konto = m.channel === 'viva' ? '1210' : konto0
@@ -108,6 +101,16 @@ export function kbLines(docs: Doc[], zbons: ZBon[], moves: CashMove[], r: Restau
       ...(isIn ? { ein: a, einNetto: a } : { aus: a, ausNetto: a }),
     })
   }
+
+  // Quán theo Viva Wallet: một dòng cả tháng, ngày cuối tháng. Einnahmen = Σ Viva − Σ Kreditzahlung.
+  // Ngày có Viva nhưng chưa có Z-Bon: tính đủ số Viva; khi có Z-Bon thì tự trừ Kreditzahlung (người dùng chốt 2026-11-27)
+  if (vivaMode && vivaTip) {
+    const last = new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate()
+    const d = `${period}-${String(last).padStart(2, '0')}`
+    out.push({ ...base, date: d, konto: '1590', text: 'Trinkgeld von Viva Wallet', prio: 5, ts: '9999',
+      ...(vivaTip > 0 ? { ein: vivaTip, einNetto: vivaTip } : { aus: -vivaTip, ausNetto: -vivaTip }) })
+  }
+
 
   out.sort((a, b) => a.date.localeCompare(b.date) || a.prio - b.prio || a.ts.localeCompare(b.ts))
   let saldo = opening
