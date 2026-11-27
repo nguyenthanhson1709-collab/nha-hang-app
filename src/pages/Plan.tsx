@@ -10,6 +10,7 @@ import { dienstplanPdf } from '../lib/hrTimePdf'
 import { Spinner, Top, useRestaurant } from '../components/ui'
 import { LangSwitch } from '../components/LangSwitch'
 import PdfSheet from '../components/PdfSheet'
+import StaffMonth from '../components/StaffMonth'
 import { useFollowMonth } from '../lib/useMonthParam'
 
 type Emp = Employee & { id: string }
@@ -28,7 +29,7 @@ export default function Plan() {
   const [ym, setYm] = useState<string | null>(null)
   const [shifts, setShifts] = useState<Shift[] | null>(null)
   const [abs, setAbs] = useState<Vacation[]>([])
-  const [view, setView] = useState<'sum' | 'grid'>('sum')
+  const [view, setView] = useState<'sum' | 'grid' | 'list'>('sum')
   const [pdf, setPdf] = useState<Blob | null>(null)
   const pm = useFollowMonth(setYm)
 
@@ -90,11 +91,12 @@ export default function Plan() {
           <div className="seg">
             <button className={view === 'sum' ? 'sel' : ''} onClick={() => setView('sum')}>{T('Tổng hợp', 'Zusammenfassung')}</button>
             <button className={view === 'grid' ? 'sel' : ''} onClick={() => setView('grid')}>{T('Lịch theo ngày', 'Monatsübersicht')}</button>
+            <button className={view === 'list' ? 'sel' : ''} onClick={() => setView('list')}>{T('Lịch làm nhân viên', 'Mitarbeiterliste')}</button>
           </div>
-          <button className="st-btn" disabled={!rows.length} onClick={() => setPdf(dienstplanPdf({ company, ym: ym!, rows: rows.map((x) => ({ name: `${x.e.last_name}, ${x.e.first_name}`, pnr: pnr(x.e), contract: x.contract, shifts: x.sh, vac: x.vac })) }))}>PDF</button>
+          {view !== 'list' && <button className="st-btn" disabled={!rows.length} onClick={() => setPdf(dienstplanPdf({ company, ym: ym!, rows: rows.map((x) => ({ name: `${x.e.last_name}, ${x.e.first_name}`, pnr: pnr(x.e), contract: x.contract, shifts: x.sh, vac: x.vac })) }))}>PDF</button>}
         </div>
 
-        {!shifts ? <Spinner /> : !rows.length ? <div className="card muted">{T('Tháng này chưa có lịch làm việc', 'Für diesen Monat ist kein Dienstplan erfasst')}</div> : view === 'sum' ? (
+        {!shifts ? <Spinner /> : view === 'list' ? <StaffMonth rid={rid!} ym={ym!} emps={emps} shifts={shifts} abs={abs} company={company} de={de} /> : !rows.length ? <div className="card muted">{T('Tháng này chưa có lịch làm việc', 'Für diesen Monat ist kein Dienstplan erfasst')}</div> : view === 'sum' ? (
           <>
             <div className="st-stats pl-kpi">
               <div className="st-stat"><span>{T('Nhân viên', 'Mitarbeiter')}</span><b>{rows.length}</b></div>

@@ -669,3 +669,13 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .eye-btn { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; width: 28px; height: 28px; min-height: 0; padding: 0; margin: -6px 0 -6px 4px; border: 0; background: none; color: var(--muted); cursor: pointer; }
 .eye-btn:hover { color: var(--brand); }
 .eye-btn svg { width: 18px; height: 18px; }
+/* Lịch làm nhân viên (Mitarbeiterliste) */
+.sm-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+.sm-bar .small { flex: 1 1 260px; }
+.sm-tab th { white-space: normal; vertical-align: bottom; line-height: 1.25; }
+.sm-tab th small { display: block; font-weight: 400; opacity: .75; }
+.sm-tab td { cursor: text; padding: 8px 10px; }
+.sm-tab tbody tr { cursor: default; }
+.sm-tab td.own { box-shadow: inset 3px 0 0 var(--brand, #FF9018); }
+.sm-tab td.ed { padding: 2px; }
+.sm-tab td.ed input, .sm-tab td.ed select { width: 100%; min-width: 60px; min-height: 36px; padding: 4px 6px; font: inherit; }
