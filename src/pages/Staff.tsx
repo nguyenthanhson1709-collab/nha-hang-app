@@ -138,7 +138,7 @@ export default function Staff() {
 
   return (
     <>
-      <Top title={T('Nhân sự', 'Personal')} sub={hs?.company_name || r.name} back={`/r/${rid}`}
+      <Top title={T('Nhân viên', 'Mitarbeiter')} sub={hs?.company_name || r.name} back={`/r/${rid}/hr`}
         right={<div className="hd-right"><LangSwitch /><button className="btn st-gear" onClick={() => setEditCo(hs?.company_name || '')} aria-label={T('Cài đặt', 'Einstellungen')} title={T('Cài đặt', 'Einstellungen')}><SIcon k="gear" /></button></div>} />
       <div className="page st">
         <div className="st-stats">
@@ -165,9 +165,6 @@ export default function Staff() {
         <div className="st-ctrl" style={{ top: stickTop }}>
           <div className="st-head">
             <h2>{T('Hồ sơ nhân viên', 'Personalakten')}</h2>
-            <button className="st-btn" onClick={() => nav(`/r/${rid}/plan`)}>
-              <SIcon k="calendar" /><span>{T('Xếp lịch', 'Dienstplan')}</span>
-            </button>
             <button className="st-btn" onClick={() => setImp({ busy: false, prog: '', res: null })}><SIcon k="upload" /><span>{T('Tải bảng lương', 'Lohnabrechnungen')}</span></button>
             <button className="st-btn primary" onClick={() => nav(`/r/${rid}/hr/new`)}><SIcon k="plus" /><span>{T('Thêm nhân viên', 'Neuer Mitarbeiter')}</span></button>
           </div>

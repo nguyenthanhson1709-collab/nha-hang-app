@@ -145,7 +145,7 @@ export default function EmployeePage() {
       setHs(s as HrSettings | null)
       if (isNew) { setE(emptyEmployee((s as HrSettings | null)?.company_name || null)); setDocs([]); setContracts([]); setPending([]); return }
       const { data, error } = await supabase.from('nh_employees').select('*').eq('id', eid!).maybeSingle()
-      if (error || !data) { toast(error ? errMsg(error) : T('Không tìm thấy nhân viên', 'Mitarbeiter nicht gefunden')); nav(`/r/${rid}/hr`, { replace: true }); return }
+      if (error || !data) { toast(error ? errMsg(error) : T('Không tìm thấy nhân viên', 'Mitarbeiter nicht gefunden')); nav(`/r/${rid}/hr/list`, { replace: true }); return }
       setE(data as Employee)
       loadChildren()
     })()
@@ -162,7 +162,7 @@ export default function EmployeePage() {
   useEffect(() => { if (e?.photo) hrSignedUrl(e.photo).then(setPhotoUrl); else setPhotoUrl('') }, [e?.photo])
 
   if (!r || !canManage(role)) return null
-  if (!e) return <><Top title={T('Nhân viên', 'Mitarbeiter')} back={`/r/${rid}/hr`} /><Spinner /></>
+  if (!e) return <><Top title={T('Nhân viên', 'Mitarbeiter')} back={`/r/${rid}/hr/list`} /><Spinner /></>
 
   const set = (p: Partial<Employee>) => setE({ ...e, ...p })
   const txt = (k: keyof Employee) => ({ value: (e[k] as string | null) || '', onChange: (ev: { target: { value: string } }) => set({ [k]: ev.target.value || null } as Partial<Employee>) })
@@ -314,7 +314,7 @@ export default function EmployeePage() {
     const { error } = await supabase.from('nh_employees').delete().eq('id', eid!)
     if (error) { toast(errMsg(error)); return }
     if (paths.length) await supabase.storage.from(HR_BUCKET).remove(paths)
-    nav(`/r/${rid}/hr`, { replace: true })
+    nav(`/r/${rid}/hr/list`, { replace: true })
   }
 
   const yn = (k: 'work_permitted' | 'multiple_employment') => (
@@ -591,7 +591,7 @@ export default function EmployeePage() {
 
   if (isNew) return (
     <>
-      <Top title={T('Nhân viên mới', 'Neuer Mitarbeiter')} sub={r.name} back={`/r/${rid}/hr`} />
+      <Top title={T('Nhân viên mới', 'Neuer Mitarbeiter')} sub={r.name} back={`/r/${rid}/hr/list`} />
       <div className="page">
         {warns.map((w) => <div key={w} className="alert warn">{w}</div>)}
         <label className="btn block drop" style={{ marginBottom: 12 }} {...dropProps((fl) => fromPayslip(fl))}>
@@ -840,7 +840,7 @@ export default function EmployeePage() {
 
   return (
     <>
-      <Top title={T('Hồ sơ nhân viên', 'Personalakte')} sub={r.name} back={`/r/${rid}/hr`}
+      <Top title={T('Hồ sơ nhân viên', 'Personalakte')} sub={r.name} back={`/r/${rid}/hr/list`}
         className={mobile ? 'top-compact' : undefined}
         right={mobile
           ? <div className="pf-menu">

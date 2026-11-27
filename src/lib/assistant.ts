@@ -195,7 +195,7 @@ export function planIntent(it: Intent, ctx: AsCtx): Plan {
   const lab = (s: string) => [s, who, rName].filter(Boolean).join(' · ')
   if (p.emp && !emp) {
     // Không rõ nhân viên nào: mở danh sách nhân viên để chọn
-    return { kind: 'go', to: `${base}/hr`, label: lab(L('Nhân sự (chọn nhân viên)', 'Personal (Mitarbeiter wählen)', 'Staff (choose an employee)')) }
+    return { kind: 'go', to: `${base}/hr/list`, label: lab(L('Nhân sự (chọn nhân viên)', 'Personal (Mitarbeiter wählen)', 'Staff (choose an employee)')) }
   }
   const mq = m ? `?m=${m}` : ''
   const withM = (s: string) => (m ? `${s} ${mLabel(m, l)}` : s)
