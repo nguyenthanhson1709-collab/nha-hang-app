@@ -206,17 +206,37 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
   }
 
   async function exportXlsx() {
-    const XLSX = await import('xlsx')
+    // xlsx-js-style: bản SheetJS ghi được màu nền. Dòng có thay đổi so với tháng trước: nền cam (ô thay đổi đậm hơn);
+    // nhân viên mới: nền xanh cả dòng
+    const XLSX = (await import('xlsx-js-style')).default
     const title = `${company} ${ym.slice(5, 7)}/${ym.slice(2, 4)}`
     const aoa: (string | number)[][] = [[title], XCOLS.map((c) => c.de)]
-    for (const { e, st } of rows) aoa.push(XCOLS.map((c) => { const { v } = val(e, st, c); const x = c.num && v ? Number(v.replace(',', '.')) : NaN; return Number.isFinite(x) ? x : v }))
+    const marks: { row: 'new' | 'chg' | null; cells: boolean[] }[] = []
+    for (const { e, st } of rows) {
+      const cells = XCOLS.map((c) => !isNew(e) && changed(e, st, c, val(e, st, c).v))
+      marks.push({ row: isNew(e) ? 'new' : cells.some(Boolean) ? 'chg' : null, cells })
+      aoa.push(XCOLS.map((c) => { const { v } = val(e, st, c); const x = c.num && v ? Number(v.replace(',', '.')) : NaN; return Number.isFinite(x) ? x : v }))
+    }
+    if (marks.some((m) => m.row)) aoa.push([], ['Orange: Änderung gegenüber Vormonat · Grün: neuer Mitarbeiter'])
     const ws = XLSX.utils.aoa_to_sheet(aoa)
+    const fill = (rgb: string) => ({ patternType: 'solid', fgColor: { rgb } })
+    const thin = { style: 'thin', color: { rgb: 'BFBFBF' } }
+    const border = { top: thin, bottom: thin, left: thin, right: thin }
+    XCOLS.forEach((_c, ci) => { const h = ws[XLSX.utils.encode_cell({ r: 1, c: ci })]; if (h) h.s = { font: { bold: true }, alignment: { wrapText: true, vertical: 'center' }, border, fill: fill('EDEDED') } })
+    const t = ws[XLSX.utils.encode_cell({ r: 0, c: 0 })]; if (t) t.s = { font: { bold: true, sz: 13 } }
+    marks.forEach((m, ri) => XCOLS.forEach((_c, ci) => {
+      const ref = XLSX.utils.encode_cell({ r: ri + 2, c: ci })
+      const cell = ws[ref] || (ws[ref] = { t: 's', v: '' })
+      cell.s = { border, ...(m.row === 'new' ? { fill: fill('C6EFCE') } : m.row === 'chg' ? { fill: fill(m.cells[ci] ? 'FFC000' : 'FFE5B4'), font: { bold: m.cells[ci] } } : {}) }
+    }))
     ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: XCOLS.length - 1 } }]
     ws['!cols'] = XCOLS.map((c) => ({ wch: Math.max(8, Math.round((c.w || 70) / 7)) }))
+    ws['!rows'] = [{ hpt: 20 }, { hpt: 42 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, `${ym.slice(5, 7)}-${ym.slice(2, 4)}`)
     XLSX.writeFile(wb, `Mitarbeiterliste_${ym.slice(5, 7)}-${ym.slice(0, 4)}.xlsx`)
   }
+
 
   if (!saved) return <div className="card muted">…</div>
   return (
@@ -237,7 +257,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
             ) : <th key={c.k} lang="de" className={c.num ? '' : 'l'} style={{ minWidth: c.num ? undefined : Math.round((c.w || 70) * 0.8) }}>{c.de}{!de && <small>{c.vi}</small>}</th>)}</tr></thead>
             <tbody>
               {rows.map(({ e, st }) => (
-                <tr key={e.id} className={isNew(e) ? 'new' : ''}>
+                <tr key={e.id} className={isNew(e) ? 'new' : XCOLS.some((c) => changed(e, st, c, val(e, st, c).v)) ? 'chgrow' : ''}>
                   {XCOLS.map((c) => {
                     const { v, own } = val(e, st, c)
                     const editing = edit?.id === e.id && edit.k === c.k

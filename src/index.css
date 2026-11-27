@@ -734,3 +734,5 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .pl-legend { align-items: center; }
 .pl-legend .pl-pdf, .pl-kpi .pl-pdf { margin-left: auto; }
 .pl-kpi:has(.pl-pdf) { grid-template-columns: repeat(3, 1fr) auto; align-items: center; }
+.sm-tab tr.chgrow td { background: color-mix(in srgb, var(--brand, #FF9018) 9%, var(--card)); }
+.sm-tab tr.chgrow td.chg { background: color-mix(in srgb, var(--brand, #FF9018) 30%, var(--card)); }
