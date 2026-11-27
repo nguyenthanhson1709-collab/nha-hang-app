@@ -1,7 +1,7 @@
 // Trang Ngân hàng của quán: kết nối tài khoản (vd. Berliner Volksbank) qua Open Banking - Enable Banking, CHỈ ĐỌC.
 // Chủ đăng nhập trên trang của ngân hàng (SecureGo plus), app không bao giờ thấy PIN. Số dư mặc định che mờ + nút con mắt.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link as RLink, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { supabase, errMsg } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
 import { useLang } from '../lib/i18n'
@@ -13,11 +13,12 @@ import { MonthBar } from '../components/MonthBar'
 interface BankApp { app_id: string; has_key: boolean; updated_at: string }
 interface Link { id: string; restaurant_id: string; aspsp_name: string; status: 'pending' | 'active' | 'expired' | 'error'; valid_until: string | null; last_sync_at: string | null; last_error: string | null; last_error_at: string | null; created_at: string }
 interface Account { uid: string; link_id: string; iban: string | null; name: string | null; currency: string | null; balance: number | null; balance_type: string | null; balance_at: string | null; enabled: boolean }
-interface Tx { id: string; iban: string | null; booking_date: string | null; value_date: string | null; amount: number; currency: string | null; counterparty: string | null; counterparty_iban: string | null; purpose: string | null; status: string | null; btc?: { code?: string; sub_code?: string; description?: string } | null }
+interface Tx { id: string; iban: string | null; booking_date: string | null; value_date: string | null; amount: number; currency: string | null; counterparty: string | null; counterparty_iban: string | null; purpose: string | null; status: string | null; btc?: { code?: string; sub_code?: string; description?: string } | null; kb_state?: 'booked' | 'matched' | 'skip' | null }
 interface Aspsp { name: string; country: string; logo?: string; psu_types?: string[]; beta?: boolean; max_days?: number | null }
 
 // Loại thanh toán theo mã giao dịch ngân hàng (ISO 20022 Bank Transaction Code: domain / family / sub-family)
 const PAY: Record<string, [string, string]> = {
+  cash: ['Nộp tiền mặt (Einzahlung)', 'Bareinzahlung'],
   in: ['Tiền chuyển đến', 'Überweisungseingang'],
   out: ['Chuyển khoản đi', 'Überweisung'],
   instant: ['Chuyển khoản tức thì', 'Echtzeitüberweisung'],
@@ -29,7 +30,15 @@ const PAY: Record<string, [string, string]> = {
   returned: ['Bị trả lại', 'Rückbuchung'],
   other: ['Khác', 'Sonstiges'],
 }
-function payType(t: Pick<Tx, 'btc' | 'amount'>): string {
+/** Nộp tiền mặt vào tài khoản (giống isCashDeposit trong supabase/functions/nh-bank/bank.ts) */
+function isCashDeposit(t: Pick<Tx, 'btc' | 'amount' | 'purpose'>) {
+  if (!(Number(t.amount) > 0)) return false
+  const p = t.purpose || ''
+  if (/bareinzahl|einzahlung|cash ?deposit/i.test(p)) return true
+  return t.btc?.code === 'NTAV' && /girocard|\bGA\b|SB |CRS|Einzahl/i.test(p)
+}
+function payType(t: Pick<Tx, 'btc' | 'amount' | 'purpose'>): string {
+  if (isCashDeposit(t)) return 'cash'
   const d = t.btc?.description || '', c = t.btc?.code || '', sc = t.btc?.sub_code || ''
   if (d === 'ACMT') return 'fee'
   if (sc === 'RRTN' || c === 'RRTN') return 'returned'
@@ -125,7 +134,7 @@ export default function Bank() {
       owner ? supabase.from('nh_bank_app').select('*').eq('id', 1).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from('nh_bank_links').select('*').eq('restaurant_id', rid!).order('created_at'),
       supabase.from('nh_bank_accounts').select('*').eq('restaurant_id', rid!).order('iban'),
-      supabase.from('nh_bank_tx').select('id, iban, booking_date, value_date, amount, currency, counterparty, counterparty_iban, purpose, status, btc:raw->bank_transaction_code').eq('restaurant_id', rid!).gte('booking_date', from).lte('booking_date', to).order('booking_date', { ascending: false }).limit(2000),
+      supabase.from('nh_bank_tx').select('id, iban, booking_date, value_date, amount, currency, counterparty, counterparty_iban, purpose, status, kb_state, btc:raw->bank_transaction_code').eq('restaurant_id', rid!).gte('booking_date', from).lte('booking_date', to).order('booking_date', { ascending: false }).limit(2000),
     ])
     setApp((a.data as BankApp) || null)
     setLinks(((l.data || []) as Link[]).filter((x) => x.status !== 'pending' || Date.now() - new Date(x.created_at).getTime() < 3600000))
@@ -141,6 +150,8 @@ export default function Bank() {
       const errs = (res.results || []).filter((x: { error?: string }) => x.error)
       if (errs.length) toast(errs.map((x: { bank: string; error: string; message: string }) => `${x.bank}: ${ERR[x.error]?.[de ? 1 : 0] || x.message}`).join(' · '))
       else if (!quiet) toast(de ? 'Aktualisiert' : 'Đã cập nhật')
+      const booked = (res.results || []).reduce((n: number, x: { kassenbuch?: { booked?: number } }) => n + (x.kassenbuch?.booked || 0), 0)
+      if (booked) toast(de ? `${booked} Bareinzahlung(en) ins Kassenbuch eingetragen` : `Đã ghi ${booked} lần nộp tiền vào Kassenbuch`)
     } catch (e) { if (!quiet) toast(errMsg(e)) }
     setBusy(''); load()
   }, [rid, de, load])
@@ -203,6 +214,17 @@ export default function Bank() {
       const res = await bankCall({ action: 'select_accounts', link_id: choose.link.id, uids: [...choose.on] }, de)
       toast(res.sync_error || (de ? 'Gespeichert' : 'Đã lưu'))
       setChoose(null)
+    } catch (e) { toast(errMsg(e)) }
+    setBusy(''); load()
+  }
+  async function bookDeposit(t: Tx) {
+    setBusy('dep' + t.id)
+    try {
+      const res = await bankCall({ action: 'book_deposit', restaurant_id: rid, tx_ids: [t.id] }, de)
+      toast(res.booked ? (de ? 'Ins Kassenbuch eingetragen (Geldtransit an Bank)' : 'Đã ghi vào Kassenbuch (Geldtransit an Bank)')
+        : res.matched ? (de ? 'Steht schon im Kassenbuch – verknüpft' : 'Kassenbuch đã có dòng này – đã nối lại')
+        : res.locked ? (de ? 'Monat ist abgeschlossen – nicht eingetragen' : 'Tháng đã khoá sổ – không ghi')
+        : (de ? 'Nichts zu tun' : 'Không có gì để ghi'))
     } catch (e) { toast(errMsg(e)) }
     setBusy(''); load()
   }
@@ -340,7 +362,11 @@ export default function Bank() {
                         <div><b>{t.counterparty || '—'}</b></div>
                         {t.purpose && <div className="small muted" style={{ wordBreak: 'break-word' }}>{t.purpose}</div>}
                       </td>
-                      <td className="num"><Money v={Number(t.amount)} sign show={showBal} onToggle={() => setShowBal(!showBal)} /></td>
+                      <td className="num"><Money v={Number(t.amount)} sign show={showBal} onToggle={() => setShowBal(!showBal)} />
+                        {isCashDeposit(t) && <div style={{ marginTop: 4 }}>{t.kb_state === 'booked' || t.kb_state === 'matched'
+                          ? <RLink className="small" to={`/r/${rid}/kb`}>✓ Kassenbuch</RLink>
+                          : <button className="small" disabled={!!busy} onClick={() => bookDeposit(t)} title={de ? 'Als Geldtransit an Bank ins Kassenbuch' : 'Ghi Geldtransit an Bank vào Kassenbuch'}>{busy === 'dep' + t.id ? '…' : '→ Kassenbuch'}</button>}</div>}
+                      </td>
                     </tr>
                   ))}
                   {!shown.length && <tr><td colSpan={3} className="muted">{de ? 'Keine Umsätze in diesem Monat' : 'Tháng này chưa có giao dịch'}</td></tr>}

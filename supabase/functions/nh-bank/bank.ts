@@ -103,3 +103,19 @@ export function psuHeaders(required: string[], req: { ip?: string | null; ua?: s
   }
   return h;
 }
+
+/** Nộp tiền mặt vào tài khoản (máy nộp tiền / quầy, thường bằng girocard): tiền vào, mã XTND/NTAV hoặc chữ "Einzahlung" */
+export function isCashDeposit(t: { amount: number; purpose?: string | null; raw?: O | null }) {
+  if (!(Number(t.amount) > 0)) return false;
+  const btc = (t.raw?.bank_transaction_code || {}) as O;
+  const p = String(t.purpose || "");
+  if (/bareinzahl|einzahlung|cash ?deposit/i.test(p)) return true;
+  return btc.code === "NTAV" && /girocard|\bGA\b|SB |CRS|Einzahl/i.test(p);
+}
+
+/** Ngày nộp thật (trong nội dung, vd. "21.11.2026/11:34"), nếu không có thì ngày ghi sổ */
+export function depositDate(t: { booking_date: string | null; purpose?: string | null }) {
+  const m = String(t.purpose || "").match(/(\d{2})\.(\d{2})\.(\d{4})\s*\/\s*\d{1,2}:\d{2}/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return t.booking_date;
+}
