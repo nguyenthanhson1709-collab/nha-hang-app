@@ -3,8 +3,8 @@ import { Link, useParams } from 'react-router-dom'
 import { DateField } from '../components/PeriodBar'
 import { supabase, errMsg, signedUrl, type CashCount, type CashMove, type ZBon } from '../lib/supabase'
 import { canManage, useApp, useRole } from '../lib/app'
-import { useT } from '../lib/i18n'
-import { daysOfMonth, eur, monthLabel, monthRange, r2, thisMonth, todayIso } from '../lib/format'
+import { useLang, useT } from '../lib/i18n'
+import { daysOfMonth, dmy, eur, monthLabel, monthRange, r2, thisMonth, todayIso } from '../lib/format'
 import { balanceBefore, currentBalance, kassenbuch, lockedPeriods, uploadFiles } from '../lib/data'
 import Scanner, { type ScannedPage } from '../components/Scanner'
 import { autoScanImage } from '../lib/scanner'
@@ -25,6 +25,7 @@ const OUT = new Set(['privatentnahme', 'geldtransit', 'sonstige_ausgabe'])
 export default function Kassenbuch() {
   const { rid } = useParams()
   const t = useT()
+  const { lang } = useLang()
   const r = useRestaurant(rid)
   const role = useRole(rid)
   const [period, setPeriod] = useState(thisMonth())
@@ -37,6 +38,8 @@ export default function Kassenbuch() {
   const [missing, setMissing] = useState<string[]>([])
   const [move, setMove] = useState<{ type: MoveType; date: string; amount: number; description: string; channel?: string } | null>(null)
   const [viva, setViva] = useState(false)
+  // Tháng trước ngày bắt đầu dùng app: Kassenbuch cũ nhập từ Excel, chỉ xem (bảng nh_kb_legacy)
+  const [legacy, setLegacy] = useState(false)
   const [mvPages, setMvPages] = useState<{ blob: Blob; preview: string }[]>([])
   const [scanner, setScanner] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -47,6 +50,22 @@ export default function Kassenbuch() {
   const load = useCallback(async () => {
     if (!r) return
     setRows(null)
+    if (r.opening_date && period < r.opening_date.slice(0, 7)) {
+      const { data } = await supabase.from('nh_kb_legacy').select('*').eq('restaurant_id', rid!).eq('period', period).order('pos')
+      if (data?.length) {
+        const n = (v: unknown) => Number(v) || 0
+        const head = data.find((x) => x.pos === 0)
+        const body = data.filter((x) => x.pos > 0)
+        setLegacy(true); setLocked(true); setMissing([]); setCounts([]); setMvFiles({})
+        setOpening(head ? n(head.saldo) : r2(n(body[0].saldo) - n(body[0].ein) + n(body[0].aus)))
+        setRows(body.map((x) => ({
+          date: x.entry_date, beleg: x.beleg || '', ein: n(x.ein), aus: n(x.aus), rate: x.mwst && !isNaN(parseFloat(x.mwst)) ? parseFloat(x.mwst) : null,
+          ust: n(x.ust), vst: n(x.vst), einNetto: n(x.ein_netto), ausNetto: n(x.aus_netto), saldo: n(x.saldo), konto: '', text: x.text || '', prio: 0, ts: '',
+        })))
+        return
+      }
+    }
+    setLegacy(false)
     const { from, to } = monthRange(period)
     const [kb, c, lk, mv, docs, zq] = await Promise.all([
       kassenbuch(rid!, period),
@@ -148,7 +167,8 @@ export default function Kassenbuch() {
       <Top title={t('kassenbuch')} sub={r.name} back={`/r/${rid}`} />
       <div className="page">
         <MonthBar value={period} onChange={setPeriod} />
-        {locked && <div className="alert warn">🔒 {t('locked')} · {t('lockedHint')}</div>}
+        {legacy ? <div className="alert warn">📄 {lang === 'de' ? 'Altes Kassenbuch (aus Excel übernommen), nur zur Ansicht. Das Kassenbuch in der App beginnt am' : 'Kassenbuch cũ (nhập từ Excel), chỉ xem. Kassenbuch trong app bắt đầu từ'} {dmy(r.opening_date!)}.</div>
+          : locked && <div className="alert warn">🔒 {t('locked')} · {t('lockedHint')}</div>}
         {negative && <div className="alert err">{t('negativeBalance')}</div>}
         {missing.length > 0 && (
           <div className="alert warn">
@@ -194,7 +214,7 @@ export default function Kassenbuch() {
             </table>
           </FitTable>
         )}
-        <div className="small muted">{monthLabel(period)} · Z-Bon <Link to={`/r/${rid}/scan?type=zbon`}>+ {t('scanZbon')}</Link></div>
+        {!legacy && <div className="small muted">{monthLabel(period)} · Z-Bon <Link to={`/r/${rid}/scan?type=zbon`}>+ {t('scanZbon')}</Link></div>}
       </div>
 
       <VivaWeek rid={rid!} open={viva} start={period === thisMonth() ? todayIso() : period + '-01'} vivaMode={r.card_source === 'viva'} onClose={() => setViva(false)} onSaved={load} />
