@@ -1997,7 +1997,7 @@ const fromTable=r=>({id:r.id,n:r.label,area:r.area_id,x:+r.x,y:+r.y,w:+r.w,h:+r.
 const toTable=x=>({id:x.id,label:x.n,area_id:x.area,x:x.x,y:x.y,w:x.w,h:x.h,rot:x.rot||0});
 const fromBooking=r=>({id:r.id,code:r.code,date:r.day,time:r.slot.slice(0,5),party:r.party,name:r.name,phone:r.phone||"",email:r.email||"",
   note:r.note||"",status:r.status,tables:(r.booking_tables||[]).map(x=>x.table_id),source:r.source,channel:r.channel||null,created:Date.parse(r.created_at),
-  createdBy:r.created_by,autoArrived:r.auto_arrived,called:!!r.called,isNew:false});
+  createdBy:r.created_by,createdByName:r.created_by_name||"",autoArrived:r.auto_arrived,called:!!r.called,isNew:false});
 
 async function loadSettings(){const {data,error}=STAFF_MODE&&(await sb.auth.getSession()).data.session?await sb.from("nh_bk_settings").select("*").eq("restaurant_id",RID).maybeSingle():await sb.rpc("nh_bk_public_settings",{p_slug:SLUG});if(!error&&data)S.settings=fromSettings(data)}
 async function loadStaffData(){
@@ -2355,7 +2355,7 @@ document.addEventListener("click",e=>{
       const cd=b.created?new Date(b.created):null;const when=cd?pad(cd.getDate())+"."+pad(cd.getMonth()+1)+". "+pad(cd.getHours())+":"+pad(cd.getMinutes()):"";
       if(closeWho()===b.id)return;
       const r=el.getBoundingClientRect(),p=document.createElement("div");p.className="who-pop";p.setAttribute("role","status");p.dataset.for=b.id;
-      p.innerHTML=b.source==="online"?`${b.channel?`<small class="who-ch">via ${esc(chName(b.channel))}</small>`:""}<small>${esc(t("onlineAt"))}</small><b>${esc(cd?pad(cd.getDate())+"."+pad(cd.getMonth()+1)+"."+cd.getFullYear():"–")}</b><small>${esc(cd?pad(cd.getHours())+":"+pad(cd.getMinutes()):"")}</small>`:`<small>${esc(t("takenLbl"))}</small><b>${esc(m?m.name:t("roles").staff)}</b><small>${esc([when,t("src")[b.source]||""].filter(Boolean).join(" · "))}</small>`;
+      p.innerHTML=b.source==="online"?`${b.channel?`<small class="who-ch">via ${esc(chName(b.channel))}</small>`:""}<small>${esc(t("onlineAt"))}</small><b>${esc(cd?pad(cd.getDate())+"."+pad(cd.getMonth()+1)+"."+cd.getFullYear():"–")}</b><small>${esc(cd?pad(cd.getHours())+":"+pad(cd.getMinutes()):"")}</small>`:`<small>${esc(t("takenLbl"))}</small><b>${esc(m?m.name:(b.createdByName||t("roles").staff))}</b><small>${esc([when,t("src")[b.source]||""].filter(Boolean).join(" · "))}</small>`;
       document.body.appendChild(p);closeWho.t=Date.now();const cx=r.left+r.width/2,w=p.offsetWidth,vw=document.documentElement.clientWidth,x=Math.min(Math.max(cx,w/2+8),vw-w/2-8);
       p.style.left=x+"px";p.style.top=r.top+"px";p.style.setProperty("--ax",(cx-x+w/2)+"px");return}
     case "plan-zoom":ui.planZoom=!ui.planZoom;break;
