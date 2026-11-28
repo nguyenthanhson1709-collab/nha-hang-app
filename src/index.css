@@ -736,3 +736,17 @@ button.st-tr:hover { background: color-mix(in srgb, var(--brand) 6%, transparent
 .pl-kpi:has(.pl-pdf) { grid-template-columns: repeat(3, 1fr) auto; align-items: center; }
 .sm-tab tr.chgrow td { background: color-mix(in srgb, var(--brand, #FF9018) 22%, var(--card)); }
 .sm-tab tr.chgrow td.chg { background: color-mix(in srgb, var(--brand, #FF9018) 42%, var(--card)); font-weight: 700; }
+/* Khung chat ghi chú xếp lịch */
+.pn-chat { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 6px; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--muted) 8%, var(--card)); max-height: 420px; overflow-y: auto; }
+.pn-msg { display: flex; flex-direction: column; max-width: 88%; }
+.pn-msg.user { align-self: flex-end; align-items: flex-end; }
+.pn-msg.assistant { align-self: flex-start; }
+.pn-bub { padding: 7px 11px; border-radius: 14px; font-size: .9rem; white-space: pre-wrap; background: var(--card); }
+.pn-msg.user .pn-bub { background: color-mix(in srgb, var(--brand, #FF9018) 26%, var(--card)); }
+.pn-prop { margin-top: 4px; padding: 6px 10px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent); font-size: .85rem; }
+.pn-prop ul { margin: 0 0 6px; padding-left: 4px; list-style: none; }
+.pn-prop-b { display: flex; gap: 6px; }
+.pn-ask { display: flex; gap: 8px; align-items: flex-end; position: sticky; bottom: -10px; padding-top: 4px; background: inherit; }
+.pn-ask textarea { flex: 1; min-height: 44px; resize: vertical; font-size: .9rem; }
+.pn-chip.fx { background: color-mix(in srgb, #4aa3ff 18%, var(--card)); }
+.pn-chip.sp { background: color-mix(in srgb, #f5c542 22%, var(--card)); }
