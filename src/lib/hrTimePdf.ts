@@ -100,3 +100,56 @@ export function dienstplanPdf(o: { company: string; ym: string; rows: PlanRow[] 
   }
   return pdf.output('blob')
 }
+
+/** Mitarbeiterliste je Monat (bảng Lịch làm nhân viên) dạng PDF, A3 ngang, tô màu giống file Excel:
+ * dòng thay đổi so với tháng trước nền cam (ô thay đổi cam đậm, chữ đậm), nhân viên mới nền xanh */
+export function mitarbeiterlistePdf(o: { title: string; sub: string; headers: string[]; widths: number[]; right: boolean[]; rows: string[][]; marks: { row: 'new' | 'chg' | null; cells: boolean[] }[] }): Blob {
+  const pdf = new jsPDF({ unit: 'mm', format: 'a3', orientation: 'landscape', compress: true })
+  const W = 420, H = 297, X0 = 10, avail = W - 2 * X0
+  head(pdf, o.title, o.sub, W)
+  const FS = 7, LH = 3
+  pdf.setFontSize(FS)
+  // Độ rộng cột theo nội dung: từ dài nhất của tiêu đề (đậm) và ô dài nhất, rồi co giãn cho vừa trang
+  const tw = (t: string) => pdf.getTextWidth(pdfText(t))
+  const nat = o.headers.map((h, i) => {
+    pdf.setFont('helvetica', 'bold'); const hw = Math.max(...pdfText(h).split(/\s+/).map((w) => pdf.getTextWidth(w)), 6)
+    pdf.setFont('helvetica', 'normal'); const cw = Math.max(0, ...o.rows.map((r) => tw(r[i] || '')))
+    return Math.max(hw, cw, o.widths[i] ? 0 : 0) + 2
+  })
+  const tot = nat.reduce((a, b) => a + b, 0), ws = nat.map((w) => (w / tot) * avail)
+  const xs: number[] = []; ws.reduce((x, w, i) => ((xs[i] = x), x + w), X0)
+  const cellLines = (t: string, i: number) => pdf.splitTextToSize(pdfText(t), ws[i] - 1.6) as string[]
+  let y = 30
+  const th = () => {
+    pdf.setFont('helvetica', 'bold')
+    const ls = o.headers.map((h, i) => cellLines(h, i))
+    const hh = Math.max(...ls.map((l) => l.length)) * LH + 2.4
+    pdf.setFillColor(237, 237, 237); pdf.rect(X0, y, avail, hh, 'F')
+    pdf.setDrawColor(190); pdf.rect(X0, y, avail, hh)
+    ls.forEach((l, i) => { pdf.text(l, o.right[i] ? xs[i] + ws[i] - 0.8 : xs[i] + 0.8, y + 3, { align: o.right[i] ? 'right' : 'left' }); if (i) pdf.line(xs[i], y, xs[i], y + hh) })
+    pdf.setFont('helvetica', 'normal'); y += hh
+  }
+  th()
+  o.rows.forEach((r, ri) => {
+    const ls = r.map((t, i) => cellLines(t, i)), rh = Math.max(1, ...ls.map((l) => l.length)) * LH + 2
+    if (y + rh > H - 16) { pdf.addPage(); y = 14; th() }
+    const m = o.marks[ri]
+    if (m?.row === 'new') { pdf.setFillColor(198, 239, 206); pdf.rect(X0, y, avail, rh, 'F') }
+    if (m?.row === 'chg') {
+      pdf.setFillColor(255, 229, 180); pdf.rect(X0, y, avail, rh, 'F')
+      m.cells.forEach((c, i) => { if (c) { pdf.setFillColor(255, 192, 0); pdf.rect(xs[i], y, ws[i], rh, 'F') } })
+    }
+    ls.forEach((l, i) => {
+      pdf.setFont('helvetica', m?.row === 'chg' && m.cells[i] ? 'bold' : 'normal')
+      pdf.text(l, o.right[i] ? xs[i] + ws[i] - 0.8 : xs[i] + 0.8, y + 3.1, { align: o.right[i] ? 'right' : 'left' })
+    })
+    pdf.setDrawColor(200); pdf.line(X0, y + rh, X0 + avail, y + rh)
+    xs.forEach((x, i) => i && pdf.line(x, y, x, y + rh)); pdf.line(X0, y, X0, y + rh); pdf.line(X0 + avail, y, X0 + avail, y + rh)
+    y += rh
+  })
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(110)
+  if (o.marks.some((m) => m.row)) pdf.text('Orange: Änderung gegenüber Vormonat · Grün: neuer Mitarbeiter', X0, Math.min(y + 6, H - 8))
+  const n = pdf.getNumberOfPages()
+  for (let i = 1; i <= n; i++) { pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(140); pdf.text(`Seite ${i} / ${n}`, W - X0, H - 6, { align: 'right' }) }
+  return pdf.output('blob')
+}
