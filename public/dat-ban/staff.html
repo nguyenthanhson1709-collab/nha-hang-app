@@ -770,7 +770,8 @@ html[data-season=xmas] .gw-n.on{background:linear-gradient(180deg,#ff5a4f,#c8161
 /* party size: all numbers as buttons (owner 2026-11-20, replaces the scroll wheel) */
 .gpgrid{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:8px}
 .gp-n{aspect-ratio:1;min-height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;font:800 19px/1 var(--font-display);cursor:pointer;padding:0;font-variant-numeric:tabular-nums;transition:border-color .15s,background .15s}
-.gp-n:hover:not(.on){border-color:#F7A21B}
+.gp-n:hover:not(.on):not(:disabled){border-color:#F7A21B}
+.gp-n.full,.gp-n:disabled{opacity:.3;cursor:not-allowed;text-decoration:line-through}
 .gp-n.on{background:linear-gradient(180deg,#FFC04A,#F68712);color:#1b1006;border-color:transparent;box-shadow:0 6px 18px rgba(246,135,18,.35)}
 html[data-season=xmas] .gp-n.on{background:linear-gradient(180deg,#ff5a4f,#c8161e);color:#fff;box-shadow:0 6px 18px rgba(214,32,40,.4),inset 0 3px 0 rgba(255,255,255,.85)}
 .gcard .party:has(.gpgrid){display:block}
@@ -1325,22 +1326,35 @@ const GIC={
 };
 function stepsBar(n){
   const L=o=>o[ui.lang]||o.de;
-  const names=[L({de:"Personen",en:"Guests",vi:"Số người"}),L({de:"Datum & Uhrzeit",en:"Date & time",vi:"Ngày & giờ"}),L({de:"Ihre Daten",en:"Your details",vi:"Thông tin"}),L({de:"Bestätigung",en:"Confirmation",vi:"Xác nhận"})];
+  const names=[L({de:"Datum & Uhrzeit",en:"Date & time",vi:"Ngày & giờ"}),L({de:"Personen",en:"Guests",vi:"Số người"}),L({de:"Ihre Daten",en:"Your details",vi:"Thông tin"}),L({de:"Bestätigung",en:"Confirmation",vi:"Xác nhận"})];
   return `<ol class="gsteps">${names.map((nm,i)=>`<li class="${i+1<n?"done":i+1===n?"on":""}"><b>${i+1}</b><span>${nm}</span></li>`).join("")}</ol>`;
 }
 function gTitle(){return `<h2 class="gtitle"><span class="gt-ic">${GIC.cal}</span>${t("bookTitle")}</h2>`}
 /* Step 1 is split in two screens (owner 2026-11-21): first the party size, then date + time.
    Each screen fits a phone without scrolling; picking a number / a time jumps to the next screen. */
-function renderStep1(){return ui.g.ps?renderStepDate():renderStepParty()}
+/* Order changed (owner 2026-11-28): date + time first so guests see which times are full, then party size.
+   Times are shown as full when not even the smallest online group fits; the party screen then greys out sizes that no longer fit. */
+function renderStep1(){return ui.g.ps?renderStepParty():renderStepDate()}
+const GPA={};
+function gPartyAvail(date){
+  const st=S.settings,ns=[];for(let n=st.minOnline;n<=st.maxOnline;n++)ns.push(n);
+  if(!GPA[date]&&ns.some(n=>!Array.isArray(GSL[date+"|"+n]))){GPA[date]=1;
+    Promise.all(ns.map(n=>Array.isArray(GSL[date+"|"+n])?null:sb.rpc("nh_bk_available_slots",{p_slug:SLUG,p_day:date,p_party:n}).then(({data,error})=>{GSL[date+"|"+n]=error?[]:data.map(r=>({s:r.slot.slice(0,5),state:r.state}))})))
+      .then(()=>{delete GPA[date];render()},()=>{delete GPA[date]})}
+  return n=>{const l=GSL[date+"|"+n];if(!Array.isArray(l))return null;const x=l.find(y=>y.s===ui.g.time);return !!x&&x.state==="ok"};
+}
 function renderStepParty(){
   const g=ui.g,st=S.settings,L=o=>o[ui.lang]||o.de;
-  return `${gTitle()}${stepsBar(1)}
-  <div class="gsec gsec-party"><div class="gsec-h"><span class="gs-ic">${GIC.group}</span>${L({de:"Anzahl der Personen",en:"Number of guests",vi:"Số người"})}</div>
+  const av=gPartyAvail(g.date),okP=av(g.party);
+  return `${gTitle()}${stepsBar(2)}
+  <div class="gsec gsec-party"><div class="gsec-h"><span class="gs-ic">${GIC.group}</span><span class="gsec-t">${L({de:"Anzahl der Personen",en:"Number of guests",vi:"Số người"})}</span>
+    <button type="button" class="gchip" data-act="g-pedit" aria-label="${esc(L({de:"Datum und Uhrzeit ändern",en:"Change date and time",vi:"Đổi ngày giờ"}))}"><span class="gs-ic">${GIC.cal}</span>${esc(fmtDate(g.date))} · ${esc(g.time||"")}<u>${L({de:"ändern",en:"change",vi:"đổi"})}</u></button></div>
   <div class="party">
-    <div class="gpgrid" id="g-pgrid" role="radiogroup" aria-label="${esc(L({de:"Anzahl der Personen",en:"Number of guests",vi:"Số người"}))}">${Array.from({length:st.maxOnline-st.minOnline+1},(_,i)=>st.minOnline+i).map(n=>`<button type="button" class="gp-n${n===g.party?" on":""}" role="radio" data-pn="${n}" aria-checked="${n===g.party}">${n}</button>`).join("")}</div>
+    <div class="gpgrid" id="g-pgrid" role="radiogroup" aria-label="${esc(L({de:"Anzahl der Personen",en:"Number of guests",vi:"Số người"}))}">${Array.from({length:st.maxOnline-st.minOnline+1},(_,i)=>st.minOnline+i).map(n=>{const a=av(n);return `<button type="button" class="gp-n${n===g.party&&a!==false?" on":""}${a===false?" full":""}" role="radio" data-pn="${n}" aria-checked="${n===g.party&&a!==false}" ${a===false?`disabled title="${esc(t("fullAt",g.time,n))}"`:""}>${n}</button>`}).join("")}</div>
   </div>
   <p class="gsmall">${esc(t("minNote",st.minOnline))} ${gMailLink(esc(t("over",st.maxOnline,st.email)),st.email)}${st.leadHours?" "+esc(t("leadNote",st.leadHours)):""}</p></div>
-  <div class="actions"><span></span><button class="btn primary gnext" data-act="g-pnext">${esc(t("persons",g.party))} · ${t("next")} ${GIC.arrow}</button></div>`;
+  ${okP===false?`<p class="err">${esc(t("fullAt",g.time,g.party))}</p>`:""}${g.err?`<p class="err">${esc(g.err)}</p>`:""}
+  <div class="actions"><button class="btn" data-act="g-pedit">${t("back")}</button><button class="btn primary gnext" data-act="g-pnext" ${okP===false?"disabled":""}>${esc(t("persons",g.party))} · ${t("next")} ${GIC.arrow}</button></div>`;
 }
 function renderStepDate(){
   const g=ui.g,st=S.settings,L=o=>o[ui.lang]||o.de;
@@ -1353,7 +1367,7 @@ function renderStepDate(){
   let slotsHtml="",perHtml="";
   if(isClosed(g.date)) slotsHtml=`<div class="note-box">${t("closedDay")}</div>`;
   else{
-    const raw=guestSlots(g.date,g.party);
+    const raw=guestSlots(g.date,st.minOnline);
     const sl=raw==="loading"?null:raw.map(x=>({s:x.s,past:x.state!=="ok"&&x.state!=="full",ok:x.state==="ok"}));
     if(!sl) slotsHtml=`<p class="muted">${t("loading")}</p>`;
     else{
@@ -1365,21 +1379,20 @@ function renderStepDate(){
         <button data-act="g-per" data-v="l" aria-pressed="${per==="l"}">${GIC.sun}<span><b>${L({de:"Mittag",en:"Lunch",vi:"Buổi trưa"})}</b><small>${esc(from)} – 17:00</small></span></button>
         <button data-act="g-per" data-v="e" aria-pressed="${per==="e"}">${GIC.moon}<span><b>${L({de:"Abend",en:"Evening",vi:"Buổi tối"})}</b><small>17:00 – ${esc(st.close)}</small></span></button></div>`;
       const shown=sl.filter(x=>per==="e"?isEve(x.s):!isEve(x.s)).filter(x=>!x.past);
-      if(!shown.some(x=>x.ok)) slotsHtml=`<div class="note-box">${t("noSlots")}</div>`;
+      if(!shown.some(x=>x.ok)) slotsHtml=`<div class="note-box">${L({de:"In diesem Zeitraum ist leider alles ausgebucht.",en:"Everything is fully booked in this period.",vi:"Khoảng thời gian này đã hết chỗ."})}</div>`;
       else slotsHtml=`<div class="slots">${shown.map(x=>x.ok?`<button class="slot" data-act="g-time" data-v="${x.s}" aria-pressed="${g.time===x.s}">${x.s}</button>`:`<button class="slot full" data-act="g-full" data-v="${x.s}" aria-pressed="${g.full===x.s}">${x.s}</button>`).join("")}</div>`;
-      if(g.full){const sg=guestSuggest(g.date,g.full,g.party);
-        slotsHtml+=`<div class="note-box" style="margin-top:10px"><b>${esc(t("fullAt",g.full,g.party))}</b><br>${sg.length?`${t("suggest")} <span style="display:inline-flex;gap:6px;flex-wrap:wrap;margin-top:6px">${sg.map(x=>`<button class="btn small" data-act="g-time" data-v="${x}">${x}</button>`).join("")}</span>`:t("noSuggest")}</div>`}
+      if(g.full){const sg=guestSuggest(g.date,g.full,st.minOnline);
+        slotsHtml+=`<div class="note-box" style="margin-top:10px"><b>${esc(L({de:"Um "+g.full+" Uhr ist leider ausgebucht.",en:"At "+g.full+" we are fully booked.",vi:"Lúc "+g.full+" đã hết chỗ."}))}</b><br>${sg.length?`${t("suggest")} <span style="display:inline-flex;gap:6px;flex-wrap:wrap;margin-top:6px">${sg.map(x=>`<button class="btn small" data-act="g-time" data-v="${x}">${x}</button>`).join("")}</span>`:t("noSuggest")}</div>`}
     }
   }
-  return `${gTitle()}${stepsBar(2)}
+  return `${gTitle()}${stepsBar(1)}
   <div class="gsec gsec-date"><div class="gsec-h"><span class="gs-ic">${GIC.cal}</span><span class="gsec-t">${L({de:"Datum wählen",en:"Choose a date",vi:"Chọn ngày"})}</span>
-    <button type="button" class="gchip" data-act="g-pedit" aria-label="${esc(L({de:"Personenzahl ändern",en:"Change number of guests",vi:"Đổi số người"}))}"><span class="gs-ic">${GIC.group}</span>${esc(t("persons",g.party))}<u>${L({de:"ändern",en:"change",vi:"đổi"})}</u></button>
     <span class="gmon"><button class="gnav" data-act="g-mon" data-v="-1" ${start.slice(0,7)<=T.slice(0,7)?"disabled":""} aria-label="‹">‹</button><button class="gmon-pick" data-act="g-cal" aria-expanded="${!!g.cal}"><span>${esc(mon)}</span></button><button class="gnav" data-act="g-mon" data-v="1" aria-label="›">›</button></span></div>
   ${g.cal?gCal():""}<div class="gdays-row"><button class="gnav gday-nav" data-act="g-day" data-v="-1" ${atT?"disabled":""} aria-label="‹">‹</button><div class="days">${dayBtns}</div><button class="gnav gday-nav" data-act="g-day" data-v="1" aria-label="›">›</button></div></div>
   <div class="gsec"><div class="gsec-h gsec-time"><span class="gs-ic">${GIC.clock}</span><span class="gsec-t">${L({de:"Uhrzeit wählen",en:"Choose a time",vi:"Chọn giờ"})}</span>${perHtml}</div>
   ${slotsHtml}</div>
   ${g.err?`<p class="err">${esc(g.err)}</p>`:""}
-  <div class="actions"><button class="btn" data-act="g-pedit">${t("back")}</button><button class="btn primary gnext" data-act="g-next" ${g.time?"":"disabled"}>${t("next")} ${GIC.arrow}</button></div>`;
+  <div class="actions"><span></span><button class="btn primary gnext" data-act="g-next" ${g.time?"":"disabled"}>${t("next")} ${GIC.arrow}</button></div>`;
 }
 /* After a step change, bring the top of the booking card into view (own page: below the top bar;
    website widget: ask the parent page to scroll to the frame). */
@@ -1508,7 +1521,7 @@ function gCardPatch(center){
   ok.forEach((el,i)=>{if(!el.contains(w)){if(gSig(el)!==gSig(nk[i]))el.replaceWith(nk[i]);return}
     el.querySelectorAll("[data-pw]").forEach(b=>{const nb=nk[i].querySelector(`[data-pw="${b.dataset.pw}"]`);if(nb)b.disabled=nb.disabled});
     const lb=el.querySelector(".gw-lbl"),nlb=nk[i].querySelector(".gw-lbl");if(lb&&nlb&&lb.outerHTML!==nlb.outerHTML)lb.replaceWith(nlb)});
-  w.querySelectorAll(".gp-n").forEach(b=>{const on=b.dataset.pn===String(ui.g.party);b.classList.toggle("on",on);b.setAttribute("aria-checked",on)});
+  const nw=nc.querySelector("#g-pgrid");w.querySelectorAll(".gp-n").forEach(b=>{const nb=nw.querySelector(`[data-pn="${b.dataset.pn}"]`);if(!nb)return;b.className=nb.className;b.disabled=nb.disabled;b.title=nb.title;b.setAttribute("aria-checked",nb.getAttribute("aria-checked"))});
   try{gSeasonFx()}catch(e){}
   return true}
 document.addEventListener("change",(e)=>{if(e.target.id==="g-party-r"||e.target.id==="g-party-n")gSetParty(e.target.value)});
@@ -1550,7 +1563,7 @@ document.addEventListener("touchcancel",()=>{GWT=false},{passive:true,capture:tr
 document.addEventListener("scroll",(e)=>{const w=e.target;if(!w||w.id!=="g-wheel")return;gWheelMark(w);if(w.dataset.lock)return;clearTimeout(w._t);w._t=setTimeout(()=>gWheelCommit(w),300)},true);
 document.addEventListener("scrollend",(e)=>{const w=e.target;if(w&&w.id==="g-wheel"&&!w.dataset.lock){clearTimeout(w._t);w._t=setTimeout(()=>gWheelCommit(w),60)}},true);
 document.addEventListener("click",(e)=>{const n=e.target.closest&&e.target.closest("[data-pn]");const a=!n&&e.target.closest&&e.target.closest("[data-pw]");if(!n&&!a)return;
-  if(n&&ui.view==="guest"&&ui.g.step===1&&!ui.g.ps){const v=+n.dataset.pn;if(v!==ui.g.party){ui.g.party=v;ui.g.time=null;ui.g.full=null}ui.g.ps=true;ui.g.err="";render();setTimeout(gStepScroll,0);return}
+  if(n&&ui.view==="guest"&&ui.g.step===1&&ui.g.ps){if(n.disabled)return;ui.g.party=+n.dataset.pn;ui.g.err="";ui.g.step=2;render();setTimeout(gStepScroll,0);return}
   gSetParty(n?n.dataset.pn:ui.g.party+(+a.dataset.pw))});
 document.addEventListener("keydown",(e)=>{if(e.target.id!=="g-wheel")return;const w=e.target;if(e.key==="ArrowRight"||e.key==="ArrowUp"){e.preventDefault();gSetParty(ui.g.party+1)}else if(e.key==="ArrowLeft"||e.key==="ArrowDown"){e.preventDefault();gSetParty(ui.g.party-1)}});
 
@@ -2141,7 +2154,7 @@ async function guestSubmit(){
   if(error&&args.p_review_ok&&(error.code==="PGRST202"||/p_review_ok|function/i.test(error.message||""))&&!/P0001/.test(error.code||"")){delete args.p_review_ok;({data,error}=await sb.rpc("nh_bk_book_online",g.channel?{...args,p_channel:g.channel}:args))}
   g.busy=false;delete GSL[g.date+"|"+g.party];
   if(error){const c=errCode(error);
-    if(c==="full"||c==="lead"){g.err=t("raceFull");g.step=1;g.full=c==="full"?g.time:null;g.time=null}
+    if(c==="full"||c==="lead"){g.err=t("raceFull");g.step=1;g.ps=false;g.full=c==="full"?g.time:null;g.time=null;for(const k in GSL)if(k.startsWith(g.date+"|"))delete GSL[k]}
     else g.err=t("bookErr");
     render();return}
   g.res={code:data.code,token:data.token,status:data.status,date:g.date,time:g.time,party:g.party,name:g.name.trim(),email:g.email.trim()};
@@ -2320,12 +2333,12 @@ document.addEventListener("click",e=>{
     case "g-day":{const T=todayS(),c=(g.ws&&g.ws>T)?g.ws:T,n=addDays(c,+v);g.ws=n<T?T:n;break}
     case "g-mon":{const T=todayS(),c=(g.ws&&g.ws>T)?g.ws:T,d=parseD(c);const f=new Date(d.getFullYear(),d.getMonth()+(+v),1);const n=f.getFullYear()+"-"+String(f.getMonth()+1).padStart(2,"0")+"-01";g.ws=n<T?T:n;break}
     case "g-per":g.per=v;g.full=null;break;
-    case "g-pnext":g.ps=true;g.err="";setTimeout(gStepScroll,0);break;
+    case "g-pnext":if(gPartyAvail(g.date)(g.party)===false){g.err=t("fullAt",g.time,g.party);break}g.step=2;g.err="";setTimeout(gStepScroll,0);break;
     case "g-pedit":g.ps=false;g.cal=false;g.err="";setTimeout(gStepScroll,0);break;
     case "g-go":{const x=document.getElementById(v);if(x)x.scrollIntoView({behavior:"smooth",block:"start"});return}
-    case "g-time":g.time=v;g.full=null;g.err="";g.step=2;setTimeout(gStepScroll,0);break;
+    case "g-time":g.time=v;g.full=null;g.err="";g.ps=true;setTimeout(gStepScroll,0);break;
     case "g-full":g.full=v;g.time=null;g.err="";break;
-    case "g-next":if(!g.time){g.err=t("pickTime");break}g.step=2;g.err="";setTimeout(gStepScroll,0);break;
+    case "g-next":if(!g.time){g.err=t("pickTime");break}g.ps=true;g.err="";setTimeout(gStepScroll,0);break;
     case "g-back":readGuest();g.step=1;g.ps=true;g.err="";g.errs={};setTimeout(gStepScroll,0);break;
     case "g-submit":{readGuest();
       {const E={};if(!g.name.trim())E.name=t("fieldReq");if(!g.phone.trim())E.phone=t("fieldReq");
