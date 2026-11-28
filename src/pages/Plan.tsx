@@ -1,5 +1,5 @@
 // Xếp lịch (Dienstplan): bảng tổng hợp từng tháng và bảng ca theo ngày, lấy từ giờ làm đã ghi
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { canManage, useRole } from '../lib/app'
@@ -32,6 +32,7 @@ export default function Plan() {
   const [view, setView] = useState<'sum' | 'grid' | 'list'>('list')
   const [pdf, setPdf] = useState<Blob | null>(null)
   const [tick, setTick] = useState(0)
+  const loadedKey = useRef('')
   const pm = useFollowMonth(setYm)
 
   useEffect(() => { const el = document.getElementById('root'); el?.classList.add('xwide'); return () => el?.classList.remove('xwide') }, [])
@@ -52,7 +53,9 @@ export default function Plan() {
   }, [rid])
   useEffect(() => {
     if (!rid || !ym) return
-    setShifts(null)
+    // Tải lại sau khi lưu (tick): giữ bảng đang hiện, không nháy về vòng chờ
+    if (loadedKey.current !== `${rid}|${ym}`) setShifts(null)
+    loadedKey.current = `${rid}|${ym}`
     const to = monthDates(ym).at(-1)!
     Promise.all([
       supabase.from('nh_shifts').select('id,employee_id,shift_date,start_time,end_time,break_min,note').eq('restaurant_id', rid).gte('shift_date', `${ym}-01`).lte('shift_date', to).limit(5000),

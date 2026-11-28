@@ -58,7 +58,8 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
   const [last, setLast] = useState<Record<string, Data>>({})   // dữ liệu tháng trước, để đánh dấu ô thay đổi
   const [showPay, setShowPay] = useState(false)
   const [edit, setEdit] = useState<{ id: string; k: string; v: string } | null>(null)
-  const [plan, setPlan] = useState<(SchedResult & { from: string; replace: number }) | null>(null)
+  type Plan = SchedResult & { from: string; replace: number; autoDel: string[] }
+  const [plan, setPlan] = useState<Plan | null>(null)
   const [busy, setBusy] = useState(false)
   // Ngày phép đã ghi (cả năm) để tính Phép còn lại đến hết tháng đang xem
   const [yv, setYv] = useState<{ employee_id: string; from_date: string; to_date: string }[]>([])
@@ -173,7 +174,12 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
     const vac: Record<string, Set<string>> = {}
     // Urlaub / Krank / Unbezahlt: tính vào số ngày của tuần; Wunschfrei (other): chỉ không xếp ca
     const off: Record<string, Set<string>> = {}
-    for (const a of abs) for (const d of dates) if (d >= a.from_date && d <= a.to_date) ((a.kind === 'other' ? off : vac)[a.employee_id] ||= new Set()).add(d)
+    // Mỗi lần bấm Xếp lịch là xếp lại từ đầu: phép tự xếp lần trước (từ ngày from) bỏ đi, số ngày đó cộng lại vào phép còn lại
+    const AUTO = 'Urlaub (automatisch geplant)'
+    const autoOld = abs.filter((a) => a.id && a.kind === 'vacation' && a.note === AUTO && a.from_date >= from && a.to_date <= last)
+    const backV: Record<string, number> = {}
+    for (const a of autoOld) for (const d of dates) if (d >= a.from_date && d <= a.to_date) backV[a.employee_id] = (backV[a.employee_id] || 0) + 1
+    for (const a of abs.filter((x) => !autoOld.includes(x))) for (const d of dates) if (d >= a.from_date && d <= a.to_date) ((a.kind === 'other' ? off : vac)[a.employee_id] ||= new Set()).add(d)
     // Lấy đúng số trong bảng (giờ/ngày, ngày/tuần, ngày vào, ngày nghỉ); ô đã sửa trong tháng được ưu tiên hơn hồ sơ
     const col = (k: string) => COLS.find((c) => c.k === k)!
     const num = (x: string) => { const v = Number(x.replace(',', '.')); return Number.isFinite(v) && v > 0 ? v : 0 }
@@ -191,21 +197,23 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
     const autoVac: Record<string, number> = {}
     for (const se of list) {
       const x = rows.find((r0) => r0.e.id === se.id)!
-      const rest = Math.floor(Number(val(x.e, x.st, col('resturlaub')).v.replace(',', '.')))
+      const rest = Math.floor(Number(val(x.e, x.st, col('resturlaub')).v.replace(',', '.'))) + (backV[se.id] || 0)
       if (!Number.isFinite(rest) || rest <= 0) continue
       const mo = Number(ym.slice(5, 7)), exitHere = !!se.exit && se.exit <= last
       autoVac[se.id] = mo === 12 || exitHere ? rest : Math.round(rest / (13 - mo))
     }
     const r = buildSchedule(ym, list, vac, (data || []) as never, { from, off, closed, autoVac, fixed, special })
     if (missing.length) r.warnings.unshift(T(`Chưa có giờ/ngày hoặc ngày/tuần, không xếp: ${missing.join(', ')}`, `Ohne Std./Tag oder Tage/Woche, nicht eingeplant: ${missing.join(', ')}`))
-    setPlan({ ...r, from, replace: shifts.filter((s) => s.shift_date >= from).length })
+    // Lưu luôn: Tổng hợp, Lịch theo ngày và hồ sơ từng nhân viên đọc cùng dữ liệu này
+    const p: Plan = { ...r, from, replace: shifts.filter((s) => s.shift_date >= from).length, autoDel: autoOld.map((a) => a.id!) }
+    if (await savePlan(p)) setPlan(p)
   }
-  async function savePlan() {
-    if (!plan) return
+  async function savePlan(plan: Plan) {
     setBusy(true)
     const last = monthDates(ym).at(-1)!
     const del = await supabase.from('nh_shifts').delete().eq('restaurant_id', rid).gte('shift_date', plan.from).lte('shift_date', last)
-    if (del.error) { setBusy(false); toast(del.error.message); return }
+    if (del.error) { setBusy(false); toast(del.error.message); return false }
+    if (plan.autoDel.length) { const { error } = await supabase.from('nh_absences').delete().eq('restaurant_id', rid).in('id', plan.autoDel); if (error) { setBusy(false); toast(error.message); return false } }
     // Phép tự xếp: ghi vào nh_absences (gộp các ngày liền nhau)
     const absIns: { restaurant_id: string; employee_id: string; kind: string; from_date: string; to_date: string; note: string }[] = []
     for (const [eid, ds] of Object.entries(plan.autoVac)) for (const d of ds) {
@@ -213,15 +221,16 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
       if (prevRow && prevRow.employee_id === eid && prevRow.to_date === isoDay(y)) prevRow.to_date = d
       else absIns.push({ restaurant_id: rid, employee_id: eid, kind: 'vacation', from_date: d, to_date: d, note: 'Urlaub (automatisch geplant)' })
     }
-    if (absIns.length) { const { error } = await supabase.from('nh_absences').insert(absIns); if (error) { setBusy(false); toast(error.message); return } }
+    if (absIns.length) { const { error } = await supabase.from('nh_absences').insert(absIns); if (error) { setBusy(false); toast(error.message); return false } }
     const rowsIns = plan.shifts.map((s) => ({ restaurant_id: rid, ...s }))
     for (let i = 0; i < rowsIns.length; i += 500) {
       const { error } = await supabase.from('nh_shifts').insert(rowsIns.slice(i, i + 500))
-      if (error) { setBusy(false); toast(error.message); return }
+      if (error) { setBusy(false); toast(error.message); return false }
     }
-    setBusy(false); setPlan(null)
+    setBusy(false)
     toast(T(`Đã lưu ${rowsIns.length} ca`, `${rowsIns.length} Schichten gespeichert`))
     onSaved?.()
+    return true
   }
 
   async function exportXlsx() {
@@ -261,7 +270,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
   return (
     <>
       <div className="sm-bar">
-        {canPlan && <button className="st-btn primary" disabled={busy || !rows.length} onClick={makePlan}>{busy && !plan ? '…' : T('Xếp lịch', 'Dienstplan erstellen')}</button>}
+        {canPlan && <button className="st-btn primary" disabled={busy || !rows.length} onClick={makePlan}>{busy ? '…' : T('Xếp lịch', 'Dienstplan erstellen')}</button>}
         <span className="small muted">{T('Ô tự điền từ hồ sơ và lịch làm. Bấm vào ô để sửa; ô đã sửa có vạch cam bên trái, xoá trống để quay về giá trị tự tính. Nền cam: khác tháng trước; dòng nền xanh: nhân viên mới.', 'Felder werden aus Personalakte und Dienstplan übernommen. Zum Ändern anklicken; geänderte Felder sind orange markiert, leeren = automatischer Wert. Orange hinterlegt: anders als Vormonat; grüne Zeile: neuer Mitarbeiter.')}</span>
         <button className="st-btn" disabled={!rows.length} onClick={exportXlsx}>Excel</button>
       </div>
@@ -312,10 +321,10 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
       {plan && (
         <div className="sheet-bg" onClick={(ev) => { if (ev.target === ev.currentTarget && !busy) setPlan(null) }}>
           <div className="sheet sched">
-            <h3>{T('Lịch tự xếp', 'Dienstplan-Vorschlag')} · {ym.slice(5, 7)}/{ym.slice(0, 4)}</h3>
+            <h3>{T('Đã xếp và lưu lịch', 'Dienstplan erstellt und gespeichert')} · {ym.slice(5, 7)}/{ym.slice(0, 4)}</h3>
             <p className="small muted">{T(`Từ ${plan.from.slice(8)}.${plan.from.slice(5, 7)}: ${plan.shifts.length} ca. Chưa đủ người so với mục tiêu: ${String(plan.gapHours).replace('.', ',')} giờ-người.`,
               `Ab ${plan.from.slice(8)}.${plan.from.slice(5, 7)}: ${plan.shifts.length} Schichten. Unterbesetzung gegenüber Ziel: ${String(plan.gapHours).replace('.', ',')} Personenstunden.`)}</p>
-            {plan.replace > 0 && <p className="small warn">{T(`${plan.replace} ca đã có trong khoảng này sẽ được thay bằng lịch mới.`, `${plan.replace} vorhandene Schichten in diesem Zeitraum werden ersetzt.`)}</p>}
+            <p className="small muted">{T('Đã cập nhật vào Tổng hợp, Lịch theo ngày và hồ sơ từng nhân viên.', 'In Zusammenfassung, Tagesplan und Personalakten übernommen.')}{plan.replace > 0 ? T(` Thay ${plan.replace} ca cũ.`, ` ${plan.replace} alte Schichten ersetzt.`) : ''}</p>
             {plan.warnings.length > 0 && <ul className="small warn">{plan.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
             <table className="pl-sum">
               <thead><tr><th className="l">{T('Nhân viên', 'Mitarbeiter')}</th><th>{T('Ngày', 'Tage')}</th><th>{T('Giờ', 'Std')}</th><th>{T('Phép tự xếp', 'Urlaub geplant')}</th></tr></thead>
@@ -325,8 +334,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
                   <td className="l small">{(plan.autoVac[e.id] || []).length ? `${plan.autoVac[e.id].length}: ${plan.autoVac[e.id].map((d) => d.slice(8)).join(', ')}.${ym.slice(5, 7)}` : ''}</td></tr>) })}</tbody>
             </table>
             <div className="sched-f">
-              <button className="st-btn" disabled={busy} onClick={() => setPlan(null)}>{T('Huỷ', 'Abbrechen')}</button>
-              <button className="st-btn primary" disabled={busy || !plan.shifts.length} onClick={savePlan}>{busy ? '…' : T('Lưu vào lịch', 'In Dienstplan übernehmen')}</button>
+              <button className="st-btn primary" onClick={() => setPlan(null)}>{T('Đóng', 'Schließen')}</button>
             </div>
           </div>
         </div>
