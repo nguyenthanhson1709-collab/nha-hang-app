@@ -158,12 +158,17 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
     const from = isoDay(tm) > first ? isoDay(tm) : first
     if (from > last) { setBusy(false); return }
     const back = new Date(`${first}T12:00:00`); back.setDate(back.getDate() - 14)
-    const [{ data, error }, cl] = await Promise.all([
+    const [{ data, error }, cl, fx, sh] = await Promise.all([
       supabase.from('nh_shifts').select('employee_id,shift_date,start_time,end_time').eq('restaurant_id', rid).gte('shift_date', isoDay(back)).lt('shift_date', from).limit(5000),
       supabase.from('nh_closed_days').select('day').eq('restaurant_id', rid).gte('day', first).lte('day', last),
+      supabase.from('nh_plan_fixed').select('employee_id,day,start_time,end_time,note').eq('restaurant_id', rid).gte('day', first).lte('day', last),
+      supabase.from('nh_special_hours').select('day,open_from,open_to').eq('restaurant_id', rid).gte('day', first).lte('day', last),
     ])
     setBusy(false)
-    if (error || cl.error) { toast((error || cl.error)!.message); return }
+    if (error || cl.error || fx.error || sh.error) { toast((error || cl.error || fx.error || sh.error)!.message); return }
+    const special = Object.fromEntries((sh.data || []).map((x: { day: string; open_from: string; open_to: string }) => [x.day, { from: x.open_from.slice(0, 5), to: x.open_to.slice(0, 5) }]))
+    const fixed = (fx.data || []).map((x: { employee_id: string; day: string; start_time: string; end_time: string; note: string | null }) =>
+      ({ employee_id: x.employee_id, day: x.day, start: x.start_time.slice(0, 5), end: x.end_time.slice(0, 5), note: x.note }))
     const closed = (cl.data || []).map((x: { day: string }) => x.day)
     const vac: Record<string, Set<string>> = {}
     // Urlaub / Krank / Unbezahlt: tính vào số ngày của tuần; Wunschfrei (other): chỉ không xếp ca
@@ -191,7 +196,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
       const mo = Number(ym.slice(5, 7)), exitHere = !!se.exit && se.exit <= last
       autoVac[se.id] = mo === 12 || exitHere ? rest : Math.round(rest / (13 - mo))
     }
-    const r = buildSchedule(ym, list, vac, (data || []) as never, { from, off, closed, autoVac })
+    const r = buildSchedule(ym, list, vac, (data || []) as never, { from, off, closed, autoVac, fixed, special })
     if (missing.length) r.warnings.unshift(T(`Chưa có giờ/ngày hoặc ngày/tuần, không xếp: ${missing.join(', ')}`, `Ohne Std./Tag oder Tage/Woche, nicht eingeplant: ${missing.join(', ')}`))
     setPlan({ ...r, from, replace: shifts.filter((s) => s.shift_date >= from).length })
   }
