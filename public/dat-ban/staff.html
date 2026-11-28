@@ -928,6 +928,16 @@ html[data-season=xmas] .gp-n.on{background:linear-gradient(180deg,#ff5a4f,#c8161
 .me-other input{width:100%;min-width:0;min-height:40px;text-align:center;padding:0 4px}
 .me-other.on input{border-color:var(--accent);color:var(--fg)}
 .me-tb{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.me-tb svg{color:var(--accent)}.me-tb .btn{margin-left:auto}
+.blk{margin:0 0 12px}
+.blk-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.blk-row .btn svg{vertical-align:-3px}
+.blk-row .btn.on{border-color:#d9534f;color:#ff8a80}
+.blk-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 4px 4px 10px;border-radius:999px;background:rgba(217,83,79,.16);border:1px solid rgba(217,83,79,.55);color:#ffb3ad;font-size:14px}
+.blk-chip small{opacity:.8}
+.blk-chip button{border:0;background:rgba(255,255,255,.12);color:inherit;width:26px;height:26px;border-radius:50%;font-size:17px;line-height:1;cursor:pointer}
+.blk-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin-top:10px}
+.blk-form .f{min-width:110px}
+.blk-form .f.grow{flex:1 1 180px}
 </style>
 </head>
 <body>
@@ -1693,11 +1703,46 @@ function renderBook(){
   const rows=shown.map(rowOf).join(""),rowsD=PH?shown.filter(isD).map(rowOf).join(""):"",rowsA=PH?shown.filter(b=>!isD(b)).map(rowOf).join(""):"";
   return `<div class="staffbar">${dateNav()}<span class="grow"></span><button class="btn primary" data-act="b-new">${t("add")}</button></div>
   <div class="stats">${stats.map(([k,v])=>`<div class="stat"><small>${k}</small><b>${v}</b></div>`).join("")}</div>
-  ${peakStrip(ui.bookDate)}
+  ${blockStrip(ui.bookDate)}${peakStrip(ui.bookDate)}
   <div class="filters"><label class="f" style="flex-direction:row;align-items:center;gap:8px">${t("status")}<select id="book-filter" style="width:auto;min-width:200px">${fl.map(f=>{const c=f==="all"?day.filter(b=>b.status!=="cancelled").length:day.filter(b=>b.status===f).length;return `<option value="${f}" ${ui.filter===f?"selected":""}>${f==="all"?t("all"):t("st")[f]} (${c})</option>`}).join("")}</select></label></div>
   ${PH&&rows?(rowsD?`<div class="list">${rowsD}</div>`:"")+(rowsA?`<div class="list">${rowsA}</div>`:""):`<div class="list">${rows?`<div class="row head" aria-hidden="true"><span>${t("colTime")}</span><span>${t("colName")}</span><span>${t("colPax")}</span><span>${t("colTable")}</span><span>${t("colSrc")}</span><span>${t("colStatus")}</span></div>`+rows:`<div class="empty">${t("empty")}</div>`}</div>`}`;
 }
 try{matchMedia("(max-width:560px)").addEventListener("change",()=>{try{render()}catch(e){}})}catch(e){}
+/* ---------- close online booking for a time range (owner 2026-11-28, table nh_bk_blocks) ----------
+   Guests see those times as full and cannot book them; staff can still enter bookings by hand. */
+let BLK=[];
+const BL=o=>o[ui.lang]||o.de;
+const IC_LOCK=`<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>`;
+function blockTimes(){const st=S.settings,out=[];for(let m=toMin(st.open);m<=toMin(st.close);m+=30)out.push(pad(m/60|0)+":"+pad(m%60));return out}
+function blockStrip(dateS){
+  const bl=BLK.filter(k=>k.day===dateS).sort((p,q)=>p.start.localeCompare(q.start));
+  const chips=bl.map(k=>`<span class="blk-chip">${IC_LOCK}<b>${esc(k.start)} – ${esc(k.end)}</b>${k.note?`<small>${esc(k.note)}</small>`:""}<button type="button" data-act="blk-del" data-id="${k.id}" aria-label="${esc(BL({de:"Wieder öffnen",en:"Reopen",vi:"Mở lại"}))}" title="${esc(BL({de:"Wieder öffnen",en:"Reopen",vi:"Mở lại"}))}">×</button></span>`).join("");
+  const tm=blockTimes(),opt=(sel)=>tm.map(x=>`<option ${x===sel?"selected":""}>${x}</option>`).join("");
+  const form=ui.blkOpen?`<div class="blk-form"><label class="f">${BL({de:"Von",en:"From",vi:"Từ"})}<select id="blk-from">${opt("18:00")}</select></label>
+    <label class="f">${BL({de:"Bis",en:"To",vi:"Đến"})}<select id="blk-to">${opt("20:00")}</select></label>
+    <label class="f grow">${BL({de:"Notiz (optional)",en:"Note (optional)",vi:"Ghi chú (không bắt buộc)"})}<input id="blk-note" maxlength="200"></label>
+    <button class="btn primary" data-act="blk-save">${BL({de:"Schließen",en:"Close",vi:"Đóng"})}</button><button class="btn" data-act="blk-open">${BL({de:"Abbrechen",en:"Cancel",vi:"Huỷ"})}</button></div>
+    <p class="muted" style="font-size:13px;margin:6px 0 0">${BL({de:"Gäste können in dieser Zeit nicht online reservieren (Uhrzeit erscheint als ausgebucht). Mitarbeiter können weiterhin manuell eintragen.",en:"Guests cannot book online in this period (the time shows as fully booked). Staff can still add bookings by hand.",vi:"Khách không đặt online được trong khoảng này (giờ hiện là hết chỗ). Nhân viên vẫn nhập tay được."})}</p>`:"";
+  return `<div class="blk"><div class="blk-row"><button class="btn small${bl.length?" on":""}" data-act="blk-open" aria-expanded="${!!ui.blkOpen}">${IC_LOCK} ${BL({de:"Online-Zeiten schließen",en:"Close online times",vi:"Đóng giờ đặt online"})}</button>${chips}</div>${form}</div>`;
+}
+async function loadBlocks(days){
+  const {data,error}=await sb.from("nh_bk_blocks").select("id,day,start_time,end_time,note").eq("restaurant_id",RID).in("day",days);
+  if(error)return;
+  BLK=BLK.filter(k=>!days.includes(k.day)).concat(data.map(r=>({id:r.id,day:r.day,start:r.start_time.slice(0,5),end:r.end_time.slice(0,5),note:r.note||""})));
+}
+async function blockSave(){
+  const f=document.getElementById("blk-from").value,to=document.getElementById("blk-to").value,note=document.getElementById("blk-note").value.trim();
+  if(to<=f){toast(BL({de:"Die Endzeit muss nach der Startzeit liegen.",en:"The end time must be after the start time.",vi:"Giờ kết thúc phải sau giờ bắt đầu."}));return}
+  const {error}=await sb.from("nh_bk_blocks").insert({restaurant_id:RID,day:ui.bookDate,start_time:f,end_time:to,note:note||null});
+  if(error){toast(BL({de:"Speichern fehlgeschlagen",en:"Could not save",vi:"Không lưu được"})+": "+error.message);return}
+  ui.blkOpen=false;await loadBlocks([ui.bookDate]);render();
+  toast(BL({de:"Online geschlossen: ",en:"Closed online: ",vi:"Đã đóng online: "})+f+" – "+to);
+}
+async function blockDel(id){
+  const {error}=await sb.from("nh_bk_blocks").delete().eq("id",id);
+  if(error){toast(error.message);return}
+  BLK=BLK.filter(k=>k.id!==id);render();toast(BL({de:"Wieder geöffnet",en:"Reopened",vi:"Đã mở lại"}));
+}
 function peakStrip(dateS){
   const bs=S.bookings.filter(x=>x.date===dateS&&PAX.includes(x.status)).sort((p,q)=>p.time.localeCompare(q.time));
   if(!bs.length)return "";
@@ -2011,7 +2056,7 @@ async function loadStaffData(){
 }
 async function loadDays(days){
   days=[...new Set(days)];if(!days.length)return;
-  const {data,error}=await sb.from("nh_bk_bookings").select("*,booking_tables:nh_bk_booking_tables(table_id)").eq("restaurant_id",RID).in("day",days);
+  const [{data,error}]=await Promise.all([sb.from("nh_bk_bookings").select("*,booking_tables:nh_bk_booking_tables(table_id)").eq("restaurant_id",RID).in("day",days),loadBlocks(days)]);
   if(error)return;
   const keep=S.bookings.filter(b=>!days.includes(b.date));
   S.bookings=keep.concat(data.map(fromBooking));days.forEach(d=>LOADED.add(d));
@@ -2367,6 +2412,9 @@ document.addEventListener("click",e=>{
     case "b-st":{e.stopPropagation();const b=S.bookings.find(x=>x.id===el.dataset.id);b.status=v;b.isNew=false;if(v==="cancelled")b.tables=[];save();toast(t("st")[v]);break}
     case "b-open":openBooking(el.dataset.id);return;
     case "b-new":openBooking(null);return;
+    case "blk-open":ui.blkOpen=!ui.blkOpen;break;
+    case "blk-save":blockSave();return;
+    case "blk-del":blockDel(el.dataset.id);return;
     case "b-new-table":openBooking(null,{tables:[v],time:ui.floorTime||"19:00"});return;
     case "b-new-picked":{const tb=ui.picked.slice();ui.picked=[];openBooking(null,{tables:tb,time:ui.floorTime||"19:00"});return}
     case "pick-clear":ui.picked=[];break;
