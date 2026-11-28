@@ -15,6 +15,7 @@ import ZbonReview from './pages/ZbonReview'
 import Kassenbuch from './pages/Kassenbuch'
 import Archive from './pages/Archive'
 import Contracts from './pages/Contracts'
+import Papers from './pages/Papers'
 import Statements from './pages/Statements'
 import Reports from './pages/Reports'
 import Plan from './pages/Plan'
@@ -113,6 +114,8 @@ function Shell({ session }: { session: Session }) {
           <Route path="/r/:rid/kb" element={<RestLayout><Kassenbuch /></RestLayout>} />
           <Route path="/r/:rid/archive" element={<RestLayout><Archive /></RestLayout>} />
           <Route path="/r/:rid/contracts" element={<RestLayout><Contracts /></RestLayout>} />
+          <Route path="/r/:rid/papers" element={<RestLayout><Papers /></RestLayout>} />
+          <Route path="/r/:rid/papers/:fid" element={<RestLayout><Papers /></RestLayout>} />
           <Route path="/r/:rid/statements" element={<RestLayout><Statements /></RestLayout>} />
           <Route path="/r/:rid/reports" element={<RestLayout><Reports /></RestLayout>} />
           <Route path="/r/:rid/bwa" element={<RestLayout><Bwa /></RestLayout>} />

@@ -23,6 +23,7 @@ const LU: Record<string, React.ReactNode> = {
   chef: <><path d="M17 21a1 1 0 0 0 1-1v-5.35c0-.457.316-.844.727-1.041a4 4 0 0 0-2.134-7.589 5 5 0 0 0-9.186 0 4 4 0 0 0-2.134 7.588c.411.198.727.585.727 1.041V20a1 1 0 0 0 1 1Z" /><path d="M6 17h12" /></>,
   card: <><rect width="20" height="14" x="2" y="5" rx="2" /><path d="M2 10h20" /><path d="M6 15h4" /></>,
   bank: <><path d="M10 18v-7" /><path d="M11.12 2.198a2 2 0 0 1 1.76.006l7.866 3.847c.476.233.31.949-.22.949H3.474c-.53 0-.695-.716-.22-.949z" /><path d="M14 18v-7" /><path d="M18 18v-7" /><path d="M3 22h18" /><path d="M6 18v-7" /></>,
+  folder: <><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" /><path d="M8 13h8" /><path d="M8 16h5" /></>,
   arrow: <><path d="M7 7h10v10" /><path d="M7 17 17 7" /></>,
   settings: <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></>,
 }
@@ -115,6 +116,7 @@ export default function Home() {
       { icon: 'chart', label: t('reports'), desc: de ? 'Auswertungen und Statistik' : 'Thống kê và phân tích', to: `/r/${rid}/reports` },
       ...(m && hasBk ? [{ icon: 'calendar', label: de ? 'Reservierungen' : 'Bàn đặt', desc: bk ? (de ? `Heute: ${bk.n} Res. · ${bk.g} Gäste` : `Hôm nay: ${bk.n} đơn · ${bk.g} khách`) : (de ? 'Tischreservierungen und Tischplan' : 'Xem và quản lý đặt bàn'), to: `/r/${rid}/bk` }] : []),
       { icon: 'invoice', label: t('invoicing'), desc: de ? 'Rechnungen und Angebote' : 'Hoá đơn và Angebot', to: `/r/${rid}/inv` },
+      { icon: 'folder', label: de ? 'Dokumente' : 'Giấy tờ', desc: de ? 'Ordner mit PDF, Word, Excel' : 'Thư mục giấy tờ PDF, Word, Excel', to: `/r/${rid}/papers` },
       { icon: 'people', label: t('hr'), desc: de ? 'Personalakten verwalten' : 'Quản lý hồ sơ nhân viên', to: `/r/${rid}/hr` },
     ] : []),
     { icon: 'chef', label: de ? 'Konzepte & Rezepte' : 'Concept & Công thức', desc: m ? (de ? 'Rezepte, Wareneinsatz, Allergene' : 'Công thức, giá vốn, dị ứng') : (de ? 'Rezepte ansehen' : 'Xem công thức món'), to: `/r/${rid}/rc` },
