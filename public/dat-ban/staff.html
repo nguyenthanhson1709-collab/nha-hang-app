@@ -939,6 +939,8 @@ html[data-season=xmas] .gp-n.on{background:linear-gradient(180deg,#ff5a4f,#c8161
 .blk-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin-top:10px}
 .blk-form .f{min-width:110px}
 .blk-form .f.grow{flex:1 1 180px}
+/* tên khách luôn hiện đủ (xuống dòng thay vì cắt "…"), ví dụ trên iPad mini (chủ quán 28.11.2026) */
+.row .who b,.row .who b .nm,.who b .nm{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere;line-height:1.25}
 </style>
 </head>
 <body>
