@@ -1226,7 +1226,9 @@ function slotsFor(dateS){
   const st=S.settings,last=toMin(st.close)-st.duration,out=[];
   const wd=parseD(dateS).getDay();let open=toMin(st.open);
   if(wd>=1&&wd<=5&&st.weekdayFrom)open=Math.max(open,toMin(st.weekdayFrom));
-  for(let m=open;m<=last;m+=st.interval)out.push(toHM(m));
+  const sp=specialOf(dateS);let lastM=last;
+  if(sp&&sp[0])open=Math.max(open,toMin(sp[0]));if(sp&&sp[1])lastM=Math.min(last,toMin(sp[1])-st.duration);
+  for(let m=open;m<=lastM;m+=st.interval)out.push(toHM(m));
   return out;
 }
 function isPast(dateS,timeS){const [y,mo,d]=dateS.split("-").map(Number),m=toMin(timeS);return new Date(y,mo-1,d,Math.floor(m/60),m%60).getTime()<Date.now()+(S.settings.leadHours||0)*3600000}
@@ -1306,7 +1308,7 @@ function renderGuest(){
   const row=(ic,k,v)=>`<div class="gf-row"><span class="gf-ic">${GIC[ic]}</span><span class="gf-k">${k}</span><span class="gf-v">${v}</span></div>`;
   const facts=`<div class="gfacts">
       ${row("pin",t("address"),`<a href="https://maps.app.goo.gl/dua1NhLpHr2oGLSz5" target="_blank" rel="noopener">Marlene-Dietrich-Platz 1<br>10785 Berlin</a>`)}
-      ${row("clock",L({de:"Öffnungszeiten",en:"Opening hours",vi:"Giờ mở cửa"}),`${L({de:"Täglich",en:"Daily",vi:"Hằng ngày"})} ${esc(st.open)} – ${esc(st.close)}<br><small>${t("closedL")}: ${t("closedV")}</small>`)}
+      ${row("clock",L({de:"Öffnungszeiten",en:"Opening hours",vi:"Giờ mở cửa"}),`${L({de:"Täglich",en:"Daily",vi:"Hằng ngày"})} ${esc(st.open)} – ${esc(st.close)}<br><small>${t("closedL")}: ${t("closedV")}</small>${Object.entries(parseSpecial(st.special)).sort().map(([k,v])=>{const [m,d]=k.split("-"),dm=(+d)+"."+(+m)+".",o=v[0]&&v[0]!==st.open,c=v[1]&&v[1]!==st.close;return o||c?`<br><small>${esc(dm)} ${o?esc(L({de:"ab ",en:"from ",vi:"từ "})+v[0]):""}${o&&c?" ":""}${c?esc(L({de:"bis ",en:"until ",vi:"đến "})+v[1]):""}</small>`:""}).join("")}`)}
       ${row("fork",L({de:"Küche",en:"Cuisine",vi:"Ẩm thực"}),L({de:"Vietnamesisch · Sushi · Modern · Authentisch",en:"Vietnamese · Sushi · Modern · Authentic",vi:"Việt Nam · Sushi · Hiện đại · Chuẩn vị"}))}
       ${row("cal",t("onlineL"),esc(t("onlineV",st.weekdayFrom||st.open)))}
     </div>
@@ -1896,6 +1898,7 @@ function renderSettings(){
     </div>
     <div class="grid3"><label class="f">${t("weekdayFrom")}<input type="time" id="s-wfrom" value="${st.weekdayFrom||""}" step="900" ${dis}></label><div class="muted" style="grid-column:span 2;align-self:end;padding-bottom:10px;font-size:14px">${t("weekdayHint")}</div></div>
     <label class="f">${t("closedDays")}<input type="text" id="s-closed" value="${esc(st.closed)}" ${dis}></label>
+    <label class="f">${PL({de:"Jährliche Sonderöffnungszeiten (TT.MM Öffnet-Schließt, durch Komma getrennt)",en:"Yearly special hours (DD.MM opens-closes, comma separated)",vi:"Giờ mở cửa đặc biệt hằng năm (NN.TT mở-đóng, cách nhau dấu phẩy)"})}<input type="text" id="s-special" value="${esc(st.special||"")}" placeholder="01.01 15:00-23:00, 31.12 11:30-22:00" ${dis}></label>
   </section>
   ${renderPeak()}
   ${renderDevices()}
@@ -2041,12 +2044,17 @@ function fromSettings(r){
   return {autoConfirm:r.auto_confirm,peakEnabled:r.peak_enabled,duration:r.duration_min,minOnline:r.min_online,maxOnline:r.max_online,
     interval:r.slot_step,weekdayFrom:r.weekday_from?r.weekday_from.slice(0,5):"",open:r.open_time.slice(0,5),close:r.close_time.slice(0,5),
     closed:(r.closed_days||[]).map(x=>{const [m,d]=x.split("-");return d+"."+m}).join(", "),email:r.contact_email||"",
-    leadHours:r.lead_hours,autoArrive:r.auto_arrive_min,fontSize:r.font_size};
+    leadHours:r.lead_hours,autoArrive:r.auto_arrive_min,fontSize:r.font_size,
+    special:Object.entries(r.special_hours||{}).sort().map(([k,v])=>{const [m,d]=k.split("-");return d+"."+m+" "+(v[0]||"")+"-"+(v[1]||"")}).join(", ")};
 }
+/* giờ đặc biệt hằng năm: "01.01 15:00-23:00, 31.12 11:30-22:00" ⇄ {"01-01":["15:00","23:00"]} */
+function parseSpecial(txt){const o={};String(txt||"").split(",").map(x=>x.trim()).filter(Boolean).forEach(x=>{const m=x.match(/^(\d{1,2})\.(\d{1,2})\.?\s+(\d{1,2}:\d{2})?\s*-\s*(\d{1,2}:\d{2})?$/);if(m)o[pad(+m[2])+"-"+pad(+m[1])]=[m[3]?pad(+m[3].split(":")[0])+":"+m[3].split(":")[1]:"",m[4]?pad(+m[4].split(":")[0])+":"+m[4].split(":")[1]:""]});return o}
+function specialOf(dateS){return parseSpecial(S.settings.special)[dateS.slice(5)]||null}
 function toSettings(s){
   return {auto_confirm:s.autoConfirm,peak_enabled:s.peakEnabled,duration_min:s.duration,min_online:s.minOnline,max_online:s.maxOnline,
     slot_step:s.interval,weekday_from:s.weekdayFrom||null,open_time:s.open,close_time:s.close,
     closed_days:s.closed.split(",").map(x=>x.trim()).filter(Boolean).map(x=>{const [d,m]=x.split(".");return pad(+m)+"-"+pad(+d)}),
+    special_hours:parseSpecial(s.special),
     contact_email:s.email||null,lead_hours:s.leadHours,auto_arrive_min:s.autoArrive,...(s.fontSize!==undefined?{font_size:s.fontSize}:{})};
 }
 const fromRule=r=>({id:r.id,days:r.days,from:r.start_time.slice(0,5),to:r.end_time.slice(0,5),max:r.max_guests,block:r.block_min,active:r.active});
@@ -2531,6 +2539,7 @@ document.addEventListener("change",e=>{
     if(id==="s-open"&&val)st.open=val;
     if(id==="s-close"&&val)st.close=val;
     if(id==="s-closed")st.closed=val;
+    if(id==="s-special")st.special=val;
     if(id==="s-wfrom")st.weekdayFrom=val;
     if(id==="s-email")st.email=val;
     ui.pe=ui.pe;
