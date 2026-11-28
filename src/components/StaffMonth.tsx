@@ -5,6 +5,8 @@ import { dmy } from '../lib/format'
 import { isActive, type Employee } from '../lib/hr'
 import { monthDates, monthStat, noSurcharge, vacDays, type Shift, type Vacation } from '../lib/hrTime'
 import PlanNotes from './PlanNotes'
+import PdfSheet from './PdfSheet'
+import { mitarbeiterlistePdf } from '../lib/hrTimePdf'
 import { buildSchedule, defaultSun, SUN_RULES, type SchedEmp, type SchedResult, type SunRule } from '../lib/scheduler'
 
 /**
@@ -233,6 +235,16 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
     return true
   }
 
+  // PDF giống file Excel (A3 ngang, tô màu thay đổi / nhân viên mới)
+  const [pdf, setPdf] = useState<Blob | null>(null)
+  function exportPdf() {
+    const marks = rows.map(({ e, st }) => { const cells = XCOLS.map((c) => !isNew(e) && changed(e, st, c, val(e, st, c).v)); return { row: isNew(e) ? 'new' as const : cells.some(Boolean) ? 'chg' as const : null, cells } })
+    setPdf(mitarbeiterlistePdf({
+      title: `${company} ${ym.slice(5, 7)}/${ym.slice(2, 4)}`, sub: `Mitarbeiterliste ${ym.slice(5, 7)}/${ym.slice(0, 4)} · ${rows.length} Mitarbeiter`,
+      headers: XCOLS.map((c) => c.de), widths: XCOLS.map((c) => (c.k === 'bank' ? 150 : c.w || 70)), right: XCOLS.map((c) => !!c.num),
+      rows: rows.map(({ e, st }) => XCOLS.map((c) => val(e, st, c).v)), marks,
+    }))
+  }
   async function exportXlsx() {
     // xlsx-js-style: bản SheetJS ghi được màu nền. Dòng có thay đổi so với tháng trước: nền cam (ô thay đổi đậm hơn);
     // nhân viên mới: nền xanh cả dòng
@@ -272,6 +284,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
       <div className="sm-bar">
         {canPlan && <button className="st-btn primary" disabled={busy || !rows.length} onClick={makePlan}>{busy ? '…' : T('Xếp lịch', 'Dienstplan erstellen')}</button>}
         <span className="small muted">{T('Ô tự điền từ hồ sơ và lịch làm. Bấm vào ô để sửa; ô đã sửa có vạch cam bên trái, xoá trống để quay về giá trị tự tính. Nền cam: khác tháng trước; dòng nền xanh: nhân viên mới.', 'Felder werden aus Personalakte und Dienstplan übernommen. Zum Ändern anklicken; geänderte Felder sind orange markiert, leeren = automatischer Wert. Orange hinterlegt: anders als Vormonat; grüne Zeile: neuer Mitarbeiter.')}</span>
+        <button className="st-btn" disabled={!rows.length} onClick={exportPdf}>PDF</button>
         <button className="st-btn" disabled={!rows.length} onClick={exportXlsx}>Excel</button>
       </div>
       {!rows.length ? <div className="card muted">{T('Tháng này chưa có nhân viên', 'Keine Mitarbeiter in diesem Monat')}</div> : (
@@ -318,6 +331,7 @@ export default function StaffMonth({ rid, ym, emps, shifts, abs, company, de, on
         </div>
       )}
       <PlanNotes rid={rid} ym={ym} emps={rows.map((x) => x.e)} abs={abs} de={de} onChanged={onSaved} />
+      {pdf && <PdfSheet pdf={pdf} title={`Mitarbeiterliste ${ym}`} onClose={() => setPdf(null)} actions={[{ label: T('Tải PDF', 'PDF laden'), primary: true, onClick: () => { const a = document.createElement('a'); a.href = URL.createObjectURL(pdf); a.download = `Mitarbeiterliste_${ym.slice(5, 7)}-${ym.slice(0, 4)}.pdf`; a.click() } }]} />}
       {plan && (
         <div className="sheet-bg" onClick={(ev) => { if (ev.target === ev.currentTarget && !busy) setPlan(null) }}>
           <div className="sheet sched">
