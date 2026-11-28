@@ -199,5 +199,17 @@ const mo2 = await as(O, () => q(`select nh_bk_my_staff($1) r`, [A]))
 ok(Array.isArray(mo2) && (mo2[0].r as { role: string }).role === 'owner', 'Chủ app nhà hàng vào app đặt bàn với vai trò chủ')
 ok((await as(X, () => q(`select nh_bk_my_staff($1) r`, [A])) as { r: unknown }[])[0].r === null, 'Phụ trách quán khác không vào được app đặt bàn của quán A')
 
+// giờ đặc biệt hằng năm: 1.1 mở từ 15:00, 31.12 đóng 22:00 (đặt muộn nhất 20:30 vì bàn 90 phút)
+await db.exec(mig('046_nh_bk_blocks.sql'))
+await db.exec(mig('047_nh_bk_special_hours.sql'))
+await db.exec(mig('047_nh_bk_special_hours.sql')) // chạy lại được
+const sl = async (d: string) => (await as(null, () => q(`select slot::text s from nh_bk_available_slots('potsdamerplatz', $1, 4)`, [d])) as { s: string }[]).map((r) => r.s)
+const ny = await sl('2027-01-01'), sy = await sl('2027-12-31'), nd = await sl('2027-03-12')
+ok(ny[0] === '15:00:00' && ny.at(-1) === '21:30:00', 'Ngày 1/1: đặt online từ 15:00')
+ok(sy[0] === '14:00:00' && sy.at(-1) === '20:30:00', 'Ngày 31/12: giờ đặt muộn nhất 20:30 (đóng cửa 22:00)')
+ok(nd[0] === '14:00:00' && nd.at(-1) === '21:30:00', 'Ngày thường không đổi')
+const ps = await as(null, () => q(`select nh_bk_public_settings('potsdamerplatz') r`))
+ok(JSON.stringify((ps as { r: { special_hours: unknown } }[])[0].r.special_hours) === '{"01-01":["15:00","23:00"],"12-31":["11:30","22:00"]}', 'Trang khách nhận được giờ đặc biệt')
+
 console.log(fails ? `\n${fails} lỗi` : '\nTất cả đạt')
 process.exit(fails ? 1 : 0)
